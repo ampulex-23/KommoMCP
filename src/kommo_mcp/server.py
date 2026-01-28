@@ -2,7 +2,7 @@
 
 import asyncio
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any
 
 from mcp.server import Server
@@ -1033,6 +1033,323 @@ async def _execute_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
                 return {'error': f'Unknown action: {action}'}
         
         return result.model_dump()
+    
+    elif name == 'kommo_entity':
+        action = arguments.get('action')
+        entity_type = arguments.get('entity_type')
+        
+        if not action or not entity_type:
+            return {'error': 'action and entity_type are required'}
+        
+        if action == 'get':
+            entity_id = arguments.get('entity_id')
+            if not entity_id:
+                return {'error': 'entity_id is required for get'}
+            
+            params = {'with': 'contacts,companies,leads,catalog_elements'}
+            data = await api.get(f'{entity_type}/{entity_id}', params=params)
+            return {'entity': data}
+        
+        elif action == 'list':
+            params = {}
+            filters = arguments.get('filters', {})
+            
+            if filters.get('pipeline_id'):
+                params['filter[pipeline_id]'] = filters['pipeline_id']
+            if filters.get('status_id'):
+                params['filter[status_id]'] = filters['status_id']
+            if filters.get('user_id'):
+                params['filter[responsible_user_id]'] = filters['user_id']
+            if filters.get('query'):
+                params['query'] = filters['query']
+            
+            params['limit'] = min(arguments.get('limit', 50), 250)
+            if arguments.get('offset'):
+                params['page'] = (arguments['offset'] // params['limit']) + 1
+            
+            if arguments.get('sort_by'):
+                order = arguments.get('sort_order', 'desc')
+                params['order[' + arguments['sort_by'] + ']'] = order
+            
+            data = await api.get(entity_type, params=params)
+            entities = data.get('_embedded', {}).get(entity_type, [])
+            
+            return {
+                'count': len(entities),
+                'entities': entities,
+            }
+        
+        elif action == 'create':
+            entity_data = arguments.get('data', {})
+            if not entity_data:
+                return {'error': 'data is required for create'}
+            
+            result = await api.post(entity_type, json=[entity_data])
+            created = result.get('_embedded', {}).get(entity_type, [{}])[0]
+            return {
+                'status': 'created',
+                'entity_id': created.get('id'),
+                'entity': created,
+            }
+        
+        elif action == 'update':
+            entity_id = arguments.get('entity_id')
+            entity_data = arguments.get('data', {})
+            if not entity_id:
+                return {'error': 'entity_id is required for update'}
+            
+            entity_data['id'] = entity_id
+            result = await api.patch(entity_type, json=[entity_data])
+            updated = result.get('_embedded', {}).get(entity_type, [{}])[0]
+            return {
+                'status': 'updated',
+                'entity_id': entity_id,
+                'entity': updated,
+            }
+        
+        elif action == 'link':
+            entity_id = arguments.get('entity_id')
+            target_type = arguments.get('target_entity_type')
+            target_id = arguments.get('target_entity_id')
+            
+            if not all([entity_id, target_type, target_id]):
+                return {'error': 'entity_id, target_entity_type, target_entity_id required'}
+            
+            link_data = {'id': entity_id, '_embedded': {target_type: [{'id': target_id}]}}
+            result = await api.patch(entity_type, json=[link_data])
+            return {'status': 'linked', 'entity_id': entity_id, 'target_id': target_id}
+        
+        elif action == 'unlink':
+            entity_id = arguments.get('entity_id')
+            target_type = arguments.get('target_entity_type')
+            target_id = arguments.get('target_entity_id')
+            
+            if not all([entity_id, target_type, target_id]):
+                return {'error': 'entity_id, target_entity_type, target_entity_id required'}
+            
+            result = await api.post(f'{entity_type}/{entity_id}/unlink', json={target_type: [{'id': target_id}]})
+            return {'status': 'unlinked', 'entity_id': entity_id, 'target_id': target_id}
+        
+        elif action == 'move':
+            entity_id = arguments.get('entity_id')
+            stage_id = arguments.get('stage_id')
+            pipeline_id = arguments.get('pipeline_id')
+            
+            if not entity_id or not stage_id:
+                return {'error': 'entity_id and stage_id required for move'}
+            
+            move_data = {'id': entity_id, 'status_id': stage_id}
+            if pipeline_id:
+                move_data['pipeline_id'] = pipeline_id
+            
+            result = await api.patch(entity_type, json=[move_data])
+            return {'status': 'moved', 'entity_id': entity_id, 'stage_id': stage_id}
+        
+        elif action == 'history':
+            entity_id = arguments.get('entity_id')
+            if not entity_id:
+                return {'error': 'entity_id required for history'}
+            
+            data = await api.get(f'{entity_type}/{entity_id}/notes', params={'limit': 50})
+            notes = data.get('_embedded', {}).get('notes', [])
+            return {'entity_id': entity_id, 'history': notes}
+        
+        else:
+            return {'error': f'Unknown action: {action}'}
+    
+    elif name == 'kommo_bulk':
+        action = arguments.get('action')
+        entity_type = arguments.get('entity_type')
+        
+        if not action or not entity_type:
+            return {'error': 'action and entity_type are required'}
+        
+        dry_run = arguments.get('dry_run', False)
+        limit = min(arguments.get('limit', 100), 500)
+        
+        # Get entities by filters or IDs
+        entity_ids = arguments.get('entity_ids', [])
+        if not entity_ids:
+            filters = arguments.get('filters', {})
+            params = {'limit': limit}
+            
+            if filters.get('pipeline_id'):
+                params['filter[pipeline_id]'] = filters['pipeline_id']
+            if filters.get('stage_id'):
+                params['filter[status_id]'] = filters['stage_id']
+            if filters.get('user_id'):
+                params['filter[responsible_user_id]'] = filters['user_id']
+            
+            data = await api.get(entity_type, params=params)
+            entities = data.get('_embedded', {}).get(entity_type, [])
+            entity_ids = [e['id'] for e in entities]
+        
+        if not entity_ids:
+            return {'status': 'no_entities', 'count': 0}
+        
+        if action == 'assign':
+            user_id = arguments.get('user_id')
+            if not user_id:
+                return {'error': 'user_id required for assign'}
+            
+            if dry_run:
+                return {'status': 'dry_run', 'would_assign': len(entity_ids), 'to_user': user_id}
+            
+            updates = [{'id': eid, 'responsible_user_id': user_id} for eid in entity_ids]
+            result = await api.patch(entity_type, json=updates)
+            return {'status': 'assigned', 'count': len(entity_ids), 'user_id': user_id}
+        
+        elif action == 'move':
+            stage_id = arguments.get('stage_id')
+            if not stage_id:
+                return {'error': 'stage_id required for move'}
+            
+            if dry_run:
+                return {'status': 'dry_run', 'would_move': len(entity_ids), 'to_stage': stage_id}
+            
+            updates = [{'id': eid, 'status_id': stage_id} for eid in entity_ids]
+            result = await api.patch(entity_type, json=updates)
+            return {'status': 'moved', 'count': len(entity_ids), 'stage_id': stage_id}
+        
+        elif action == 'tag':
+            tags = arguments.get('tags', [])
+            tag_action = arguments.get('tag_action', 'add')
+            
+            if not tags:
+                return {'error': 'tags required'}
+            
+            if dry_run:
+                return {'status': 'dry_run', 'would_tag': len(entity_ids), 'tags': tags, 'action': tag_action}
+            
+            if tag_action == 'add':
+                updates = [{'id': eid, '_embedded': {'tags': [{'name': t} for t in tags]}} for eid in entity_ids]
+            else:
+                # Remove tags - need to get current and filter
+                return {'error': 'tag removal not yet implemented'}
+            
+            result = await api.patch(entity_type, json=updates)
+            return {'status': 'tagged', 'count': len(entity_ids), 'tags': tags}
+        
+        elif action == 'create_tasks':
+            task_text = arguments.get('task_text', 'Follow up')
+            task_due_days = arguments.get('task_due_days', 1)
+            
+            if dry_run:
+                return {'status': 'dry_run', 'would_create_tasks': len(entity_ids)}
+            
+            due_timestamp = int((datetime.now() + timedelta(days=task_due_days)).timestamp())
+            tasks = [
+                {
+                    'text': task_text,
+                    'complete_till': due_timestamp,
+                    'entity_id': eid,
+                    'entity_type': entity_type,
+                }
+                for eid in entity_ids
+            ]
+            
+            result = await api.post('tasks', json=tasks)
+            created = result.get('_embedded', {}).get('tasks', [])
+            return {'status': 'tasks_created', 'count': len(created)}
+        
+        elif action == 'update':
+            changes = arguments.get('changes', {})
+            if not changes:
+                return {'error': 'changes required for update'}
+            
+            if dry_run:
+                return {'status': 'dry_run', 'would_update': len(entity_ids), 'changes': changes}
+            
+            updates = [{**changes, 'id': eid} for eid in entity_ids]
+            result = await api.patch(entity_type, json=updates)
+            return {'status': 'updated', 'count': len(entity_ids)}
+        
+        elif action == 'export':
+            params = {'limit': limit}
+            data = await api.get(entity_type, params=params)
+            entities = data.get('_embedded', {}).get(entity_type, [])
+            return {'status': 'exported', 'count': len(entities), 'entities': entities}
+        
+        else:
+            return {'error': f'Unknown bulk action: {action}'}
+    
+    elif name == 'kommo_search':
+        action = arguments.get('action')
+        
+        if not action:
+            return {'error': 'action is required'}
+        
+        limit = arguments.get('limit', 20)
+        
+        if action == 'query':
+            query = arguments.get('query', '')
+            entity_types = arguments.get('entity_types', ['leads', 'contacts', 'companies'])
+            
+            results = {}
+            for et in entity_types:
+                try:
+                    data = await api.get(et, params={'query': query, 'limit': limit})
+                    results[et] = data.get('_embedded', {}).get(et, [])
+                except Exception:
+                    results[et] = []
+            
+            total = sum(len(v) for v in results.values())
+            return {'query': query, 'total': total, 'results': results}
+        
+        elif action == 'related':
+            entity_id = arguments.get('entity_id')
+            entity_type = arguments.get('entity_type')
+            
+            if not entity_id or not entity_type:
+                return {'error': 'entity_id and entity_type required'}
+            
+            data = await api.get(f'{entity_type}/{entity_id}', params={'with': 'contacts,companies,leads'})
+            embedded = data.get('_embedded', {})
+            
+            return {
+                'entity_id': entity_id,
+                'entity_type': entity_type,
+                'related': {
+                    'contacts': embedded.get('contacts', []),
+                    'companies': embedded.get('companies', []),
+                    'leads': embedded.get('leads', []),
+                },
+            }
+        
+        elif action == 'recent':
+            entity_types = arguments.get('entity_types', ['leads'])
+            
+            results = {}
+            for et in entity_types:
+                try:
+                    data = await api.get(et, params={'order[updated_at]': 'desc', 'limit': limit})
+                    results[et] = data.get('_embedded', {}).get(et, [])
+                except Exception:
+                    results[et] = []
+            
+            return {'results': results}
+        
+        elif action == 'similar':
+            entity_id = arguments.get('entity_id')
+            entity_type = arguments.get('entity_type', 'leads')
+            
+            if not entity_id:
+                return {'error': 'entity_id required for similar'}
+            
+            # Get entity details
+            entity = await api.get(f'{entity_type}/{entity_id}')
+            
+            # Search by name similarity
+            name = entity.get('name', '')
+            if name:
+                data = await api.get(entity_type, params={'query': name.split()[0] if name else '', 'limit': limit})
+                similar = [e for e in data.get('_embedded', {}).get(entity_type, []) if e['id'] != entity_id]
+                return {'entity_id': entity_id, 'similar': similar[:limit]}
+            
+            return {'entity_id': entity_id, 'similar': []}
+        
+        else:
+            return {'error': f'Unknown search action: {action}'}
     
     elif name == 'kommo_task_create':
         # Parse complete_till - can be ISO string or Unix timestamp

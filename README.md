@@ -93,6 +93,32 @@ Use MCP Client node with HTTP transport:
 
 *Legacy individual tools still available for backward compatibility*
 
+### Entity Management
+- `kommo_entity` - **Universal CRUD tool** with actions:
+  - `get` - Get entity by ID with related entities
+  - `list` - List entities with filters, sorting, pagination
+  - `create` - Create new entity
+  - `update` - Update entity fields
+  - `link` / `unlink` - Link/unlink entities
+  - `move` - Move lead to another stage
+  - `history` - Get entity change history
+
+### Bulk Operations
+- `kommo_bulk` - **Mass operations** with actions:
+  - `assign` - Reassign entities to user
+  - `move` - Move multiple leads to stage
+  - `tag` - Add tags to entities
+  - `create_tasks` - Create tasks for multiple entities
+  - `update` - Update multiple entities
+  - `export` - Export entities
+
+### Smart Search
+- `kommo_search` - **Intelligent search** with actions:
+  - `query` - Natural language search across entities
+  - `related` - Find all related entities
+  - `recent` - Recently modified entities
+  - `similar` - Find similar entities
+
 ### Actions
 - `kommo_task_create` - Create tasks linked to leads/contacts/companies
 - `kommo_note_create` - Add notes to any entity

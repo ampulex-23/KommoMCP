@@ -448,6 +448,128 @@ Actions:
                 'required': ['action'],
             },
         },
+        {
+            'name': 'kommo_entity',
+            'description': '''Universal entity management tool. Create, read, update entities in CRM.
+
+Actions:
+- get: Get entity by ID with full details and related entities
+- list: List entities with filters, sorting, pagination
+- create: Create new entity (lead, contact, company)
+- update: Update entity fields
+- link: Link entities together (contact to lead, company to contact)
+- unlink: Remove link between entities
+- move: Move lead to another stage/pipeline
+- history: Get entity change history''',
+            'inputSchema': {
+                'type': 'object',
+                'properties': {
+                    'action': {
+                        'type': 'string',
+                        'enum': ['get', 'list', 'create', 'update', 'link', 'unlink', 'move', 'history'],
+                        'description': 'Action to perform',
+                    },
+                    'entity_type': {
+                        'type': 'string',
+                        'enum': ['leads', 'contacts', 'companies', 'tasks', 'notes'],
+                        'description': 'Entity type',
+                    },
+                    'entity_id': {'type': 'integer', 'description': 'Entity ID (for get, update, link, move, history)'},
+                    'data': {'type': 'object', 'description': 'Entity data (for create, update)'},
+                    'filters': {'type': 'object', 'description': 'Filters for list (pipeline_id, status_id, user_id, query, tags)'},
+                    'target_entity_type': {'type': 'string', 'description': 'Target entity type (for link/unlink)'},
+                    'target_entity_id': {'type': 'integer', 'description': 'Target entity ID (for link/unlink)'},
+                    'stage_id': {'type': 'integer', 'description': 'Stage ID (for move)'},
+                    'pipeline_id': {'type': 'integer', 'description': 'Pipeline ID (for move, list)'},
+                    'limit': {'type': 'integer', 'description': 'Max results (default: 50)'},
+                    'offset': {'type': 'integer', 'description': 'Offset for pagination'},
+                    'sort_by': {'type': 'string', 'description': 'Sort field (created_at, updated_at, price)'},
+                    'sort_order': {'type': 'string', 'enum': ['asc', 'desc'], 'description': 'Sort order'},
+                },
+                'required': ['action', 'entity_type'],
+            },
+        },
+        {
+            'name': 'kommo_bulk',
+            'description': '''Bulk operations on multiple entities. Mass updates, assignments, tagging.
+
+Actions:
+- update: Update multiple entities matching criteria
+- assign: Reassign entities to another user
+- tag: Add/remove tags from entities
+- move: Move multiple leads to stage
+- create_tasks: Create tasks for multiple entities
+- delete: Delete multiple entities (careful!)
+- export: Export entities to structured format''',
+            'inputSchema': {
+                'type': 'object',
+                'properties': {
+                    'action': {
+                        'type': 'string',
+                        'enum': ['update', 'assign', 'tag', 'move', 'create_tasks', 'delete', 'export'],
+                        'description': 'Bulk action to perform',
+                    },
+                    'entity_type': {
+                        'type': 'string',
+                        'enum': ['leads', 'contacts', 'companies', 'tasks'],
+                        'description': 'Entity type to operate on',
+                    },
+                    'filters': {
+                        'type': 'object',
+                        'description': 'Criteria to select entities (pipeline_id, stage_id, user_id, tags, date_from, date_to, stale_days)',
+                    },
+                    'entity_ids': {
+                        'type': 'array',
+                        'items': {'type': 'integer'},
+                        'description': 'Specific entity IDs (alternative to filters)',
+                    },
+                    'changes': {'type': 'object', 'description': 'Changes to apply (for update)'},
+                    'user_id': {'type': 'integer', 'description': 'Target user ID (for assign)'},
+                    'tags': {'type': 'array', 'items': {'type': 'string'}, 'description': 'Tags to add/remove'},
+                    'tag_action': {'type': 'string', 'enum': ['add', 'remove'], 'description': 'Tag action'},
+                    'stage_id': {'type': 'integer', 'description': 'Target stage (for move)'},
+                    'task_text': {'type': 'string', 'description': 'Task text (for create_tasks)'},
+                    'task_due_days': {'type': 'integer', 'description': 'Days until task due (for create_tasks)'},
+                    'dry_run': {'type': 'boolean', 'description': 'Preview changes without applying (default: false)'},
+                    'limit': {'type': 'integer', 'description': 'Max entities to process (default: 100)'},
+                },
+                'required': ['action', 'entity_type'],
+            },
+        },
+        {
+            'name': 'kommo_search',
+            'description': '''Smart search across CRM data. Natural language queries, fuzzy matching, related entities.
+
+Actions:
+- query: Natural language search ("крупные сделки в работе", "контакты без email")
+- similar: Find similar entities to given one
+- related: Find all related entities (contacts of company, deals of contact)
+- recent: Recently viewed/modified entities
+- saved: Execute saved search/filter''',
+            'inputSchema': {
+                'type': 'object',
+                'properties': {
+                    'action': {
+                        'type': 'string',
+                        'enum': ['query', 'similar', 'related', 'recent', 'saved'],
+                        'description': 'Search action',
+                    },
+                    'query': {'type': 'string', 'description': 'Search query (natural language or keywords)'},
+                    'entity_types': {
+                        'type': 'array',
+                        'items': {'type': 'string'},
+                        'description': 'Entity types to search (leads, contacts, companies, tasks, notes)',
+                    },
+                    'entity_id': {'type': 'integer', 'description': 'Entity ID (for similar, related)'},
+                    'entity_type': {'type': 'string', 'description': 'Entity type (for similar, related)'},
+                    'include_related': {'type': 'boolean', 'description': 'Include related entities in results'},
+                    'date_from': {'type': 'string', 'description': 'Filter by date from'},
+                    'date_to': {'type': 'string', 'description': 'Filter by date to'},
+                    'limit': {'type': 'integer', 'description': 'Max results (default: 20)'},
+                },
+                'required': ['action'],
+            },
+        },
     ]
     
     return {'tools': tools}

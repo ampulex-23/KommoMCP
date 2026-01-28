@@ -1,0 +1,1 @@
+{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"kommo_search","arguments":{"action":"recent","entity_types":["leads"],"limit":3}}}

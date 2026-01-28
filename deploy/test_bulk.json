@@ -1,0 +1,1 @@
+{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"kommo_bulk","arguments":{"action":"create_tasks","entity_type":"leads","filters":{"pipeline_id":4717462},"task_text":"Follow up call","task_due_days":2,"dry_run":true,"limit":5}}}
