@@ -119,7 +119,21 @@ Use MCP Client node with HTTP transport:
   - `recent` - Recently modified entities
   - `similar` - Find similar entities
 
-### Actions
+### Reports
+- `kommo_report` - **Formatted reports** with actions:
+  - `summary` - Period summary (deals, revenue, conversion)
+  - `comparison` - Compare with previous period
+  - `pipeline_health` - Pipeline health check with recommendations
+  - `activity` - Manager activity report
+  - `custom` - Custom report with selected metrics
+
+### Automation
+- `kommo_automate` - **AI-powered automation** with actions:
+  - `suggest` - Get AI recommendations for automation
+  - `stale_followup` - Create tasks for stale deals
+  - `escalation` - Escalate deals to manager
+
+### Quick Actions
 - `kommo_task_create` - Create tasks linked to leads/contacts/companies
 - `kommo_note_create` - Add notes to any entity
 
@@ -136,6 +150,10 @@ Ask your AI assistant:
 - "Какие клиенты в зоне риска оттока?"
 - "Оцени качество текущих лидов"
 - "Найди дубликаты контактов"
+- "Сделай отчёт за месяц"
+- "Сравни продажи с прошлым периодом"
+- "Что можно автоматизировать?"
+- "Создай задачи для зависших сделок"
 
 ## Deployment
 
