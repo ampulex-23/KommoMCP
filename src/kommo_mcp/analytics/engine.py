@@ -512,6 +512,10 @@ class AnalyticsEngine:
             SalesForecast with projections
         """
         # Get current deals in pipeline (not closed)
+        # Only consider deals created within forecast_days * 3 to be realistic
+        # (deals older than that are likely stale and won't close)
+        cutoff_date = datetime.now() - timedelta(days=forecast_days * 3)
+        
         query = select(
             StageDB.id.label('stage_id'),
             StageDB.name.label('stage_name'),
@@ -524,6 +528,7 @@ class AnalyticsEngine:
         ).where(
             LeadDB.is_deleted == False,  # noqa: E712
             StageDB.type.notin_([2, 3]),  # Not won or lost
+            LeadDB.kommo_created_at >= cutoff_date,  # Only recent deals
         ).group_by(
             StageDB.id, StageDB.name, StageDB.sort, StageDB.type
         ).order_by(StageDB.sort)
