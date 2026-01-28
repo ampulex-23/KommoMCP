@@ -411,6 +411,43 @@ async def _handle_tools_list() -> dict:
                 'required': ['text', 'entity_id', 'entity_type'],
             },
         },
+        {
+            'name': 'kommo_analytics',
+            'description': '''Universal analytics tool. Combines all analytics functions in one.
+
+Actions:
+- pipeline: Pipeline performance (conversion, avg check, cycle time)
+- funnel: Funnel conversion analysis by stage
+- forecast: Sales predictions (expected, optimistic, pessimistic)
+- managers: Manager performance comparison
+- revenue: Revenue trend by day/week/month
+- stale: Find stuck deals without activity
+- sources: Lead sources effectiveness
+- churn: Customers at risk of churn
+- scoring: Score leads to prioritize
+- duplicates: Find duplicate contacts/companies''',
+            'inputSchema': {
+                'type': 'object',
+                'properties': {
+                    'action': {
+                        'type': 'string',
+                        'enum': ['pipeline', 'funnel', 'forecast', 'managers', 'revenue', 'stale', 'sources', 'churn', 'scoring', 'duplicates'],
+                        'description': 'Analytics action to perform',
+                    },
+                    'pipeline_id': {'type': 'integer', 'description': 'Pipeline ID (for pipeline, funnel, forecast, revenue, stale, sources, scoring)'},
+                    'user_id': {'type': 'integer', 'description': 'User ID (for managers)'},
+                    'date_from': {'type': 'string', 'description': 'Start date ISO (for pipeline, funnel, sources)'},
+                    'date_to': {'type': 'string', 'description': 'End date ISO (for pipeline, funnel, sources)'},
+                    'forecast_days': {'type': 'integer', 'description': 'Forecast horizon days (for forecast, default: 30)'},
+                    'group_by': {'type': 'string', 'description': 'Grouping: day/week/month (for revenue, default: month)'},
+                    'periods_count': {'type': 'integer', 'description': 'Number of periods (for revenue, default: 12)'},
+                    'threshold_days': {'type': 'integer', 'description': 'Days threshold (for stale: 14, churn: 90)'},
+                    'limit': {'type': 'integer', 'description': 'Max results (for stale, churn, scoring, duplicates, default: 50)'},
+                    'entity_type': {'type': 'string', 'description': 'Entity type: contacts/companies (for duplicates)'},
+                },
+                'required': ['action'],
+            },
+        },
     ]
     
     return {'tools': tools}

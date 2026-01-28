@@ -79,16 +79,19 @@ Use MCP Client node with HTTP transport:
 - `kommo_contact_create` - Create new contact
 
 ### Analytics
-- `kommo_pipeline_analytics` - Pipeline performance metrics (conversion, avg check, cycle time)
-- `kommo_manager_performance` - Manager statistics (leads, revenue, win rate)
-- `kommo_sales_forecast` - Sales predictions (expected, optimistic, pessimistic)
-- `kommo_funnel_analysis` - Conversion analysis by stage
-- `kommo_stale_deals` - Find deals stuck without activity
-- `kommo_lead_sources` - Lead sources analytics by pipeline
-- `kommo_revenue_trend` - Revenue dynamics by day/week/month
-- `kommo_churn_risk` - Identify customers at risk of churn
-- `kommo_lead_score` - Score leads to prioritize sales efforts
-- `kommo_duplicates_find` - Find duplicate contacts/companies
+- `kommo_analytics` - **Universal analytics tool** with actions:
+  - `pipeline` - Pipeline performance (conversion, avg check, cycle time)
+  - `funnel` - Funnel conversion analysis by stage
+  - `forecast` - Sales predictions (expected, optimistic, pessimistic)
+  - `managers` - Manager performance comparison
+  - `revenue` - Revenue trend by day/week/month
+  - `stale` - Find stuck deals without activity
+  - `sources` - Lead sources effectiveness
+  - `churn` - Customers at risk of churn
+  - `scoring` - Score leads to prioritize
+  - `duplicates` - Find duplicate contacts/companies
+
+*Legacy individual tools still available for backward compatibility*
 
 ### Actions
 - `kommo_task_create` - Create tasks linked to leads/contacts/companies

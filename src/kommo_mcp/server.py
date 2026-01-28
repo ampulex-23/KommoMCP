@@ -954,6 +954,86 @@ async def _execute_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
         
         return result.model_dump()
     
+    elif name == 'kommo_analytics':
+        from kommo_mcp.analytics.engine import AnalyticsEngine
+        
+        action = arguments.get('action')
+        if not action:
+            return {'error': 'action is required'}
+        
+        async with _get_session_factory()() as session:
+            engine = AnalyticsEngine(session)
+            
+            if action == 'pipeline':
+                date_from = _parse_date(arguments.get('date_from'))
+                date_to = _parse_date(arguments.get('date_to'))
+                result = await engine.pipeline_analytics(
+                    pipeline_id=arguments.get('pipeline_id'),
+                    date_from=date_from,
+                    date_to=date_to,
+                )
+            elif action == 'funnel':
+                date_from = _parse_date(arguments.get('date_from'))
+                date_to = _parse_date(arguments.get('date_to'))
+                result = await engine.funnel_analysis(
+                    pipeline_id=arguments['pipeline_id'],
+                    date_from=date_from,
+                    date_to=date_to,
+                )
+            elif action == 'forecast':
+                result = await engine.sales_forecast(
+                    pipeline_id=arguments.get('pipeline_id'),
+                    forecast_days=arguments.get('forecast_days', 30),
+                )
+            elif action == 'managers':
+                date_from = _parse_date(arguments.get('date_from'))
+                date_to = _parse_date(arguments.get('date_to'))
+                result = await engine.manager_performance(
+                    user_id=arguments.get('user_id'),
+                    date_from=date_from,
+                    date_to=date_to,
+                )
+            elif action == 'revenue':
+                result = await engine.revenue_trend(
+                    group_by=arguments.get('group_by', 'month'),
+                    pipeline_id=arguments.get('pipeline_id'),
+                    periods_count=arguments.get('periods_count', 12),
+                )
+            elif action == 'stale':
+                result = await engine.stale_deals(
+                    threshold_days=arguments.get('threshold_days', 14),
+                    pipeline_id=arguments.get('pipeline_id'),
+                    limit=arguments.get('limit', 50),
+                )
+            elif action == 'sources':
+                date_from = _parse_date(arguments.get('date_from'))
+                date_to = _parse_date(arguments.get('date_to'))
+                result = await engine.lead_sources(
+                    pipeline_id=arguments.get('pipeline_id'),
+                    date_from=date_from,
+                    date_to=date_to,
+                )
+            elif action == 'churn':
+                result = await engine.churn_risk(
+                    days_threshold=arguments.get('threshold_days', 90),
+                    min_deals=arguments.get('min_deals', 1),
+                    limit=arguments.get('limit', 50),
+                )
+            elif action == 'scoring':
+                result = await engine.lead_score(
+                    pipeline_id=arguments.get('pipeline_id'),
+                    limit=arguments.get('limit', 50),
+                )
+            elif action == 'duplicates':
+                result = await engine.find_duplicates(
+                    entity_type=arguments.get('entity_type', 'contacts'),
+                    limit=arguments.get('limit', 50),
+                )
+            else:
+                return {'error': f'Unknown action: {action}'}
+        
+        return result.model_dump()
+    
     elif name == 'kommo_task_create':
         # Parse complete_till - can be ISO string or Unix timestamp
         complete_till = arguments['complete_till']
