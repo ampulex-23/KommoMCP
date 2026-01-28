@@ -15,10 +15,10 @@ logger = logging.getLogger(__name__)
 
 
 def create_webhook_app() -> FastAPI:
-    """Create FastAPI application for webhooks."""
+    """Create FastAPI application for webhooks and MCP HTTP."""
     app = FastAPI(
-        title='KommoMCP Webhooks',
-        description='Webhook receiver for Kommo CRM events',
+        title='KommoMCP Server',
+        description='MCP Server for Kommo CRM with webhooks and HTTP transport',
         version='1.0.0',
     )
     
@@ -27,7 +27,69 @@ def create_webhook_app() -> FastAPI:
     @app.get('/health')
     async def health_check():
         """Health check endpoint."""
-        return {'status': 'ok', 'service': 'kommo-mcp-webhooks'}
+        return {'status': 'ok', 'service': 'kommo-mcp'}
+    
+    @app.get('/mcp')
+    async def mcp_info():
+        """MCP server info."""
+        return {
+            'name': 'kommo-mcp',
+            'version': '1.0.0',
+            'protocol_version': '2024-11-05',
+            'capabilities': {'tools': {}, 'resources': {}},
+        }
+    
+    @app.post('/mcp')
+    async def mcp_endpoint(request: Request):
+        """MCP HTTP Streamable endpoint for n8n."""
+        import json
+        from kommo_mcp.mcp_http.server import (
+            _handle_initialize,
+            _handle_tools_list,
+            _handle_tools_call,
+            _handle_resources_list,
+            _handle_resources_read,
+        )
+        
+        try:
+            body = await request.json()
+            logger.info(f'MCP request: {body.get("method")}')
+            
+            method = body.get('method')
+            params = body.get('params', {})
+            request_id = body.get('id')
+            
+            if method == 'initialize':
+                result = await _handle_initialize(params)
+            elif method == 'tools/list':
+                result = await _handle_tools_list()
+            elif method == 'tools/call':
+                result = await _handle_tools_call(params)
+            elif method == 'resources/list':
+                result = await _handle_resources_list()
+            elif method == 'resources/read':
+                result = await _handle_resources_read(params)
+            elif method == 'ping':
+                result = {}
+            else:
+                return JSONResponse(content={
+                    'jsonrpc': '2.0',
+                    'id': request_id,
+                    'error': {'code': -32601, 'message': f'Method not found: {method}'},
+                })
+            
+            return JSONResponse(content={
+                'jsonrpc': '2.0',
+                'id': request_id,
+                'result': result,
+            })
+        except Exception as e:
+            logger.exception('MCP request error')
+            return JSONResponse(status_code=500, content={
+                'jsonrpc': '2.0',
+                'id': None,
+                'error': {'code': -32603, 'message': str(e)},
+            })
     
     @app.post('/webhook/kommo')
     async def receive_webhook(

@@ -1,14 +1,15 @@
 # KommoMCP
 
-MCP Server for Kommo/amoCRM with analytics focus.
+MCP Server for Kommo/amoCRM with analytics focus. Enables AI assistants to interact with your CRM data through natural language.
 
 ## Features
 
-- 🔌 **MCP Protocol** - Works with Claude Desktop, Cursor, Windsurf
+- 🔌 **MCP Protocol** - Works with Claude Desktop, Cursor, Windsurf, n8n
 - 📊 **Analytics** - Pipeline analytics, manager performance, sales forecasts
 - 🔄 **Data Sync** - Incremental sync from Kommo API to PostgreSQL
 - ⚡ **Async** - Built with asyncio for high performance
 - 🗄️ **PostgreSQL** - Local database for big data analytics
+- 🌐 **HTTP Transport** - REST API for n8n and other integrations
 
 ## Quick Start
 
@@ -55,25 +56,61 @@ Add to your Claude Desktop config (`claude_desktop_config.json`):
 }
 ```
 
+### n8n Configuration
+
+Use MCP Client node with HTTP transport:
+- **URL**: `https://your-domain.com/mcp`
+- **Transport**: HTTP Streamable
+
 ## Available Tools
 
 ### Sync & Status
 - `kommo_ping` - Check API connection
-- `kommo_sync_start` - Start data synchronization
+- `kommo_sync_start` - Start data synchronization (full or incremental)
 - `kommo_sync_status` - Get sync status
 
 ### Data Access
 - `kommo_pipelines_list` - List all pipelines with stages
 - `kommo_users_list` - List all users
-- `kommo_leads_list` - List leads with filtering
-- `kommo_lead_get` - Get lead details
-- `kommo_leads_summary` - Quick leads summary
+- `kommo_leads_list` - List leads with filtering, sorting, date ranges
+- `kommo_lead_get` - Get lead details with contacts
+- `kommo_lead_create` - Create new lead
+- `kommo_contacts_list` - List contacts
+- `kommo_contact_create` - Create new contact
 
-### Analytics (Coming Soon)
-- `kommo_pipeline_analytics` - Pipeline performance metrics
-- `kommo_manager_performance` - Manager statistics
-- `kommo_sales_forecast` - Sales predictions
-- `kommo_funnel_analysis` - Conversion analysis
+### Analytics
+- `kommo_pipeline_analytics` - Pipeline performance metrics (conversion, avg check, cycle time)
+- `kommo_manager_performance` - Manager statistics (leads, revenue, win rate)
+- `kommo_sales_forecast` - Sales predictions (expected, optimistic, pessimistic)
+- `kommo_funnel_analysis` - Conversion analysis by stage
+
+## Example Queries
+
+Ask your AI assistant:
+- "Покажи аналитику по основной воронке за последний месяц"
+- "Сделай прогноз продаж на 30 дней"
+- "Сравни показатели менеджеров"
+- "Покажи последние 10 сделок"
+- "Где теряются сделки в воронке?"
+
+## Deployment
+
+### VDS with nginx + SSL
+
+```bash
+# Install on server
+cd /opt/kommo-mcp
+python -m venv venv
+source venv/bin/activate
+pip install -e .
+
+# Create systemd service
+sudo systemctl enable kommo-webhooks
+sudo systemctl start kommo-webhooks
+
+# Configure nginx with SSL
+sudo certbot --nginx -d your-domain.com
+```
 
 ## Development
 

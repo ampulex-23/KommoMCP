@@ -139,6 +139,24 @@ async def list_tools() -> list[Tool]:
                         'description': 'Page number for pagination',
                         'default': 1,
                     },
+                    'order_by': {
+                        'type': 'string',
+                        'description': 'Sort field: created_at, updated_at, id (default: updated_at)',
+                        'default': 'updated_at',
+                    },
+                    'order_dir': {
+                        'type': 'string',
+                        'description': 'Sort direction: asc or desc (default: desc)',
+                        'default': 'desc',
+                    },
+                    'created_at_from': {
+                        'type': 'string',
+                        'description': 'Filter by created_at from date (ISO format or timestamp)',
+                    },
+                    'created_at_to': {
+                        'type': 'string',
+                        'description': 'Filter by created_at to date (ISO format or timestamp)',
+                    },
                 },
                 'required': [],
             },
@@ -250,6 +268,28 @@ async def list_tools() -> list[Tool]:
                     },
                 },
                 'required': [],
+            },
+        ),
+        Tool(
+            name='kommo_funnel_analysis',
+            description='Detailed funnel conversion analysis with stage-by-stage metrics. Shows how leads flow through the pipeline stages. Requires synced data.',
+            inputSchema={
+                'type': 'object',
+                'properties': {
+                    'pipeline_id': {
+                        'type': 'integer',
+                        'description': 'Pipeline ID to analyze',
+                    },
+                    'date_from': {
+                        'type': 'string',
+                        'description': 'Start date (ISO format)',
+                    },
+                    'date_to': {
+                        'type': 'string',
+                        'description': 'End date (ISO format)',
+                    },
+                },
+                'required': ['pipeline_id'],
             },
         ),
         Tool(
@@ -611,6 +651,23 @@ async def _execute_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
         params['limit'] = limit
         params['page'] = page
         
+        # Sorting
+        order_by = arguments.get('order_by', 'updated_at')
+        order_dir = arguments.get('order_dir', 'desc')
+        params[f'order[{order_by}]'] = order_dir
+        
+        # Date filters
+        if arguments.get('created_at_from'):
+            from_val = arguments['created_at_from']
+            if isinstance(from_val, str) and not from_val.isdigit():
+                from_val = int(datetime.fromisoformat(from_val.replace('Z', '+00:00')).timestamp())
+            params['filter[created_at][from]'] = int(from_val)
+        if arguments.get('created_at_to'):
+            to_val = arguments['created_at_to']
+            if isinstance(to_val, str) and not to_val.isdigit():
+                to_val = int(datetime.fromisoformat(to_val.replace('Z', '+00:00')).timestamp())
+            params['filter[created_at][to]'] = int(to_val)
+        
         data = await api.get('leads', params=params)
         leads = data.get('_embedded', {}).get('leads', [])
         
@@ -765,6 +822,22 @@ async def _execute_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
         
         return result.model_dump()
     
+    elif name == 'kommo_funnel_analysis':
+        from kommo_mcp.analytics.engine import AnalyticsEngine
+        
+        date_from = _parse_date(arguments.get('date_from'))
+        date_to = _parse_date(arguments.get('date_to'))
+        
+        async with _get_session_factory()() as session:
+            engine = AnalyticsEngine(session)
+            result = await engine.funnel_analysis(
+                pipeline_id=arguments['pipeline_id'],
+                date_from=date_from,
+                date_to=date_to,
+            )
+        
+        return result.model_dump()
+    
     elif name == 'kommo_revenue_report':
         from kommo_mcp.analytics.engine import AnalyticsEngine
         
@@ -801,6 +874,137 @@ async def _execute_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
             )
         
         return result.model_dump()
+    
+    elif name == 'kommo_stale_deals':
+        from kommo_mcp.analytics.engine import AnalyticsEngine
+        
+        async with _get_session_factory()() as session:
+            engine = AnalyticsEngine(session)
+            result = await engine.stale_deals(
+                threshold_days=arguments.get('threshold_days', 14),
+                pipeline_id=arguments.get('pipeline_id'),
+                limit=arguments.get('limit', 50),
+            )
+        
+        return result.model_dump()
+    
+    elif name == 'kommo_lead_sources':
+        from kommo_mcp.analytics.engine import AnalyticsEngine
+        
+        date_from = _parse_date(arguments.get('date_from'))
+        date_to = _parse_date(arguments.get('date_to'))
+        
+        async with _get_session_factory()() as session:
+            engine = AnalyticsEngine(session)
+            result = await engine.lead_sources(
+                pipeline_id=arguments.get('pipeline_id'),
+                date_from=date_from,
+                date_to=date_to,
+            )
+        
+        return result.model_dump()
+    
+    elif name == 'kommo_revenue_trend':
+        from kommo_mcp.analytics.engine import AnalyticsEngine
+        
+        async with _get_session_factory()() as session:
+            engine = AnalyticsEngine(session)
+            result = await engine.revenue_trend(
+                group_by=arguments.get('group_by', 'month'),
+                pipeline_id=arguments.get('pipeline_id'),
+                periods_count=arguments.get('periods_count', 12),
+            )
+        
+        return result.model_dump()
+    
+    elif name == 'kommo_churn_risk':
+        from kommo_mcp.analytics.engine import AnalyticsEngine
+        
+        async with _get_session_factory()() as session:
+            engine = AnalyticsEngine(session)
+            result = await engine.churn_risk(
+                days_threshold=arguments.get('days_threshold', 90),
+                min_deals=arguments.get('min_deals', 1),
+                limit=arguments.get('limit', 50),
+            )
+        
+        return result.model_dump()
+    
+    elif name == 'kommo_lead_score':
+        from kommo_mcp.analytics.engine import AnalyticsEngine
+        
+        async with _get_session_factory()() as session:
+            engine = AnalyticsEngine(session)
+            result = await engine.lead_score(
+                pipeline_id=arguments.get('pipeline_id'),
+                limit=arguments.get('limit', 50),
+            )
+        
+        return result.model_dump()
+    
+    elif name == 'kommo_duplicates_find':
+        from kommo_mcp.analytics.engine import AnalyticsEngine
+        
+        async with _get_session_factory()() as session:
+            engine = AnalyticsEngine(session)
+            result = await engine.find_duplicates(
+                entity_type=arguments.get('entity_type', 'contacts'),
+                limit=arguments.get('limit', 50),
+            )
+        
+        return result.model_dump()
+    
+    elif name == 'kommo_task_create':
+        # Parse complete_till - can be ISO string or Unix timestamp
+        complete_till = arguments['complete_till']
+        if isinstance(complete_till, str):
+            try:
+                dt = datetime.fromisoformat(complete_till.replace('Z', '+00:00'))
+                complete_till = int(dt.timestamp())
+            except ValueError:
+                complete_till = int(complete_till)
+        
+        task_data = {
+            'text': arguments['text'],
+            'complete_till': complete_till,
+        }
+        
+        if arguments.get('entity_id') and arguments.get('entity_type'):
+            task_data['entity_id'] = arguments['entity_id']
+            task_data['entity_type'] = arguments['entity_type']
+        
+        if arguments.get('task_type_id'):
+            task_data['task_type_id'] = arguments['task_type_id']
+        
+        if arguments.get('responsible_user_id'):
+            task_data['responsible_user_id'] = arguments['responsible_user_id']
+        
+        result = await api.post('tasks', json=[task_data])
+        created = result.get('_embedded', {}).get('tasks', [{}])[0]
+        return {
+            'status': 'created',
+            'task_id': created.get('id'),
+            'task': created,
+        }
+    
+    elif name == 'kommo_note_create':
+        entity_type = arguments['entity_type']
+        entity_id = arguments['entity_id']
+        
+        note_data = {
+            'note_type': 'common',
+            'params': {
+                'text': arguments['text'],
+            },
+        }
+        
+        result = await api.post(f'{entity_type}/{entity_id}/notes', json=[note_data])
+        created = result.get('_embedded', {}).get('notes', [{}])[0]
+        return {
+            'status': 'created',
+            'note_id': created.get('id'),
+            'note': created,
+        }
     
     # === CRUD: Leads ===
     

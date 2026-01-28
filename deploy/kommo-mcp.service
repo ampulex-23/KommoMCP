@@ -1,0 +1,15 @@
+[Unit]
+Description=KommoMCP Server
+After=network.target postgresql.service
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/kommo-mcp
+Environment=PATH=/opt/kommo-mcp/venv/bin:/usr/local/bin:/usr/bin:/bin
+ExecStart=/opt/kommo-mcp/venv/bin/python -m kommo_mcp.server
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

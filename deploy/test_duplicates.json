@@ -1,0 +1,1 @@
+{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"kommo_duplicates_find","arguments":{"entity_type":"contacts","limit":5}}}

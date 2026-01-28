@@ -1,0 +1,1 @@
+{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"kommo_pipeline_analytics","arguments":{"pipeline_id":4717462,"date_from":"2025-12-28","date_to":"2026-01-28"}}}

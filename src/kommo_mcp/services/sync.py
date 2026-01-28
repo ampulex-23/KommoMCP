@@ -157,18 +157,41 @@ class SyncManager:
         """Sync leads from Kommo API."""
         last_sync = None if full else await self._get_last_sync('leads')
         
-        params = {}
+        params = {'order[updated_at]': 'desc'}
         if last_sync:
             params['filter[updated_at][from]'] = int(last_sync.timestamp())
         
         count = 0
-        async for lead in self.api.get_leads(**params):
-            await self._upsert_lead(lead)
-            count += 1
+        page = 1
+        page_size = 250
+        
+        while True:
+            page_params = {**params, 'page': page, 'limit': page_size}
+            try:
+                data = await self.api.get('leads', params=page_params)
+            except Exception as e:
+                logger.warning(f'Error fetching leads page {page}: {e}')
+                break
+            
+            if not data:
+                break
+            
+            leads = data.get('_embedded', {}).get('leads', [])
+            if not leads:
+                break
+            
+            for lead in leads:
+                await self._upsert_lead(lead)
+                count += 1
             
             if count % 100 == 0:
                 await self.session.commit()
                 logger.debug(f'Synced {count} leads...')
+            
+            if len(leads) < page_size:
+                break
+            
+            page += 1
         
         await self.session.commit()
         return count
@@ -221,7 +244,8 @@ class SyncManager:
             params['filter[updated_at][from]'] = int(last_sync.timestamp())
         
         count = 0
-        async for contact in self.api.get_contacts(**params):
+        try:
+          async for contact in self.api.get_contacts(**params):
             stmt = insert(ContactDB).values(
                 id=contact['id'],
                 name=contact.get('name', ''),
@@ -255,6 +279,11 @@ class SyncManager:
             
             if count % 100 == 0:
                 await self.session.commit()
+        except TypeError as e:
+            if 'NoneType' in str(e):
+                logger.warning('No contacts found or empty response')
+            else:
+                raise
         
         await self.session.commit()
         return count
@@ -268,7 +297,8 @@ class SyncManager:
             params['filter[updated_at][from]'] = int(last_sync.timestamp())
         
         count = 0
-        async for company in self.api.get_companies(**params):
+        try:
+          async for company in self.api.get_companies(**params):
             stmt = insert(CompanyDB).values(
                 id=company['id'],
                 name=company.get('name', ''),
@@ -298,6 +328,11 @@ class SyncManager:
             
             if count % 100 == 0:
                 await self.session.commit()
+        except TypeError as e:
+            if 'NoneType' in str(e):
+                logger.warning('No companies found or empty response')
+            else:
+                raise
         
         await self.session.commit()
         return count
@@ -351,7 +386,8 @@ class SyncManager:
     def _extract_custom_fields(self, entity: dict[str, Any]) -> dict[str, Any]:
         """Extract custom fields from entity."""
         custom_fields = {}
-        for field in entity.get('custom_fields_values', []):
+        fields_values = entity.get('custom_fields_values') or []
+        for field in fields_values:
             field_id = str(field.get('field_id'))
             values = field.get('values', [])
             if values:

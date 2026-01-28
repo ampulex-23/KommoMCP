@@ -139,8 +139,8 @@ class LeadDB(Base, KommoMixin):
     status = relationship('StageDB')
     contacts = relationship('ContactDB', secondary=lead_contacts, back_populates='leads')
     companies = relationship('CompanyDB', secondary=lead_companies, back_populates='leads')
-    tasks = relationship('TaskDB', back_populates='lead')
-    notes = relationship('NoteDB', back_populates='lead')
+    # Note: tasks and notes relationships removed due to polymorphic entity_type
+    # Use manual queries instead
 
     __table_args__ = (
         Index('ix_leads_pipeline_status', 'pipeline_id', 'status_id'),
@@ -205,7 +205,7 @@ class TaskDB(Base, KommoMixin):
     __tablename__ = 'tasks'
 
     id = Column(BigInteger, primary_key=True)
-    text = Column(String(1000))
+    text = Column(Text)  # Changed from String(1000) to Text for long task descriptions
     task_type_id = Column(Integer, default=1)
     entity_id = Column(BigInteger)
     entity_type = Column(String(50))
@@ -216,16 +216,11 @@ class TaskDB(Base, KommoMixin):
     is_completed = Column(Boolean, default=False)
     complete_till = Column(DateTime)
     duration = Column(Integer, default=0)
-    result = Column(String(1000))
+    result = Column(Text)  # Changed from String(1000) to Text
 
     responsible_user = relationship('UserDB', back_populates='tasks')
-    lead = relationship(
-        'LeadDB',
-        back_populates='tasks',
-        primaryjoin='and_(TaskDB.entity_id==LeadDB.id, TaskDB.entity_type=="leads")',
-        foreign_keys=[entity_id],
-        viewonly=True,
-    )
+    # Note: relationship to lead removed due to polymorphic entity_type
+    # Use manual queries instead: TaskDB.entity_type == 'leads' and TaskDB.entity_id == lead_id
 
     __table_args__ = (
         Index('ix_tasks_entity', 'entity_type', 'entity_id'),
@@ -250,13 +245,8 @@ class NoteDB(Base, KommoMixin):
     created_by = Column(BigInteger)
     updated_by = Column(BigInteger)
 
-    lead = relationship(
-        'LeadDB',
-        back_populates='notes',
-        primaryjoin='and_(NoteDB.entity_id==LeadDB.id, NoteDB.entity_type=="leads")',
-        foreign_keys=[entity_id],
-        viewonly=True,
-    )
+    # Note: relationship to lead removed due to polymorphic entity_type
+    # Use manual queries instead
 
     __table_args__ = (
         Index('ix_notes_entity', 'entity_type', 'entity_id'),

@@ -6,7 +6,7 @@ from typing import Any, AsyncIterator
 import httpx
 
 from kommo_mcp.api.rate_limiter import RateLimiter
-from kommo_mcp.config import settings
+from kommo_mcp.config import init_settings
 
 logger = logging.getLogger(__name__)
 
@@ -49,9 +49,10 @@ class KommoClient:
             access_token: API access token (default from settings).
             timeout: Request timeout in seconds.
         """
-        self.subdomain = subdomain or settings.kommo_subdomain
-        self.access_token = access_token or settings.kommo_access_token
-        self.base_url = f'https://{self.subdomain}.kommo.com/api/v4'
+        _settings = init_settings()
+        self.subdomain = subdomain or _settings.kommo_subdomain
+        self.access_token = access_token or _settings.kommo_access_token
+        self.base_url = f'https://{self.subdomain}.amocrm.ru/api/v4'
         
         self.client = httpx.AsyncClient(
             headers={
@@ -175,6 +176,9 @@ class KommoClient:
                     break
                 raise
             
+            if not data:
+                break
+            
             # Extract items from _embedded
             embedded = data.get('_embedded', {})
             # Find the items key (usually matches endpoint name)
@@ -200,6 +204,9 @@ class KommoClient:
 
     async def get_leads(self, **params: Any) -> AsyncIterator[dict]:
         """Get leads with auto-pagination."""
+        # Sort by updated_at desc to get newest first
+        if 'order[updated_at]' not in params and 'order[created_at]' not in params:
+            params['order[updated_at]'] = 'desc'
         async for lead in self.iterate('leads', params=params):
             yield lead
 
