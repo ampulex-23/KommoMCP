@@ -95,7 +95,47 @@
 
 ---
 
-### 📝 Быстрые действия
+### � Отчёты (kommo_report)
+
+Генерация форматированных отчётов:
+
+| Action | Описание | Ключевые параметры |
+|--------|----------|-------------------|
+| `summary` | Сводка за период (сделки, выручка) | period, pipeline_id |
+| `comparison` | Сравнение периодов | period, compare_with |
+| `pipeline_health` | Здоровье воронки | pipeline_id, threshold_days |
+| `activity` | Отчёт по активности менеджеров | period, user_id |
+| `custom` | Кастомный отчёт | metrics, group_by |
+
+**period:** today, yesterday, week, month, quarter, year, custom
+
+**Примеры:**
+- "Отчёт за месяц" → `action: summary, period: month`
+- "Сравни с прошлым периодом" → `action: comparison, period: month`
+- "Здоровье воронки" → `action: pipeline_health`
+
+---
+
+### ⚙️ Автоматизация (kommo_automate)
+
+Автоматические действия и рекомендации:
+
+| Action | Описание | Ключевые параметры |
+|--------|----------|-------------------|
+| `suggest` | AI-рекомендации по автоматизации | - |
+| `stale_followup` | Создать задачи для зависших сделок | threshold_days, task_text, dry_run |
+| `escalation` | Эскалация сделок на руководителя | threshold_days, assign_to, dry_run |
+
+**Важно:** По умолчанию `dry_run: true` — предпросмотр без выполнения!
+
+**Примеры:**
+- "Что можно автоматизировать?" → `action: suggest`
+- "Создай задачи для зависших сделок" → `action: stale_followup, dry_run: false`
+- "Эскалируй сделки старше 30 дней на РОПа" → `action: escalation, threshold_days: 30, assign_to: 123`
+
+---
+
+### �📝 Быстрые действия
 
 | Инструмент | Описание |
 |------------|----------|

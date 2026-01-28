@@ -967,7 +967,7 @@ async def _execute_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
             if action == 'pipeline':
                 date_from = _parse_date(arguments.get('date_from'))
                 date_to = _parse_date(arguments.get('date_to'))
-                result = await engine.pipeline_analytics(
+                result = await engine.pipeline_summary(
                     pipeline_id=arguments.get('pipeline_id'),
                     date_from=date_from,
                     date_to=date_to,
@@ -1350,6 +1350,352 @@ async def _execute_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
         
         else:
             return {'error': f'Unknown search action: {action}'}
+    
+    elif name == 'kommo_report':
+        from kommo_mcp.analytics.engine import AnalyticsEngine
+        
+        action = arguments.get('action')
+        if not action:
+            return {'error': 'action is required'}
+        
+        period = arguments.get('period', 'month')
+        
+        # Calculate date range based on period
+        now = datetime.now()
+        if period == 'today':
+            date_from = now.replace(hour=0, minute=0, second=0, microsecond=0)
+            date_to = now
+        elif period == 'yesterday':
+            date_from = (now - timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
+            date_to = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        elif period == 'week':
+            date_from = now - timedelta(days=7)
+            date_to = now
+        elif period == 'month':
+            date_from = now - timedelta(days=30)
+            date_to = now
+        elif period == 'quarter':
+            date_from = now - timedelta(days=90)
+            date_to = now
+        elif period == 'year':
+            date_from = now - timedelta(days=365)
+            date_to = now
+        else:
+            date_from = _parse_date(arguments.get('date_from'))
+            date_to = _parse_date(arguments.get('date_to'))
+        
+        async with _get_session_factory()() as session:
+            engine = AnalyticsEngine(session)
+            
+            if action == 'summary':
+                # Get multiple analytics for summary
+                pipeline_data = await engine.pipeline_summary(
+                    pipeline_id=arguments.get('pipeline_id'),
+                    date_from=date_from,
+                    date_to=date_to,
+                )
+                
+                # Handle list or single object
+                if isinstance(pipeline_data, list):
+                    total_leads = sum(p.total_leads for p in pipeline_data)
+                    won_leads = sum(p.won_leads for p in pipeline_data)
+                    lost_leads = sum(p.lost_leads for p in pipeline_data)
+                    total_value = sum(p.total_value for p in pipeline_data)
+                    avg_value = total_value / won_leads if won_leads > 0 else 0
+                    conversion_rate = (won_leads / total_leads * 100) if total_leads > 0 else 0
+                    avg_cycle_days = sum(p.avg_cycle_days for p in pipeline_data) / len(pipeline_data) if pipeline_data else 0
+                else:
+                    total_leads = pipeline_data.total_leads
+                    won_leads = pipeline_data.won_leads
+                    lost_leads = pipeline_data.lost_leads
+                    total_value = pipeline_data.total_value
+                    avg_value = pipeline_data.avg_value
+                    conversion_rate = pipeline_data.conversion_rate
+                    avg_cycle_days = pipeline_data.avg_cycle_days
+                
+                return {
+                    'report_type': 'summary',
+                    'period': period,
+                    'date_from': str(date_from) if date_from else None,
+                    'date_to': str(date_to) if date_to else None,
+                    'total_leads': total_leads,
+                    'won_leads': won_leads,
+                    'lost_leads': lost_leads,
+                    'total_value': total_value,
+                    'avg_value': avg_value,
+                    'conversion_rate': conversion_rate,
+                    'avg_cycle_days': avg_cycle_days,
+                }
+            
+            elif action == 'comparison':
+                compare_with = arguments.get('compare_with', 'previous_period')
+                
+                def extract_metrics(data):
+                    if isinstance(data, list):
+                        return {
+                            'total_leads': sum(p.total_leads for p in data),
+                            'total_value': sum(p.total_value for p in data),
+                            'conversion_rate': (sum(p.won_leads for p in data) / sum(p.total_leads for p in data) * 100) if sum(p.total_leads for p in data) > 0 else 0,
+                        }
+                    return {
+                        'total_leads': data.total_leads,
+                        'total_value': data.total_value,
+                        'conversion_rate': data.conversion_rate,
+                    }
+                
+                # Current period
+                current_data = await engine.pipeline_summary(
+                    pipeline_id=arguments.get('pipeline_id'),
+                    date_from=date_from,
+                    date_to=date_to,
+                )
+                current = extract_metrics(current_data)
+                
+                # Previous period
+                if date_from and date_to:
+                    period_length = (date_to - date_from).days
+                    prev_date_to = date_from
+                    prev_date_from = date_from - timedelta(days=period_length)
+                else:
+                    prev_date_from = now - timedelta(days=60)
+                    prev_date_to = now - timedelta(days=30)
+                
+                previous_data = await engine.pipeline_summary(
+                    pipeline_id=arguments.get('pipeline_id'),
+                    date_from=prev_date_from,
+                    date_to=prev_date_to,
+                )
+                previous = extract_metrics(previous_data)
+                
+                def calc_change(curr, prev):
+                    if prev == 0:
+                        return 100 if curr > 0 else 0
+                    return round((curr - prev) / prev * 100, 1)
+                
+                return {
+                    'report_type': 'comparison',
+                    'current_period': {'from': str(date_from), 'to': str(date_to)},
+                    'previous_period': {'from': str(prev_date_from), 'to': str(prev_date_to)},
+                    'current': {
+                        'leads': current['total_leads'],
+                        'value': current['total_value'],
+                        'conversion': current['conversion_rate'],
+                    },
+                    'previous': {
+                        'leads': previous['total_leads'],
+                        'value': previous['total_value'],
+                        'conversion': previous['conversion_rate'],
+                    },
+                    'changes': {
+                        'leads': calc_change(current['total_leads'], previous['total_leads']),
+                        'value': calc_change(current['total_value'], previous['total_value']),
+                        'conversion': calc_change(current['conversion_rate'], previous['conversion_rate']),
+                    },
+                }
+            
+            elif action == 'pipeline_health':
+                stale = await engine.stale_deals(
+                    threshold_days=arguments.get('threshold_days', 14),
+                    pipeline_id=arguments.get('pipeline_id'),
+                    limit=100,
+                )
+                
+                pipeline_data = await engine.pipeline_summary(
+                    pipeline_id=arguments.get('pipeline_id'),
+                    date_from=date_from,
+                    date_to=date_to,
+                )
+                
+                # Handle list or single object
+                if isinstance(pipeline_data, list):
+                    in_progress = sum(p.in_progress for p in pipeline_data)
+                else:
+                    in_progress = pipeline_data.in_progress
+                
+                return {
+                    'report_type': 'pipeline_health',
+                    'total_active_deals': in_progress,
+                    'stale_deals_count': stale.total_stale,
+                    'stale_deals_value': stale.total_value,
+                    'health_score': max(0, 100 - (stale.total_stale * 5)),
+                    'by_stage': stale.by_stage,
+                    'recommendations': [
+                        f'У вас {stale.total_stale} зависших сделок на сумму {stale.total_value}',
+                        'Рекомендуется связаться с клиентами по этим сделкам',
+                    ] if stale.total_stale > 0 else ['Воронка в хорошем состоянии'],
+                }
+            
+            elif action == 'activity':
+                managers = await engine.manager_performance(
+                    user_id=arguments.get('user_id'),
+                    date_from=date_from,
+                    date_to=date_to,
+                )
+                
+                return {
+                    'report_type': 'activity',
+                    'period': period,
+                    'managers': [
+                        {
+                            'name': m.user_name,
+                            'leads': m.total_leads,
+                            'won': m.won_leads,
+                            'revenue': m.total_revenue,
+                            'win_rate': m.win_rate,
+                        }
+                        for m in managers.managers
+                    ],
+                }
+            
+            elif action == 'custom':
+                metrics = arguments.get('metrics', ['revenue', 'deals_count'])
+                group_by = arguments.get('group_by', 'month')
+                
+                result = {'report_type': 'custom', 'metrics': metrics, 'group_by': group_by}
+                
+                if 'revenue' in metrics:
+                    revenue = await engine.revenue_trend(
+                        group_by=group_by,
+                        pipeline_id=arguments.get('pipeline_id'),
+                        periods_count=12,
+                    )
+                    result['revenue_data'] = revenue.model_dump()
+                
+                return result
+            
+            else:
+                return {'error': f'Unknown report action: {action}'}
+    
+    elif name == 'kommo_automate':
+        from kommo_mcp.analytics.engine import AnalyticsEngine
+        
+        action = arguments.get('action')
+        if not action:
+            return {'error': 'action is required'}
+        
+        dry_run = arguments.get('dry_run', True)
+        
+        if action == 'stale_followup':
+            threshold_days = arguments.get('threshold_days', 14)
+            task_text = arguments.get('task_text', 'Связаться с клиентом - сделка без активности')
+            
+            async with _get_session_factory()() as session:
+                engine = AnalyticsEngine(session)
+                stale = await engine.stale_deals(
+                    threshold_days=threshold_days,
+                    pipeline_id=arguments.get('pipeline_id'),
+                    limit=arguments.get('limit', 50),
+                )
+            
+            if dry_run:
+                return {
+                    'status': 'dry_run',
+                    'action': 'stale_followup',
+                    'would_create_tasks': stale.total_stale,
+                    'deals': [{'id': d.lead_id, 'name': d.lead_name, 'days_inactive': d.days_inactive} for d in stale.deals[:10]],
+                }
+            
+            # Create tasks for stale deals
+            due_timestamp = int((datetime.now() + timedelta(days=1)).timestamp())
+            tasks = [
+                {
+                    'text': task_text,
+                    'complete_till': due_timestamp,
+                    'entity_id': d.lead_id,
+                    'entity_type': 'leads',
+                }
+                for d in stale.deals
+            ]
+            
+            if tasks:
+                result = await api.post('tasks', json=tasks)
+                created = result.get('_embedded', {}).get('tasks', [])
+                return {'status': 'executed', 'tasks_created': len(created)}
+            
+            return {'status': 'no_stale_deals', 'tasks_created': 0}
+        
+        elif action == 'escalation':
+            threshold_days = arguments.get('threshold_days', 30)
+            assign_to = arguments.get('assign_to')
+            
+            if not assign_to:
+                return {'error': 'assign_to (user_id) is required for escalation'}
+            
+            async with _get_session_factory()() as session:
+                engine = AnalyticsEngine(session)
+                stale = await engine.stale_deals(
+                    threshold_days=threshold_days,
+                    pipeline_id=arguments.get('pipeline_id'),
+                    limit=50,
+                )
+            
+            if dry_run:
+                return {
+                    'status': 'dry_run',
+                    'action': 'escalation',
+                    'would_escalate': stale.total_stale,
+                    'to_user': assign_to,
+                    'deals': [{'id': d.lead_id, 'name': d.lead_name} for d in stale.deals[:10]],
+                }
+            
+            # Reassign stale deals
+            if stale.deals:
+                updates = [{'id': d.lead_id, 'responsible_user_id': assign_to} for d in stale.deals]
+                result = await api.patch('leads', json=updates)
+                return {'status': 'escalated', 'count': len(updates), 'to_user': assign_to}
+            
+            return {'status': 'no_deals_to_escalate'}
+        
+        elif action == 'suggest':
+            async with _get_session_factory()() as session:
+                engine = AnalyticsEngine(session)
+                
+                stale = await engine.stale_deals(threshold_days=14, limit=10)
+                churn = await engine.churn_risk(days_threshold=90, limit=10)
+            
+            suggestions = []
+            
+            if stale.total_stale > 5:
+                suggestions.append({
+                    'type': 'stale_followup',
+                    'priority': 'high',
+                    'description': f'Создать задачи для {stale.total_stale} зависших сделок',
+                    'command': 'kommo_automate(action="stale_followup", threshold_days=14)',
+                })
+            
+            if churn.high_risk_count > 3:
+                suggestions.append({
+                    'type': 'churn_prevention',
+                    'priority': 'medium',
+                    'description': f'Связаться с {churn.high_risk_count} клиентами в зоне риска оттока',
+                    'command': 'kommo_analytics(action="churn")',
+                })
+            
+            if not suggestions:
+                suggestions.append({
+                    'type': 'none',
+                    'priority': 'low',
+                    'description': 'CRM в хорошем состоянии, критических автоматизаций не требуется',
+                })
+            
+            return {'suggestions': suggestions}
+        
+        elif action == 'check_rules':
+            # Placeholder for rule checking
+            return {
+                'status': 'info',
+                'message': 'Rule checking is configured via Kommo interface. Use suggest action for AI recommendations.',
+            }
+        
+        elif action == 'welcome_sequence':
+            return {
+                'status': 'info',
+                'message': 'Welcome sequences should be configured via Kommo Digital Pipeline or Salesbot.',
+                'recommendation': 'Use kommo_bulk with create_tasks to create onboarding tasks for new leads.',
+            }
+        
+        else:
+            return {'error': f'Unknown automate action: {action}'}
     
     elif name == 'kommo_task_create':
         # Parse complete_till - can be ISO string or Unix timestamp

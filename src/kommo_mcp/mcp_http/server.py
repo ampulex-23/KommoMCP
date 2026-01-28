@@ -570,6 +570,74 @@ Actions:
                 'required': ['action'],
             },
         },
+        {
+            'name': 'kommo_report',
+            'description': '''Generate formatted reports from CRM data. Summaries, comparisons, exports.
+
+Actions:
+- summary: Daily/weekly/monthly summary (deals, revenue, tasks)
+- comparison: Compare periods or managers
+- pipeline_health: Pipeline status overview
+- activity: Activity report (calls, meetings, tasks)
+- custom: Custom report with specified metrics''',
+            'inputSchema': {
+                'type': 'object',
+                'properties': {
+                    'action': {
+                        'type': 'string',
+                        'enum': ['summary', 'comparison', 'pipeline_health', 'activity', 'custom'],
+                        'description': 'Report type',
+                    },
+                    'period': {
+                        'type': 'string',
+                        'enum': ['today', 'yesterday', 'week', 'month', 'quarter', 'year', 'custom'],
+                        'description': 'Report period',
+                    },
+                    'date_from': {'type': 'string', 'description': 'Start date for custom period'},
+                    'date_to': {'type': 'string', 'description': 'End date for custom period'},
+                    'pipeline_id': {'type': 'integer', 'description': 'Filter by pipeline'},
+                    'user_id': {'type': 'integer', 'description': 'Filter by user'},
+                    'compare_with': {'type': 'string', 'description': 'Period to compare: previous_period, previous_year'},
+                    'metrics': {
+                        'type': 'array',
+                        'items': {'type': 'string'},
+                        'description': 'Metrics for custom report: revenue, deals_count, conversion, avg_check, cycle_time',
+                    },
+                    'group_by': {'type': 'string', 'description': 'Group by: day, week, month, manager, pipeline, stage'},
+                    'format': {'type': 'string', 'enum': ['text', 'table', 'json'], 'description': 'Output format'},
+                },
+                'required': ['action'],
+            },
+        },
+        {
+            'name': 'kommo_automate',
+            'description': '''Automation rules and triggers. Set up automatic actions based on conditions.
+
+Actions:
+- check_rules: Check which automation rules would trigger for given conditions
+- suggest: Get AI suggestions for automations based on CRM patterns
+- stale_followup: Auto-create tasks for stale deals
+- welcome_sequence: Set up welcome actions for new leads
+- escalation: Escalate deals based on criteria''',
+            'inputSchema': {
+                'type': 'object',
+                'properties': {
+                    'action': {
+                        'type': 'string',
+                        'enum': ['check_rules', 'suggest', 'stale_followup', 'welcome_sequence', 'escalation'],
+                        'description': 'Automation action',
+                    },
+                    'trigger_type': {'type': 'string', 'description': 'Trigger: deal_created, deal_moved, deal_stale, contact_created'},
+                    'conditions': {'type': 'object', 'description': 'Conditions to check'},
+                    'pipeline_id': {'type': 'integer', 'description': 'Pipeline for automation'},
+                    'threshold_days': {'type': 'integer', 'description': 'Days threshold for stale/escalation'},
+                    'task_text': {'type': 'string', 'description': 'Task text for auto-created tasks'},
+                    'assign_to': {'type': 'integer', 'description': 'User ID to assign'},
+                    'dry_run': {'type': 'boolean', 'description': 'Preview without executing'},
+                },
+                'required': ['action'],
+            },
+        },
     ]
     
     return {'tools': tools}
