@@ -83,6 +83,16 @@ Use MCP Client node with HTTP transport:
 - `kommo_manager_performance` - Manager statistics (leads, revenue, win rate)
 - `kommo_sales_forecast` - Sales predictions (expected, optimistic, pessimistic)
 - `kommo_funnel_analysis` - Conversion analysis by stage
+- `kommo_stale_deals` - Find deals stuck without activity
+- `kommo_lead_sources` - Lead sources analytics by pipeline
+- `kommo_revenue_trend` - Revenue dynamics by day/week/month
+- `kommo_churn_risk` - Identify customers at risk of churn
+- `kommo_lead_score` - Score leads to prioritize sales efforts
+- `kommo_duplicates_find` - Find duplicate contacts/companies
+
+### Actions
+- `kommo_task_create` - Create tasks linked to leads/contacts/companies
+- `kommo_note_create` - Add notes to any entity
 
 ## Example Queries
 
@@ -92,6 +102,11 @@ Ask your AI assistant:
 - "Сравни показатели менеджеров"
 - "Покажи последние 10 сделок"
 - "Где теряются сделки в воронке?"
+- "Найди зависшие сделки без активности более 14 дней"
+- "Покажи динамику выручки по месяцам"
+- "Какие клиенты в зоне риска оттока?"
+- "Оцени качество текущих лидов"
+- "Найди дубликаты контактов"
 
 ## Deployment
 
