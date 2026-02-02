@@ -29,6 +29,11 @@ def create_webhook_app() -> FastAPI:
         """Health check endpoint."""
         return {'status': 'ok', 'service': 'kommo-mcp'}
     
+    @app.get('/oauth/callback')
+    async def oauth_callback(code: str = None, state: str = None):
+        """OAuth callback for Kommo integration verification."""
+        return {'status': 'ok', 'message': 'OAuth callback received', 'code': code}
+    
     @app.get('/mcp')
     async def mcp_info():
         """MCP server info."""
