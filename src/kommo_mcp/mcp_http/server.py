@@ -638,6 +638,32 @@ Actions:
                 'required': ['action'],
             },
         },
+        {
+            'name': 'kommo_insights',
+            'description': '''Business insights and opportunities tool. Actions:
+- top_clients: Top clients by revenue
+- rfm: RFM segmentation analysis (Recency, Frequency, Monetary)
+- workload: Manager workload distribution
+- opportunities: Find upsell/cross-sell/reactivation opportunities
+- big_deals: Large deals in pipeline''',
+            'inputSchema': {
+                'type': 'object',
+                'properties': {
+                    'action': {
+                        'type': 'string',
+                        'enum': ['top_clients', 'rfm', 'workload', 'opportunities', 'big_deals'],
+                        'description': 'Insight action',
+                    },
+                    'limit': {'type': 'integer', 'description': 'Number of results (default 10)'},
+                    'by': {'type': 'string', 'enum': ['companies', 'contacts'], 'description': 'Group by companies or contacts'},
+                    'date_from': {'type': 'string', 'description': 'Start date (ISO format)'},
+                    'date_to': {'type': 'string', 'description': 'End date (ISO format)'},
+                    'days_inactive': {'type': 'integer', 'description': 'Days of inactivity for opportunities'},
+                    'threshold': {'type': 'number', 'description': 'Value threshold for big deals'},
+                },
+                'required': ['action'],
+            },
+        },
     ]
     
     return {'tools': tools}

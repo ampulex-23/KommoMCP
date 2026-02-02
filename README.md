@@ -133,6 +133,14 @@ Use MCP Client node with HTTP transport:
   - `stale_followup` - Create tasks for stale deals
   - `escalation` - Escalate deals to manager
 
+### Business Insights
+- `kommo_insights` - **Business intelligence** with actions:
+  - `top_clients` - Top clients by revenue
+  - `rfm` - RFM segmentation (Recency, Frequency, Monetary)
+  - `workload` - Manager workload distribution
+  - `opportunities` - Upsell/reactivation opportunities
+  - `big_deals` - Large deals in pipeline
+
 ### Quick Actions
 - `kommo_task_create` - Create tasks linked to leads/contacts/companies
 - `kommo_note_create` - Add notes to any entity
@@ -154,6 +162,10 @@ Ask your AI assistant:
 - "Сравни продажи с прошлым периодом"
 - "Что можно автоматизировать?"
 - "Создай задачи для зависших сделок"
+- "Покажи топ-10 клиентов по выручке"
+- "Сделай RFM-анализ клиентов"
+- "Какая нагрузка на менеджеров?"
+- "Найди возможности для допродаж"
 
 ## Deployment
 

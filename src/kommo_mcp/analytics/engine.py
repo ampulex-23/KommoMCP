@@ -9,6 +9,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from kommo_mcp.analytics.models import (
     ActivityReport,
+    BigDeal,
+    BigDealsReport,
     ChurnRiskContact,
     ChurnRiskReport,
     DuplicateGroup,
@@ -19,16 +21,25 @@ from kommo_mcp.analytics.models import (
     LeadSource,
     LeadSourcesReport,
     ManagerPerformance,
+    ManagerWorkload,
+    Opportunity,
+    OpportunitiesReport,
     PipelineSummary,
     RevenuePeriod,
     RevenueTrendPeriod,
     RevenueTrendReport,
+    RFMClient,
+    RFMReport,
+    RFMSegment,
     SalesForecast,
     ScoredLead,
     StageForecast,
     StageSummary,
     StaleDeal,
     StaleDealsReport,
+    TopClient,
+    TopClientsReport,
+    WorkloadReport,
 )
 from kommo_mcp.db.models import (
     CompanyDB,
@@ -40,6 +51,7 @@ from kommo_mcp.db.models import (
     TaskDB,
     UserDB,
     contact_companies,
+    lead_companies,
 )
 
 logger = logging.getLogger(__name__)
@@ -1498,4 +1510,567 @@ class AnalyticsEngine:
             total_groups=len(groups),
             total_duplicates=total_duplicates,
             groups=groups,
+        )
+
+    async def top_clients(
+        self,
+        limit: int = 10,
+        date_from: datetime | None = None,
+        date_to: datetime | None = None,
+        by: str = 'companies',  # companies or contacts
+    ) -> TopClientsReport:
+        """
+        Get top clients by revenue.
+        
+        Args:
+            limit: Number of top clients
+            date_from: Start date for deals
+            date_to: End date for deals
+            by: Group by 'companies' or 'contacts'
+        """
+        if by == 'companies':
+            query = select(
+                CompanyDB.id.label('client_id'),
+                CompanyDB.name,
+                func.sum(LeadDB.price).label('total_revenue'),
+                func.count(LeadDB.id).label('deals_count'),
+                func.count(LeadDB.id).filter(StageDB.type == 2).label('won_deals'),
+                func.max(LeadDB.closed_at).label('last_deal_date'),
+            ).select_from(
+                CompanyDB
+            ).join(
+                lead_companies, lead_companies.c.company_id == CompanyDB.id
+            ).join(
+                LeadDB, LeadDB.id == lead_companies.c.lead_id
+            ).join(
+                StageDB, StageDB.id == LeadDB.status_id
+            ).where(
+                LeadDB.is_deleted == False,  # noqa: E712
+                StageDB.type == 2,  # Won deals only
+            ).group_by(
+                CompanyDB.id, CompanyDB.name
+            ).order_by(
+                func.sum(LeadDB.price).desc()
+            ).limit(limit)
+        else:
+            query = select(
+                ContactDB.id.label('client_id'),
+                ContactDB.name,
+                func.sum(LeadDB.price).label('total_revenue'),
+                func.count(LeadDB.id).label('deals_count'),
+                func.count(LeadDB.id).filter(StageDB.type == 2).label('won_deals'),
+                func.max(LeadDB.closed_at).label('last_deal_date'),
+            ).select_from(
+                ContactDB
+            ).join(
+                LeadDB, LeadDB.main_contact_id == ContactDB.id
+            ).join(
+                StageDB, StageDB.id == LeadDB.status_id
+            ).where(
+                LeadDB.is_deleted == False,  # noqa: E712
+                StageDB.type == 2,  # Won deals only
+            ).group_by(
+                ContactDB.id, ContactDB.name
+            ).order_by(
+                func.sum(LeadDB.price).desc()
+            ).limit(limit)
+
+        if date_from:
+            query = query.where(LeadDB.closed_at >= date_from)
+        if date_to:
+            query = query.where(LeadDB.closed_at <= date_to)
+
+        result = await self.session.execute(query)
+        rows = result.all()
+
+        total_revenue = 0.0
+        clients = []
+        for row in rows:
+            revenue = float(row.total_revenue or 0)
+            total_revenue += revenue
+            avg_value = revenue / row.won_deals if row.won_deals > 0 else 0
+            
+            client = TopClient(
+                company_id=row.client_id if by == 'companies' else None,
+                contact_id=row.client_id if by == 'contacts' else None,
+                name=row.name or 'Unknown',
+                total_revenue=revenue,
+                deals_count=row.deals_count,
+                won_deals=row.won_deals,
+                avg_deal_value=avg_value,
+                last_deal_date=row.last_deal_date,
+            )
+            clients.append(client)
+
+        return TopClientsReport(
+            period_start=date_from,
+            period_end=date_to,
+            total_revenue=total_revenue,
+            clients=clients,
+        )
+
+    async def rfm_analysis(
+        self,
+        limit: int = 100,
+        by: str = 'companies',
+    ) -> RFMReport:
+        """
+        RFM (Recency, Frequency, Monetary) analysis.
+        
+        Segments:
+        - Champions (5,5,5): Best customers
+        - Loyal (4-5, 4-5, 4-5): Regular high-value
+        - Potential Loyalists (4-5, 2-3, 2-3): Recent but not frequent
+        - At Risk (2-3, 4-5, 4-5): Were good, not recent
+        - Hibernating (1-2, 1-2, 1-2): Lost customers
+        """
+        now = datetime.now()
+        
+        if by == 'companies':
+            query = select(
+                CompanyDB.id.label('client_id'),
+                CompanyDB.name,
+                func.max(LeadDB.closed_at).label('last_purchase'),
+                func.count(LeadDB.id).label('frequency'),
+                func.sum(LeadDB.price).label('monetary'),
+            ).select_from(
+                CompanyDB
+            ).join(
+                lead_companies, lead_companies.c.company_id == CompanyDB.id
+            ).join(
+                LeadDB, LeadDB.id == lead_companies.c.lead_id
+            ).join(
+                StageDB, StageDB.id == LeadDB.status_id
+            ).where(
+                LeadDB.is_deleted == False,  # noqa: E712
+                StageDB.type == 2,  # Won deals
+            ).group_by(
+                CompanyDB.id, CompanyDB.name
+            ).having(
+                func.count(LeadDB.id) > 0
+            )
+        else:
+            query = select(
+                ContactDB.id.label('client_id'),
+                ContactDB.name,
+                func.max(LeadDB.closed_at).label('last_purchase'),
+                func.count(LeadDB.id).label('frequency'),
+                func.sum(LeadDB.price).label('monetary'),
+            ).select_from(
+                ContactDB
+            ).join(
+                LeadDB, LeadDB.main_contact_id == ContactDB.id
+            ).join(
+                StageDB, StageDB.id == LeadDB.status_id
+            ).where(
+                LeadDB.is_deleted == False,  # noqa: E712
+                StageDB.type == 2,  # Won deals
+            ).group_by(
+                ContactDB.id, ContactDB.name
+            ).having(
+                func.count(LeadDB.id) > 0
+            )
+
+        result = await self.session.execute(query)
+        rows = result.all()
+
+        if not rows:
+            return RFMReport(total_clients=0, segments=[], clients=[])
+
+        # Calculate percentiles for scoring
+        recencies = []
+        frequencies = []
+        monetaries = []
+        
+        for row in rows:
+            if row.last_purchase:
+                recencies.append((now - row.last_purchase).days)
+            frequencies.append(row.frequency)
+            monetaries.append(float(row.monetary or 0))
+
+        def percentile_score(value: float, values: list, reverse: bool = False) -> int:
+            if not values:
+                return 3
+            sorted_vals = sorted(values, reverse=reverse)
+            n = len(sorted_vals)
+            for i, v in enumerate(sorted_vals):
+                if value <= v:
+                    return min(5, max(1, 5 - int(i / n * 5)))
+            return 1
+
+        def get_segment(r: int, f: int, m: int) -> str:
+            if r >= 4 and f >= 4 and m >= 4:
+                return 'Champions'
+            elif r >= 3 and f >= 3 and m >= 3:
+                return 'Loyal'
+            elif r >= 4 and f <= 2:
+                return 'Potential Loyalists'
+            elif r <= 2 and f >= 3 and m >= 3:
+                return 'At Risk'
+            elif r <= 2 and f <= 2:
+                return 'Hibernating'
+            else:
+                return 'Others'
+
+        clients = []
+        segment_counts: dict[str, dict] = {}
+        
+        for row in rows:
+            recency_days = (now - row.last_purchase).days if row.last_purchase else 999
+            frequency = row.frequency
+            monetary = float(row.monetary or 0)
+            
+            r_score = percentile_score(recency_days, recencies, reverse=True)
+            f_score = percentile_score(frequency, frequencies)
+            m_score = percentile_score(monetary, monetaries)
+            
+            segment = get_segment(r_score, f_score, m_score)
+            
+            if segment not in segment_counts:
+                segment_counts[segment] = {'count': 0, 'revenue': 0.0, 'r': r_score, 'f': f_score, 'm': m_score}
+            segment_counts[segment]['count'] += 1
+            segment_counts[segment]['revenue'] += monetary
+            
+            if len(clients) < limit:
+                clients.append(RFMClient(
+                    company_id=row.client_id if by == 'companies' else None,
+                    contact_id=row.client_id if by == 'contacts' else None,
+                    name=row.name or 'Unknown',
+                    recency_days=recency_days,
+                    frequency=frequency,
+                    monetary=monetary,
+                    r_score=r_score,
+                    f_score=f_score,
+                    m_score=m_score,
+                    segment=segment,
+                ))
+
+        segment_descriptions = {
+            'Champions': 'Лучшие клиенты - покупают часто и много',
+            'Loyal': 'Лояльные клиенты - стабильные покупки',
+            'Potential Loyalists': 'Потенциально лояльные - недавно купили, но редко',
+            'At Risk': 'В зоне риска - были хорошими, давно не покупали',
+            'Hibernating': 'Спящие - давно не покупали',
+            'Others': 'Прочие',
+        }
+
+        segments = [
+            RFMSegment(
+                segment=name,
+                r_score=data['r'],
+                f_score=data['f'],
+                m_score=data['m'],
+                count=data['count'],
+                total_revenue=data['revenue'],
+                description=segment_descriptions.get(name, ''),
+            )
+            for name, data in segment_counts.items()
+        ]
+
+        return RFMReport(
+            total_clients=len(rows),
+            segments=sorted(segments, key=lambda x: x.total_revenue, reverse=True),
+            clients=clients,
+        )
+
+    async def manager_workload(self) -> WorkloadReport:
+        """
+        Get workload distribution across managers.
+        """
+        now = datetime.now()
+        today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        
+        # Active deals per manager
+        deals_query = select(
+            UserDB.id,
+            UserDB.name,
+            func.count(LeadDB.id).label('active_deals'),
+            func.sum(LeadDB.price).label('active_value'),
+        ).select_from(
+            UserDB
+        ).outerjoin(
+            LeadDB, LeadDB.responsible_user_id == UserDB.id
+        ).outerjoin(
+            StageDB, StageDB.id == LeadDB.status_id
+        ).where(
+            UserDB.is_active == True,  # noqa: E712
+        ).group_by(
+            UserDB.id, UserDB.name
+        )
+
+        # Filter to only active deals (not won/lost)
+        deals_query = select(
+            UserDB.id,
+            UserDB.name,
+            func.count(LeadDB.id).filter(
+                StageDB.type.notin_([2, 3]),
+                LeadDB.is_deleted == False,  # noqa: E712
+            ).label('active_deals'),
+            func.sum(LeadDB.price).filter(
+                StageDB.type.notin_([2, 3]),
+                LeadDB.is_deleted == False,  # noqa: E712
+            ).label('active_value'),
+        ).select_from(
+            UserDB
+        ).outerjoin(
+            LeadDB, LeadDB.responsible_user_id == UserDB.id
+        ).outerjoin(
+            StageDB, StageDB.id == LeadDB.status_id
+        ).where(
+            UserDB.is_active == True,  # noqa: E712
+        ).group_by(
+            UserDB.id, UserDB.name
+        )
+
+        deals_result = await self.session.execute(deals_query)
+        deals_rows = {r.id: r for r in deals_result.all()}
+
+        # Overdue tasks per manager
+        tasks_query = select(
+            TaskDB.responsible_user_id,
+            func.count(TaskDB.id).filter(
+                TaskDB.complete_till < now,
+                TaskDB.is_completed == False,  # noqa: E712
+            ).label('overdue'),
+            func.count(TaskDB.id).filter(
+                TaskDB.complete_till >= today_start,
+                TaskDB.complete_till < today_start + timedelta(days=1),
+            ).label('today'),
+        ).group_by(
+            TaskDB.responsible_user_id
+        )
+
+        tasks_result = await self.session.execute(tasks_query)
+        tasks_rows = {r.responsible_user_id: r for r in tasks_result.all()}
+
+        managers = []
+        total_deals = 0
+        overloaded = 0
+        underloaded = 0
+
+        for user_id, row in deals_rows.items():
+            active = row.active_deals or 0
+            total_deals += active
+            
+            task_row = tasks_rows.get(user_id)
+            overdue = task_row.overdue if task_row else 0
+            today = task_row.today if task_row else 0
+            
+            # Capacity score: 0-100, based on deals and overdue tasks
+            # Assume optimal is 20 deals, 0 overdue
+            capacity = min(100, int((active / 20) * 50 + (overdue * 10)))
+            
+            if capacity > 80:
+                overloaded += 1
+            elif capacity < 30 and active > 0:
+                underloaded += 1
+
+            managers.append(ManagerWorkload(
+                user_id=user_id,
+                user_name=row.name or f'User {user_id}',
+                active_deals=active,
+                active_deals_value=float(row.active_value or 0),
+                overdue_tasks=overdue,
+                tasks_today=today,
+                capacity_score=capacity,
+            ))
+
+        managers.sort(key=lambda x: x.capacity_score, reverse=True)
+        avg_deals = total_deals / len(managers) if managers else 0
+
+        return WorkloadReport(
+            total_active_deals=total_deals,
+            avg_deals_per_manager=round(avg_deals, 1),
+            overloaded_managers=overloaded,
+            underloaded_managers=underloaded,
+            managers=managers,
+        )
+
+    async def find_opportunities(
+        self,
+        days_inactive: int = 90,
+        limit: int = 20,
+    ) -> OpportunitiesReport:
+        """
+        Find sales opportunities: upsell, cross-sell, reactivation.
+        """
+        now = datetime.now()
+        cutoff = now - timedelta(days=days_inactive)
+        
+        # Reactivation: clients who bought before but not recently
+        reactivation_query = select(
+            CompanyDB.id,
+            CompanyDB.name,
+            func.max(LeadDB.price).label('last_value'),
+            func.max(LeadDB.closed_at).label('last_date'),
+            func.count(LeadDB.id).label('total_deals'),
+        ).select_from(
+            CompanyDB
+        ).join(
+            lead_companies, lead_companies.c.company_id == CompanyDB.id
+        ).join(
+            LeadDB, LeadDB.id == lead_companies.c.lead_id
+        ).join(
+            StageDB, StageDB.id == LeadDB.status_id
+        ).where(
+            StageDB.type == 2,  # Won
+            LeadDB.is_deleted == False,  # noqa: E712
+        ).group_by(
+            CompanyDB.id, CompanyDB.name
+        ).having(
+            func.max(LeadDB.closed_at) < cutoff,
+            func.count(LeadDB.id) >= 1,
+        ).order_by(
+            func.sum(LeadDB.price).desc()
+        ).limit(limit)
+
+        react_result = await self.session.execute(reactivation_query)
+        reactivations = []
+        
+        for row in react_result.all():
+            days_since = (now - row.last_date).days if row.last_date else 999
+            reactivations.append(Opportunity(
+                type='reactivation',
+                company_id=row.id,
+                name=row.name or 'Unknown',
+                last_deal_value=float(row.last_value or 0),
+                potential_value=float(row.last_value or 0) * 1.2,
+                days_since_last_deal=days_since,
+                reason=f'Не покупали {days_since} дней, было {row.total_deals} сделок',
+            ))
+
+        # Upsell: clients with growing deal values
+        upsell_query = select(
+            CompanyDB.id,
+            CompanyDB.name,
+            func.max(LeadDB.price).label('max_value'),
+            func.avg(LeadDB.price).label('avg_value'),
+            func.count(LeadDB.id).label('deals_count'),
+        ).select_from(
+            CompanyDB
+        ).join(
+            lead_companies, lead_companies.c.company_id == CompanyDB.id
+        ).join(
+            LeadDB, LeadDB.id == lead_companies.c.lead_id
+        ).join(
+            StageDB, StageDB.id == LeadDB.status_id
+        ).where(
+            StageDB.type == 2,
+            LeadDB.is_deleted == False,  # noqa: E712
+            LeadDB.closed_at >= cutoff,
+        ).group_by(
+            CompanyDB.id, CompanyDB.name
+        ).having(
+            func.count(LeadDB.id) >= 2,
+        ).order_by(
+            func.max(LeadDB.price).desc()
+        ).limit(limit)
+
+        upsell_result = await self.session.execute(upsell_query)
+        upsells = []
+        
+        for row in upsell_result.all():
+            max_val = float(row.max_value or 0)
+            avg_val = float(row.avg_value or 0)
+            if max_val > avg_val * 1.3:  # Growing
+                upsells.append(Opportunity(
+                    type='upsell',
+                    company_id=row.id,
+                    name=row.name or 'Unknown',
+                    last_deal_value=max_val,
+                    potential_value=max_val * 1.5,
+                    days_since_last_deal=0,
+                    reason=f'Растущий клиент: макс {max_val:.0f}, средний {avg_val:.0f}',
+                ))
+
+        total_potential = sum(o.potential_value for o in reactivations + upsells)
+
+        return OpportunitiesReport(
+            total_opportunities=len(reactivations) + len(upsells),
+            total_potential_value=total_potential,
+            upsell=upsells[:limit],
+            cross_sell=[],  # Would need product data
+            reactivation=reactivations[:limit],
+        )
+
+    async def big_deals(
+        self,
+        threshold: float | None = None,
+        limit: int = 20,
+    ) -> BigDealsReport:
+        """
+        Get big deals currently in pipeline.
+        
+        Args:
+            threshold: Minimum deal value (auto-calculated if None)
+            limit: Max deals to return
+        """
+        # Auto-calculate threshold as top 10% of deals
+        if threshold is None:
+            avg_query = select(
+                func.percentile_cont(0.9).within_group(LeadDB.price)
+            ).where(
+                LeadDB.is_deleted == False,  # noqa: E712
+                LeadDB.price > 0,
+            )
+            try:
+                avg_result = await self.session.execute(avg_query)
+                threshold = float(avg_result.scalar() or 100000)
+            except Exception:
+                threshold = 100000
+
+        query = select(
+            LeadDB.id,
+            LeadDB.name,
+            LeadDB.price,
+            LeadDB.kommo_created_at,
+            PipelineDB.name.label('pipeline_name'),
+            StageDB.name.label('stage_name'),
+            StageDB.sort,
+            UserDB.name.label('user_name'),
+        ).select_from(
+            LeadDB
+        ).join(
+            StageDB, StageDB.id == LeadDB.status_id
+        ).join(
+            PipelineDB, PipelineDB.id == LeadDB.pipeline_id
+        ).outerjoin(
+            UserDB, UserDB.id == LeadDB.responsible_user_id
+        ).where(
+            LeadDB.is_deleted == False,  # noqa: E712
+            LeadDB.price >= threshold,
+            StageDB.type.notin_([2, 3]),  # Not closed
+        ).order_by(
+            LeadDB.price.desc()
+        ).limit(limit)
+
+        result = await self.session.execute(query)
+        rows = result.all()
+
+        now = datetime.now()
+        deals = []
+        total_value = 0.0
+
+        for row in rows:
+            days = (now - row.kommo_created_at).days if row.kommo_created_at else 0
+            # Simple probability based on stage position
+            probability = min(0.9, 0.1 + (row.sort or 0) * 0.1)
+            
+            deals.append(BigDeal(
+                lead_id=row.id,
+                lead_name=row.name or f'Deal {row.id}',
+                price=float(row.price or 0),
+                pipeline_name=row.pipeline_name or '',
+                stage_name=row.stage_name or '',
+                responsible_user=row.user_name,
+                days_in_pipeline=days,
+                probability=probability,
+            ))
+            total_value += float(row.price or 0)
+
+        return BigDealsReport(
+            threshold=threshold,
+            total_count=len(deals),
+            total_value=total_value,
+            deals=deals,
         )

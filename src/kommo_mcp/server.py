@@ -1697,6 +1697,61 @@ async def _execute_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
         else:
             return {'error': f'Unknown automate action: {action}'}
     
+    elif name == 'kommo_insights':
+        from kommo_mcp.analytics.engine import AnalyticsEngine
+        
+        action = arguments.get('action')
+        if not action:
+            return {'error': 'action is required'}
+        
+        limit = arguments.get('limit', 10)
+        by = arguments.get('by', 'companies')
+        
+        async with _get_session_factory()() as session:
+            engine = AnalyticsEngine(session)
+            
+            if action == 'top_clients':
+                date_from = _parse_date(arguments.get('date_from'))
+                date_to = _parse_date(arguments.get('date_to'))
+                
+                result = await engine.top_clients(
+                    limit=limit,
+                    date_from=date_from,
+                    date_to=date_to,
+                    by=by,
+                )
+                return result.model_dump()
+            
+            elif action == 'rfm':
+                result = await engine.rfm_analysis(
+                    limit=limit,
+                    by=by,
+                )
+                return result.model_dump()
+            
+            elif action == 'workload':
+                result = await engine.manager_workload()
+                return result.model_dump()
+            
+            elif action == 'opportunities':
+                days_inactive = arguments.get('days_inactive', 90)
+                result = await engine.find_opportunities(
+                    days_inactive=days_inactive,
+                    limit=limit,
+                )
+                return result.model_dump()
+            
+            elif action == 'big_deals':
+                threshold = arguments.get('threshold')
+                result = await engine.big_deals(
+                    threshold=threshold,
+                    limit=limit,
+                )
+                return result.model_dump()
+            
+            else:
+                return {'error': f'Unknown insights action: {action}'}
+    
     elif name == 'kommo_task_create':
         # Parse complete_till - can be ISO string or Unix timestamp
         complete_till = arguments['complete_till']

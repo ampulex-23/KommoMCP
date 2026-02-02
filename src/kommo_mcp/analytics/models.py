@@ -296,3 +296,128 @@ class DuplicatesReport(BaseModel):
     total_groups: int = 0
     total_duplicates: int = 0
     groups: list[DuplicateGroup] = Field(default_factory=list)
+
+
+class TopClient(BaseModel):
+    """Top client by revenue."""
+    
+    contact_id: int | None = None
+    company_id: int | None = None
+    name: str
+    total_revenue: float = 0.0
+    deals_count: int = 0
+    won_deals: int = 0
+    avg_deal_value: float = 0.0
+    last_deal_date: datetime | None = None
+
+
+class TopClientsReport(BaseModel):
+    """Top clients report."""
+    
+    period_start: datetime | None = None
+    period_end: datetime | None = None
+    total_revenue: float = 0.0
+    clients: list[TopClient] = Field(default_factory=list)
+
+
+class RFMSegment(BaseModel):
+    """RFM segment with clients."""
+    
+    segment: str  # Champions, Loyal, At Risk, etc.
+    r_score: int  # 1-5
+    f_score: int  # 1-5
+    m_score: int  # 1-5
+    count: int = 0
+    total_revenue: float = 0.0
+    description: str = ''
+
+
+class RFMClient(BaseModel):
+    """Client with RFM scores."""
+    
+    contact_id: int | None = None
+    company_id: int | None = None
+    name: str
+    recency_days: int = 0
+    frequency: int = 0
+    monetary: float = 0.0
+    r_score: int = 1
+    f_score: int = 1
+    m_score: int = 1
+    segment: str = ''
+
+
+class RFMReport(BaseModel):
+    """RFM analysis report."""
+    
+    total_clients: int = 0
+    segments: list[RFMSegment] = Field(default_factory=list)
+    clients: list[RFMClient] = Field(default_factory=list)
+
+
+class ManagerWorkload(BaseModel):
+    """Manager workload metrics."""
+    
+    user_id: int
+    user_name: str
+    active_deals: int = 0
+    active_deals_value: float = 0.0
+    overdue_tasks: int = 0
+    tasks_today: int = 0
+    avg_deals_per_day: float = 0.0
+    capacity_score: int = 0  # 0-100, 100 = overloaded
+
+
+class WorkloadReport(BaseModel):
+    """Team workload report."""
+    
+    total_active_deals: int = 0
+    avg_deals_per_manager: float = 0.0
+    overloaded_managers: int = 0
+    underloaded_managers: int = 0
+    managers: list[ManagerWorkload] = Field(default_factory=list)
+
+
+class Opportunity(BaseModel):
+    """Sales opportunity."""
+    
+    type: str  # upsell, cross_sell, reactivation, renewal
+    contact_id: int | None = None
+    company_id: int | None = None
+    name: str
+    last_deal_value: float = 0.0
+    potential_value: float = 0.0
+    days_since_last_deal: int = 0
+    reason: str = ''
+
+
+class OpportunitiesReport(BaseModel):
+    """Opportunities report."""
+    
+    total_opportunities: int = 0
+    total_potential_value: float = 0.0
+    upsell: list[Opportunity] = Field(default_factory=list)
+    cross_sell: list[Opportunity] = Field(default_factory=list)
+    reactivation: list[Opportunity] = Field(default_factory=list)
+
+
+class BigDeal(BaseModel):
+    """Big deal in pipeline."""
+    
+    lead_id: int
+    lead_name: str
+    price: float
+    pipeline_name: str
+    stage_name: str
+    responsible_user: str | None = None
+    days_in_pipeline: int = 0
+    probability: float = 0.0
+
+
+class BigDealsReport(BaseModel):
+    """Big deals report."""
+    
+    threshold: float = 0.0
+    total_count: int = 0
+    total_value: float = 0.0
+    deals: list[BigDeal] = Field(default_factory=list)
