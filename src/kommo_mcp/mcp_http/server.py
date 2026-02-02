@@ -672,6 +672,65 @@ Actions:
             },
         },
         {
+            'name': 'kommo_search',
+            'description': '''Advanced search across CRM. Actions:
+- query: Search by text query (API)
+- all: Search across leads, contacts, companies (DB)
+- leads: Advanced lead search with filters (DB)
+- contacts: Contact search (DB)
+- related: Get related entities
+- recent: Get recently updated entities
+- similar: Find similar entities''',
+            'inputSchema': {
+                'type': 'object',
+                'properties': {
+                    'action': {
+                        'type': 'string',
+                        'enum': ['query', 'all', 'leads', 'contacts', 'related', 'recent', 'similar'],
+                        'description': 'Search action',
+                    },
+                    'query': {'type': 'string', 'description': 'Search query'},
+                    'entity_types': {'type': 'array', 'items': {'type': 'string'}, 'description': 'Entity types for all search'},
+                    'pipeline_id': {'type': 'integer', 'description': 'Filter by pipeline'},
+                    'status_id': {'type': 'integer', 'description': 'Filter by status'},
+                    'responsible_user_id': {'type': 'integer', 'description': 'Filter by responsible user'},
+                    'price_min': {'type': 'integer', 'description': 'Minimum price'},
+                    'price_max': {'type': 'integer', 'description': 'Maximum price'},
+                    'is_open': {'type': 'boolean', 'description': 'Filter open/closed deals'},
+                    'days': {'type': 'integer', 'description': 'Created in last N days'},
+                    'limit': {'type': 'integer', 'description': 'Max items to return'},
+                },
+                'required': ['action'],
+            },
+        },
+        {
+            'name': 'kommo_contacts_ext',
+            'description': '''Extended contact management. Actions:
+- search: Smart contact search with filters
+- without_deals: Find contacts without any deals
+- linked: Get all linked entities (deals, companies, tasks)
+- duplicates: Find duplicate contacts
+- merge_preview: Preview merge of contacts''',
+            'inputSchema': {
+                'type': 'object',
+                'properties': {
+                    'action': {
+                        'type': 'string',
+                        'enum': ['search', 'without_deals', 'linked', 'duplicates', 'merge_preview'],
+                        'description': 'Contact action',
+                    },
+                    'query': {'type': 'string', 'description': 'Search query for name'},
+                    'contact_id': {'type': 'integer', 'description': 'Contact ID for linked action'},
+                    'contact_ids': {'type': 'array', 'items': {'type': 'integer'}, 'description': 'Contact IDs for merge_preview'},
+                    'has_deals': {'type': 'boolean', 'description': 'Filter: has deals or not'},
+                    'responsible_user_id': {'type': 'integer', 'description': 'Filter by responsible user'},
+                    'days': {'type': 'integer', 'description': 'Period in days'},
+                    'limit': {'type': 'integer', 'description': 'Max items to return'},
+                },
+                'required': ['action'],
+            },
+        },
+        {
             'name': 'kommo_communications',
             'description': '''Communication history and activity tracking. Actions:
 - history: Full communication history for entity (calls, emails, notes)

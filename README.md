@@ -4,16 +4,16 @@ MCP Server for Kommo/amoCRM with analytics focus. Enables AI assistants to inter
 
 ## Coverage
 
-**75 / 1000 user stories implemented** (7.5%)
+**85 / 1000 user stories implemented** (8.5%)
 
 | Category | Implemented | Total |
 |----------|-------------|-------|
 | Analytics & Reports | 24 | 100 |
 | Automation | 18 | 100 |
 | Communications | 6 | 100 |
-| Search & Navigation | 11 | 100 |
+| Contacts & Companies | 8 | 100 |
+| Search & Navigation | 16 | 100 |
 | Deal Management | 10 | 100 |
-| Contacts & Companies | 3 | 100 |
 
 ## Features
 
@@ -157,6 +157,24 @@ Use MCP Client node with HTTP transport:
   - `compare` - Period comparison (month/quarter/year)
   - `yoy` - Year-over-year comparison
 
+### Contacts
+- `kommo_contacts_ext` - **Extended contact management** with actions:
+  - `search` - Smart contact search with filters
+  - `without_deals` - Find contacts without deals
+  - `linked` - Get linked entities (deals, companies, tasks)
+  - `duplicates` - Find duplicate contacts
+  - `merge_preview` - Preview merge of contacts
+
+### Search
+- `kommo_search` - **Advanced search** with actions:
+  - `all` - Search across leads, contacts, companies
+  - `leads` - Lead search with filters (pipeline, price, status)
+  - `contacts` - Contact search
+  - `query` - API text search
+  - `related` - Get related entities
+  - `recent` - Recently updated
+  - `similar` - Find similar entities
+
 ### Communications
 - `kommo_communications` - **Communication history** with actions:
   - `history` - Full communication history for entity
@@ -227,6 +245,9 @@ Ask your AI assistant:
 - "Покажи историю общения с клиентом"
 - "Когда последний раз звонили клиенту?"
 - "Статистика звонков за месяц"
+- "Найди контакты без сделок"
+- "Поиск сделок дороже 100к"
+- "Какие сделки связаны с контактом?"
 
 ## Deployment
 

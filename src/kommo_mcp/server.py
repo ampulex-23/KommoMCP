@@ -1348,6 +1348,57 @@ async def _execute_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
             
             return {'entity_id': entity_id, 'similar': []}
         
+        elif action == 'all':
+            from kommo_mcp.analytics.engine import AnalyticsEngine
+            
+            query = arguments.get('query')
+            if not query:
+                return {'error': 'query is required for all search'}
+            
+            async with _get_session_factory()() as session:
+                engine = AnalyticsEngine(session)
+                result = await engine.search_all(
+                    query=query,
+                    entity_types=arguments.get('entity_types'),
+                    limit=limit,
+                )
+                return result
+        
+        elif action == 'leads':
+            from kommo_mcp.analytics.engine import AnalyticsEngine
+            
+            async with _get_session_factory()() as session:
+                engine = AnalyticsEngine(session)
+                
+                created_after = None
+                if arguments.get('days'):
+                    created_after = datetime.now() - timedelta(days=arguments['days'])
+                
+                result = await engine.search_leads(
+                    query=arguments.get('query'),
+                    pipeline_id=arguments.get('pipeline_id'),
+                    status_id=arguments.get('status_id'),
+                    responsible_user_id=arguments.get('responsible_user_id'),
+                    price_min=arguments.get('price_min'),
+                    price_max=arguments.get('price_max'),
+                    created_after=created_after,
+                    is_open=arguments.get('is_open'),
+                    limit=limit,
+                )
+                return result
+        
+        elif action == 'contacts':
+            from kommo_mcp.analytics.engine import AnalyticsEngine
+            
+            async with _get_session_factory()() as session:
+                engine = AnalyticsEngine(session)
+                result = await engine.contacts_search(
+                    query=arguments.get('query'),
+                    responsible_user_id=arguments.get('responsible_user_id'),
+                    limit=limit,
+                )
+                return result
+        
         else:
             return {'error': f'Unknown search action: {action}'}
     
@@ -2056,6 +2107,53 @@ async def _execute_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
         
         else:
             return {'error': f'Unknown setup action: {action}'}
+    
+    elif name == 'kommo_contacts_ext':
+        from kommo_mcp.analytics.engine import AnalyticsEngine
+        
+        action = arguments.get('action')
+        if not action:
+            return {'error': 'action is required'}
+        
+        async with _get_session_factory()() as session:
+            engine = AnalyticsEngine(session)
+            
+            if action == 'search':
+                result = await engine.contacts_search(
+                    query=arguments.get('query'),
+                    has_deals=arguments.get('has_deals'),
+                    responsible_user_id=arguments.get('responsible_user_id'),
+                    limit=arguments.get('limit', 50),
+                )
+                return result
+            
+            elif action == 'without_deals':
+                result = await engine.contacts_without_deals(
+                    days=arguments.get('days'),
+                    limit=arguments.get('limit', 50),
+                )
+                return result
+            
+            elif action == 'linked':
+                contact_id = arguments.get('contact_id')
+                if not contact_id:
+                    return {'error': 'contact_id is required'}
+                result = await engine.contact_linked(contact_id=contact_id)
+                return result
+            
+            elif action == 'duplicates':
+                result = await engine.find_duplicates(entity_type='contacts', limit=arguments.get('limit', 50))
+                return result.model_dump()
+            
+            elif action == 'merge_preview':
+                contact_ids = arguments.get('contact_ids')
+                if not contact_ids:
+                    return {'error': 'contact_ids is required (array of IDs)'}
+                result = await engine.contacts_merge_preview(contact_ids=contact_ids)
+                return result
+            
+            else:
+                return {'error': f'Unknown contacts action: {action}'}
     
     elif name == 'kommo_communications':
         from kommo_mcp.analytics.engine import AnalyticsEngine

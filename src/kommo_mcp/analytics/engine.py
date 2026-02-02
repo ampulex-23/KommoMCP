@@ -3317,3 +3317,469 @@ class AnalyticsEngine:
             'type': note_type,
             'text': note.text[:100] if note.text else None,
         }
+
+    # === Contacts ===
+
+    async def contacts_search(
+        self,
+        query: str | None = None,
+        has_deals: bool | None = None,
+        responsible_user_id: int | None = None,
+        limit: int = 50,
+    ) -> dict:
+        """
+        Smart contact search with filters.
+        """
+        base_q = select(
+            ContactDB.id,
+            ContactDB.name,
+            ContactDB.responsible_user_id,
+            ContactDB.kommo_created_at,
+        ).where(ContactDB.is_deleted == False)  # noqa: E712
+        
+        if query:
+            base_q = base_q.where(ContactDB.name.ilike(f'%{query}%'))
+        
+        if responsible_user_id:
+            base_q = base_q.where(ContactDB.responsible_user_id == responsible_user_id)
+        
+        if has_deals is not None:
+            from kommo_mcp.db.models import lead_contacts
+            
+            # Subquery for contacts with deals (via junction table)
+            contacts_with_deals = select(lead_contacts.c.contact_id).distinct()
+            
+            if has_deals:
+                base_q = base_q.where(ContactDB.id.in_(contacts_with_deals))
+            else:
+                base_q = base_q.where(ContactDB.id.notin_(contacts_with_deals))
+        
+        base_q = base_q.order_by(ContactDB.kommo_created_at.desc()).limit(limit)
+        
+        result = await self.session.execute(base_q)
+        contacts = result.all()
+        
+        # Get user names
+        user_ids = {c.responsible_user_id for c in contacts if c.responsible_user_id}
+        user_names = {}
+        if user_ids:
+            users_q = select(UserDB.id, UserDB.name).where(UserDB.id.in_(user_ids))
+            users_result = await self.session.execute(users_q)
+            user_names = {u.id: u.name for u in users_result}
+        
+        return {
+            'count': len(contacts),
+            'contacts': [
+                {
+                    'id': c.id,
+                    'name': c.name,
+                    'responsible': user_names.get(c.responsible_user_id),
+                    'created_at': c.kommo_created_at.isoformat() if c.kommo_created_at else None,
+                }
+                for c in contacts
+            ],
+        }
+
+    async def contacts_without_deals(
+        self,
+        days: int | None = None,
+        limit: int = 50,
+    ) -> dict:
+        """
+        Find contacts without any deals.
+        """
+        from kommo_mcp.db.models import lead_contacts
+        
+        # Contacts with deals (via lead_contacts junction table)
+        contacts_with_deals = select(lead_contacts.c.contact_id).distinct()
+        
+        query = select(
+            ContactDB.id,
+            ContactDB.name,
+            ContactDB.responsible_user_id,
+            ContactDB.kommo_created_at,
+        ).where(
+            ContactDB.is_deleted == False,  # noqa: E712
+            ContactDB.id.notin_(contacts_with_deals),
+        )
+        
+        if days:
+            date_from = datetime.now() - timedelta(days=days)
+            query = query.where(ContactDB.kommo_created_at >= date_from)
+        
+        query = query.order_by(ContactDB.kommo_created_at.desc()).limit(limit)
+        
+        result = await self.session.execute(query)
+        contacts = result.all()
+        
+        # Get user names
+        user_ids = {c.responsible_user_id for c in contacts if c.responsible_user_id}
+        user_names = {}
+        if user_ids:
+            users_q = select(UserDB.id, UserDB.name).where(UserDB.id.in_(user_ids))
+            users_result = await self.session.execute(users_q)
+            user_names = {u.id: u.name for u in users_result}
+        
+        # Total count
+        count_q = select(func.count(ContactDB.id)).where(
+            ContactDB.is_deleted == False,  # noqa: E712
+            ContactDB.id.notin_(contacts_with_deals),
+        )
+        total = (await self.session.execute(count_q)).scalar() or 0
+        
+        return {
+            'total_without_deals': total,
+            'showing': len(contacts),
+            'contacts': [
+                {
+                    'id': c.id,
+                    'name': c.name,
+                    'responsible': user_names.get(c.responsible_user_id),
+                    'created_at': c.kommo_created_at.isoformat() if c.kommo_created_at else None,
+                }
+                for c in contacts
+            ],
+        }
+
+    async def contact_linked(
+        self,
+        contact_id: int,
+    ) -> dict:
+        """
+        Get all linked entities for a contact.
+        """
+        from kommo_mcp.db.models import lead_contacts
+        
+        # Get contact
+        contact_q = select(ContactDB).where(ContactDB.id == contact_id)
+        contact = (await self.session.execute(contact_q)).scalar()
+        
+        if not contact:
+            return {'error': f'Contact {contact_id} not found'}
+        
+        # Get deals via junction table
+        deals_q = select(
+            LeadDB.id,
+            LeadDB.name,
+            LeadDB.price,
+            LeadDB.status_id,
+            StageDB.name.label('status_name'),
+            StageDB.type.label('status_type'),
+        ).join(
+            lead_contacts, lead_contacts.c.lead_id == LeadDB.id
+        ).join(
+            StageDB, StageDB.id == LeadDB.status_id
+        ).where(
+            lead_contacts.c.contact_id == contact_id,
+            LeadDB.is_deleted == False,  # noqa: E712
+        ).order_by(LeadDB.kommo_created_at.desc())
+        
+        deals_result = await self.session.execute(deals_q)
+        deals = deals_result.all()
+        
+        # Get companies (via leads linked to contact)
+        companies_q = select(
+            CompanyDB.id,
+            CompanyDB.name,
+        ).join(
+            LeadDB, LeadDB.company_id == CompanyDB.id
+        ).join(
+            lead_contacts, lead_contacts.c.lead_id == LeadDB.id
+        ).where(
+            lead_contacts.c.contact_id == contact_id,
+            LeadDB.is_deleted == False,  # noqa: E712
+        ).distinct()
+        
+        companies_result = await self.session.execute(companies_q)
+        companies = companies_result.all()
+        
+        # Get tasks
+        tasks_q = select(
+            TaskDB.id,
+            TaskDB.text,
+            TaskDB.is_completed,
+            TaskDB.complete_till,
+        ).where(
+            TaskDB.entity_type == 'contacts',
+            TaskDB.entity_id == contact_id,
+        ).order_by(TaskDB.complete_till.desc()).limit(10)
+        
+        tasks_result = await self.session.execute(tasks_q)
+        tasks = tasks_result.all()
+        
+        # Stats
+        total_revenue = sum(d.price or 0 for d in deals)
+        won_deals = sum(1 for d in deals if d.status_type == 2)
+        active_deals = sum(1 for d in deals if d.status_type == 0)
+        
+        return {
+            'contact': {
+                'id': contact.id,
+                'name': contact.name,
+            },
+            'stats': {
+                'total_deals': len(deals),
+                'won_deals': won_deals,
+                'active_deals': active_deals,
+                'total_revenue': total_revenue,
+            },
+            'deals': [
+                {
+                    'id': d.id,
+                    'name': d.name,
+                    'price': d.price,
+                    'status': d.status_name,
+                    'is_won': d.status_type == 2,
+                }
+                for d in deals
+            ],
+            'companies': [
+                {'id': c.id, 'name': c.name}
+                for c in companies
+            ],
+            'tasks': [
+                {
+                    'id': t.id,
+                    'text': t.text,
+                    'completed': t.is_completed,
+                    'due': t.complete_till.isoformat() if t.complete_till else None,
+                }
+                for t in tasks
+            ],
+        }
+
+    async def contacts_merge_preview(
+        self,
+        contact_ids: list[int],
+    ) -> dict:
+        """
+        Preview what will happen when merging contacts.
+        """
+        if len(contact_ids) < 2:
+            return {'error': 'Need at least 2 contact IDs to merge'}
+        
+        contacts_q = select(ContactDB).where(ContactDB.id.in_(contact_ids))
+        result = await self.session.execute(contacts_q)
+        contacts = result.scalars().all()
+        
+        if len(contacts) != len(contact_ids):
+            found_ids = {c.id for c in contacts}
+            missing = [cid for cid in contact_ids if cid not in found_ids]
+            return {'error': f'Contacts not found: {missing}'}
+        
+        from kommo_mcp.db.models import lead_contacts
+        
+        # Count deals for each
+        deals_info = []
+        for contact in contacts:
+            deals_q = select(func.count(LeadDB.id)).join(
+                lead_contacts, lead_contacts.c.lead_id == LeadDB.id
+            ).where(
+                lead_contacts.c.contact_id == contact.id,
+                LeadDB.is_deleted == False,  # noqa: E712
+            )
+            deals_count = (await self.session.execute(deals_q)).scalar() or 0
+            deals_info.append({
+                'id': contact.id,
+                'name': contact.name,
+                'deals_count': deals_count,
+                'created_at': contact.kommo_created_at.isoformat() if contact.kommo_created_at else None,
+            })
+        
+        # Suggest primary (oldest or most deals)
+        primary = max(deals_info, key=lambda x: (x['deals_count'], x['created_at'] or ''))
+        
+        return {
+            'contacts': deals_info,
+            'suggested_primary': primary['id'],
+            'total_deals': sum(c['deals_count'] for c in deals_info),
+            'note': 'Use Kommo UI to merge contacts. This is a preview only.',
+        }
+
+    # === Search ===
+
+    async def search_all(
+        self,
+        query: str,
+        entity_types: list[str] | None = None,
+        limit: int = 20,
+    ) -> dict:
+        """
+        Search across all entity types.
+        """
+        if not entity_types:
+            entity_types = ['leads', 'contacts', 'companies']
+        
+        results = {}
+        
+        if 'leads' in entity_types:
+            leads_q = select(
+                LeadDB.id,
+                LeadDB.name,
+                LeadDB.price,
+                StageDB.name.label('status'),
+            ).join(
+                StageDB, StageDB.id == LeadDB.status_id
+            ).where(
+                LeadDB.is_deleted == False,  # noqa: E712
+                LeadDB.name.ilike(f'%{query}%'),
+            ).order_by(LeadDB.kommo_created_at.desc()).limit(limit)
+            
+            leads_result = await self.session.execute(leads_q)
+            results['leads'] = [
+                {'id': l.id, 'name': l.name, 'price': l.price, 'status': l.status}
+                for l in leads_result.all()
+            ]
+        
+        if 'contacts' in entity_types:
+            contacts_q = select(
+                ContactDB.id,
+                ContactDB.name,
+            ).where(
+                ContactDB.is_deleted == False,  # noqa: E712
+                ContactDB.name.ilike(f'%{query}%'),
+            ).order_by(ContactDB.kommo_created_at.desc()).limit(limit)
+            
+            contacts_result = await self.session.execute(contacts_q)
+            results['contacts'] = [
+                {'id': c.id, 'name': c.name}
+                for c in contacts_result.all()
+            ]
+        
+        if 'companies' in entity_types:
+            companies_q = select(
+                CompanyDB.id,
+                CompanyDB.name,
+            ).where(
+                CompanyDB.is_deleted == False,  # noqa: E712
+                CompanyDB.name.ilike(f'%{query}%'),
+            ).order_by(CompanyDB.kommo_created_at.desc()).limit(limit)
+            
+            companies_result = await self.session.execute(companies_q)
+            results['companies'] = [
+                {'id': c.id, 'name': c.name}
+                for c in companies_result.all()
+            ]
+        
+        total = sum(len(v) for v in results.values())
+        
+        return {
+            'query': query,
+            'total_found': total,
+            'results': results,
+        }
+
+    async def search_leads(
+        self,
+        query: str | None = None,
+        pipeline_id: int | None = None,
+        status_id: int | None = None,
+        responsible_user_id: int | None = None,
+        price_min: int | None = None,
+        price_max: int | None = None,
+        created_after: datetime | None = None,
+        created_before: datetime | None = None,
+        is_open: bool | None = None,
+        limit: int = 50,
+    ) -> dict:
+        """
+        Advanced lead search with filters.
+        """
+        base_q = select(
+            LeadDB.id,
+            LeadDB.name,
+            LeadDB.price,
+            LeadDB.pipeline_id,
+            LeadDB.status_id,
+            LeadDB.responsible_user_id,
+            LeadDB.kommo_created_at,
+            StageDB.name.label('status_name'),
+            StageDB.type.label('status_type'),
+            PipelineDB.name.label('pipeline_name'),
+        ).join(
+            StageDB, StageDB.id == LeadDB.status_id
+        ).join(
+            PipelineDB, PipelineDB.id == LeadDB.pipeline_id
+        ).where(LeadDB.is_deleted == False)  # noqa: E712
+        
+        if query:
+            base_q = base_q.where(LeadDB.name.ilike(f'%{query}%'))
+        
+        if pipeline_id:
+            base_q = base_q.where(LeadDB.pipeline_id == pipeline_id)
+        
+        if status_id:
+            base_q = base_q.where(LeadDB.status_id == status_id)
+        
+        if responsible_user_id:
+            base_q = base_q.where(LeadDB.responsible_user_id == responsible_user_id)
+        
+        if price_min is not None:
+            base_q = base_q.where(LeadDB.price >= price_min)
+        
+        if price_max is not None:
+            base_q = base_q.where(LeadDB.price <= price_max)
+        
+        if created_after:
+            base_q = base_q.where(LeadDB.kommo_created_at >= created_after)
+        
+        if created_before:
+            base_q = base_q.where(LeadDB.kommo_created_at <= created_before)
+        
+        if is_open is not None:
+            if is_open:
+                base_q = base_q.where(StageDB.type == 0)  # Open
+            else:
+                base_q = base_q.where(StageDB.type.in_([1, 2]))  # Closed (lost/won)
+        
+        base_q = base_q.order_by(LeadDB.kommo_created_at.desc()).limit(limit)
+        
+        result = await self.session.execute(base_q)
+        leads = result.all()
+        
+        # Get user names
+        user_ids = {l.responsible_user_id for l in leads if l.responsible_user_id}
+        user_names = {}
+        if user_ids:
+            users_q = select(UserDB.id, UserDB.name).where(UserDB.id.in_(user_ids))
+            users_result = await self.session.execute(users_q)
+            user_names = {u.id: u.name for u in users_result}
+        
+        return {
+            'count': len(leads),
+            'leads': [
+                {
+                    'id': l.id,
+                    'name': l.name,
+                    'price': l.price,
+                    'pipeline': l.pipeline_name,
+                    'status': l.status_name,
+                    'is_open': l.status_type == 0,
+                    'responsible': user_names.get(l.responsible_user_id),
+                    'created_at': l.kommo_created_at.isoformat() if l.kommo_created_at else None,
+                }
+                for l in leads
+            ],
+        }
+
+    async def search_by_custom_field(
+        self,
+        entity_type: str,
+        field_name: str,
+        field_value: str,
+        limit: int = 50,
+    ) -> dict:
+        """
+        Search entities by custom field value.
+        Note: This requires custom_fields_values to be stored in DB.
+        Currently returns a placeholder as custom fields are in JSONB.
+        """
+        # For now, return info about the search
+        # Full implementation would require JSONB queries
+        return {
+            'note': 'Custom field search requires JSONB query on custom_fields_values',
+            'entity_type': entity_type,
+            'field_name': field_name,
+            'field_value': field_value,
+            'hint': 'Use Kommo API directly for custom field filtering',
+        }
