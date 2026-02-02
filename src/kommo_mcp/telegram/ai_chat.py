@@ -726,13 +726,22 @@ class AIChat:
                     ]
                 })
             
+            logger.info(f'Creating {len(contacts)} contacts')
             async with session.post(url, headers=headers, json=contacts) as resp:
+                response_text = await resp.text()
+                logger.info(f'Contacts response: {resp.status} - {response_text[:300]}')
                 if resp.status in [200, 201]:
-                    data = await resp.json()
-                    created = data.get('_embedded', {}).get('contacts', [])
-                    return {'success': True, 'created_contacts': len(created), 'contacts': [{'id': c['id'], 'name': c['name']} for c in created[:5]]}
-                error = await resp.text()
-                return {'error': f'Failed to create contacts: {error[:200]}'}
+                    try:
+                        data = json.loads(response_text)
+                        created = data.get('_embedded', {}).get('contacts', [])
+                        return {
+                            'success': True, 
+                            'created_contacts': len(created), 
+                            'contacts': [{'id': c.get('id'), 'name': c.get('name', 'N/A')} for c in created[:5]]
+                        }
+                    except Exception as e:
+                        return {'error': f'Parse error: {e}'}
+                return {'error': f'API error {resp.status}: {response_text[:200]}'}
         
         elif action == 'companies':
             url = f'{self.kommo_base_url}/api/v4/companies'
@@ -740,13 +749,22 @@ class AIChat:
             for i in range(count):
                 comps.append({'name': f'{random.choice(companies)} #{random.randint(1, 999)}'})
             
+            logger.info(f'Creating {len(comps)} companies')
             async with session.post(url, headers=headers, json=comps) as resp:
+                response_text = await resp.text()
+                logger.info(f'Companies response: {resp.status} - {response_text[:300]}')
                 if resp.status in [200, 201]:
-                    data = await resp.json()
-                    created = data.get('_embedded', {}).get('companies', [])
-                    return {'success': True, 'created_companies': len(created), 'companies': [{'id': c['id'], 'name': c['name']} for c in created[:5]]}
-                error = await resp.text()
-                return {'error': f'Failed to create companies: {error[:200]}'}
+                    try:
+                        data = json.loads(response_text)
+                        created = data.get('_embedded', {}).get('companies', [])
+                        return {
+                            'success': True, 
+                            'created_companies': len(created), 
+                            'companies': [{'id': c.get('id'), 'name': c.get('name', 'N/A')} for c in created[:5]]
+                        }
+                    except Exception as e:
+                        return {'error': f'Parse error: {e}'}
+                return {'error': f'API error {resp.status}: {response_text[:200]}'}
         
         elif action == 'leads':
             if not pipeline_id:
@@ -778,18 +796,23 @@ class AIChat:
                     lead['responsible_user_id'] = responsible_user_id
                 leads.append(lead)
             
+            logger.info(f'Creating {len(leads)} leads in pipeline {pipeline_id}')
             async with session.post(url, headers=headers, json=leads) as resp:
+                response_text = await resp.text()
+                logger.info(f'Leads response: {resp.status} - {response_text[:300]}')
                 if resp.status in [200, 201]:
-                    data = await resp.json()
-                    created = data.get('_embedded', {}).get('leads', [])
-                    return {
-                        'success': True, 
-                        'created_leads': len(created), 
-                        'pipeline_id': pipeline_id,
-                        'leads': [{'id': l['id'], 'name': l['name'], 'price': l.get('price')} for l in created[:5]]
-                    }
-                error = await resp.text()
-                return {'error': f'Failed to create leads: {error[:200]}'}
+                    try:
+                        data = json.loads(response_text)
+                        created = data.get('_embedded', {}).get('leads', [])
+                        return {
+                            'success': True, 
+                            'created_leads': len(created), 
+                            'pipeline_id': pipeline_id,
+                            'leads': [{'id': l.get('id'), 'name': l.get('name', 'N/A'), 'price': l.get('price')} for l in created[:5]]
+                        }
+                    except Exception as e:
+                        return {'error': f'Parse error: {e}'}
+                return {'error': f'API error {resp.status}: {response_text[:200]}'}
         
         elif action == 'generate_all':
             # Create contacts, companies, and leads
