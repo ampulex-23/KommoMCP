@@ -488,3 +488,86 @@ class DailyDigest(BaseModel):
     # Highlights
     highlights: list[str] = Field(default_factory=list)
     metrics: list[DigestMetric] = Field(default_factory=list)
+
+
+class RankedManager(BaseModel):
+    """Manager with ranking metrics."""
+    
+    user_id: int
+    user_name: str
+    rank: int = 0
+    
+    # Metrics
+    deals_won: int = 0
+    revenue: float = 0.0
+    conversion_rate: float = 0.0
+    avg_deal_value: float = 0.0
+    avg_cycle_days: float = 0.0
+    
+    # Comparison to average
+    revenue_vs_avg: float = 0.0  # percent above/below average
+    conversion_vs_avg: float = 0.0
+
+
+class ManagerRankingReport(BaseModel):
+    """Manager ranking report."""
+    
+    period_start: datetime | None = None
+    period_end: datetime | None = None
+    ranking_by: str = 'revenue'  # revenue, conversion, deals_won
+    
+    total_managers: int = 0
+    avg_revenue: float = 0.0
+    avg_conversion: float = 0.0
+    avg_deals: float = 0.0
+    
+    managers: list[RankedManager] = Field(default_factory=list)
+
+
+class PeriodMetrics(BaseModel):
+    """Metrics for a single period."""
+    
+    period_name: str  # "Текущий месяц", "Прошлый год"
+    date_from: datetime
+    date_to: datetime
+    
+    new_leads: int = 0
+    won_deals: int = 0
+    lost_deals: int = 0
+    revenue: float = 0.0
+    conversion_rate: float = 0.0
+    avg_deal_value: float = 0.0
+    avg_cycle_days: float = 0.0
+
+
+class PeriodComparison(BaseModel):
+    """Comparison between two periods."""
+    
+    current: PeriodMetrics
+    previous: PeriodMetrics
+    
+    # Changes (percent)
+    leads_change: float | None = None
+    won_change: float | None = None
+    revenue_change: float | None = None
+    conversion_change: float | None = None
+    avg_deal_change: float | None = None
+    
+    # Insights
+    insights: list[str] = Field(default_factory=list)
+
+
+class YoYComparison(BaseModel):
+    """Year-over-year comparison."""
+    
+    current_year: int
+    previous_year: int
+    current_month: int
+    
+    current: PeriodMetrics
+    previous: PeriodMetrics
+    
+    revenue_change: float | None = None
+    deals_change: float | None = None
+    
+    insights: list[str] = Field(default_factory=list)

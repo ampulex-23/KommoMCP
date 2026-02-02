@@ -1749,6 +1749,33 @@ async def _execute_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
                 )
                 return result.model_dump()
             
+            elif action == 'ranking':
+                ranking_by = arguments.get('ranking_by', 'revenue')
+                date_from = _parse_date(arguments.get('date_from'))
+                date_to = _parse_date(arguments.get('date_to'))
+                
+                result = await engine.manager_ranking(
+                    ranking_by=ranking_by,
+                    date_from=date_from,
+                    date_to=date_to,
+                )
+                return result.model_dump()
+            
+            elif action == 'compare':
+                period = arguments.get('period', 'month')
+                compare_with = arguments.get('compare_with', 'previous')
+                
+                result = await engine.period_comparison(
+                    period=period,
+                    compare_with=compare_with,
+                )
+                return result.model_dump()
+            
+            elif action == 'yoy':
+                month = arguments.get('month')
+                result = await engine.yoy_comparison(month=month)
+                return result.model_dump()
+            
             else:
                 return {'error': f'Unknown insights action: {action}'}
     

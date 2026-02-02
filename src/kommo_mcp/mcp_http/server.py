@@ -645,13 +645,16 @@ Actions:
 - rfm: RFM segmentation analysis (Recency, Frequency, Monetary)
 - workload: Manager workload distribution
 - opportunities: Find upsell/cross-sell/reactivation opportunities
-- big_deals: Large deals in pipeline''',
+- big_deals: Large deals in pipeline
+- ranking: Manager ranking by revenue/conversion/deals
+- compare: Period comparison (month/quarter/year vs previous or YoY)
+- yoy: Year-over-year comparison for specific month''',
             'inputSchema': {
                 'type': 'object',
                 'properties': {
                     'action': {
                         'type': 'string',
-                        'enum': ['top_clients', 'rfm', 'workload', 'opportunities', 'big_deals'],
+                        'enum': ['top_clients', 'rfm', 'workload', 'opportunities', 'big_deals', 'ranking', 'compare', 'yoy'],
                         'description': 'Insight action',
                     },
                     'limit': {'type': 'integer', 'description': 'Number of results (default 10)'},
@@ -660,6 +663,10 @@ Actions:
                     'date_to': {'type': 'string', 'description': 'End date (ISO format)'},
                     'days_inactive': {'type': 'integer', 'description': 'Days of inactivity for opportunities'},
                     'threshold': {'type': 'number', 'description': 'Value threshold for big deals'},
+                    'ranking_by': {'type': 'string', 'enum': ['revenue', 'conversion', 'deals_won'], 'description': 'Ranking criteria'},
+                    'period': {'type': 'string', 'enum': ['month', 'quarter', 'year'], 'description': 'Period for comparison'},
+                    'compare_with': {'type': 'string', 'enum': ['previous', 'yoy'], 'description': 'Compare with previous period or YoY'},
+                    'month': {'type': 'integer', 'description': 'Month number (1-12) for YoY comparison'},
                 },
                 'required': ['action'],
             },

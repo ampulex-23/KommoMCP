@@ -25,10 +25,14 @@ from kommo_mcp.analytics.models import (
     LeadSource,
     LeadSourcesReport,
     ManagerPerformance,
+    ManagerRankingReport,
     ManagerWorkload,
     Opportunity,
     OpportunitiesReport,
+    PeriodComparison,
+    PeriodMetrics,
     PipelineSummary,
+    RankedManager,
     RevenuePeriod,
     RevenueTrendPeriod,
     RevenueTrendReport,
@@ -44,6 +48,7 @@ from kommo_mcp.analytics.models import (
     TopClient,
     TopClientsReport,
     WorkloadReport,
+    YoYComparison,
 )
 from kommo_mcp.db.models import (
     CompanyDB,
@@ -2432,4 +2437,353 @@ class AnalyticsEngine:
             overdue_tasks=overdue_tasks,
             highlights=highlights,
             metrics=metrics,
+        )
+
+    async def manager_ranking(
+        self,
+        ranking_by: str = 'revenue',  # revenue, conversion, deals_won
+        date_from: datetime | None = None,
+        date_to: datetime | None = None,
+    ) -> ManagerRankingReport:
+        """
+        Rank managers by various metrics.
+        """
+        now = datetime.now()
+        if not date_from:
+            date_from = now - timedelta(days=30)
+        if not date_to:
+            date_to = now
+
+        query = select(
+            UserDB.id,
+            UserDB.name,
+            func.count(LeadDB.id).filter(StageDB.type == 2).label('won'),
+            func.count(LeadDB.id).label('total'),
+            func.sum(LeadDB.price).filter(StageDB.type == 2).label('revenue'),
+            func.avg(
+                func.extract('epoch', LeadDB.closed_at) - func.extract('epoch', LeadDB.kommo_created_at)
+            ).filter(StageDB.type == 2).label('avg_cycle_seconds'),
+        ).select_from(
+            UserDB
+        ).join(
+            LeadDB, LeadDB.responsible_user_id == UserDB.id
+        ).join(
+            StageDB, StageDB.id == LeadDB.status_id
+        ).where(
+            UserDB.is_active == True,  # noqa: E712
+            LeadDB.kommo_created_at >= date_from,
+            LeadDB.kommo_created_at <= date_to,
+            LeadDB.is_deleted == False,  # noqa: E712
+        ).group_by(
+            UserDB.id, UserDB.name
+        ).having(
+            func.count(LeadDB.id) > 0
+        )
+
+        result = await self.session.execute(query)
+        rows = result.all()
+
+        if not rows:
+            return ManagerRankingReport(
+                period_start=date_from,
+                period_end=date_to,
+                ranking_by=ranking_by,
+            )
+
+        managers_data = []
+        total_revenue = 0.0
+        total_conversion = 0.0
+        total_deals = 0
+
+        for row in rows:
+            won = row.won or 0
+            total = row.total or 0
+            revenue = float(row.revenue or 0)
+            conversion = (won / total * 100) if total > 0 else 0
+            avg_value = revenue / won if won > 0 else 0
+            avg_cycle = (row.avg_cycle_seconds or 0) / 86400  # to days
+
+            managers_data.append({
+                'user_id': row.id,
+                'user_name': row.name or f'User {row.id}',
+                'deals_won': won,
+                'revenue': revenue,
+                'conversion_rate': conversion,
+                'avg_deal_value': avg_value,
+                'avg_cycle_days': avg_cycle,
+            })
+
+            total_revenue += revenue
+            total_conversion += conversion
+            total_deals += won
+
+        n = len(managers_data)
+        avg_revenue = total_revenue / n if n > 0 else 0
+        avg_conversion = total_conversion / n if n > 0 else 0
+        avg_deals = total_deals / n if n > 0 else 0
+
+        # Sort by ranking criteria
+        if ranking_by == 'revenue':
+            managers_data.sort(key=lambda x: x['revenue'], reverse=True)
+        elif ranking_by == 'conversion':
+            managers_data.sort(key=lambda x: x['conversion_rate'], reverse=True)
+        else:  # deals_won
+            managers_data.sort(key=lambda x: x['deals_won'], reverse=True)
+
+        # Build ranked managers
+        managers = []
+        for i, m in enumerate(managers_data):
+            revenue_vs_avg = ((m['revenue'] - avg_revenue) / avg_revenue * 100) if avg_revenue > 0 else 0
+            conversion_vs_avg = ((m['conversion_rate'] - avg_conversion) / avg_conversion * 100) if avg_conversion > 0 else 0
+
+            managers.append(RankedManager(
+                user_id=m['user_id'],
+                user_name=m['user_name'],
+                rank=i + 1,
+                deals_won=m['deals_won'],
+                revenue=m['revenue'],
+                conversion_rate=round(m['conversion_rate'], 1),
+                avg_deal_value=round(m['avg_deal_value'], 0),
+                avg_cycle_days=round(m['avg_cycle_days'], 1),
+                revenue_vs_avg=round(revenue_vs_avg, 1),
+                conversion_vs_avg=round(conversion_vs_avg, 1),
+            ))
+
+        return ManagerRankingReport(
+            period_start=date_from,
+            period_end=date_to,
+            ranking_by=ranking_by,
+            total_managers=n,
+            avg_revenue=round(avg_revenue, 0),
+            avg_conversion=round(avg_conversion, 1),
+            avg_deals=round(avg_deals, 1),
+            managers=managers,
+        )
+
+    async def period_comparison(
+        self,
+        period: str = 'month',  # month, quarter, year
+        compare_with: str = 'previous',  # previous, yoy (year-over-year)
+    ) -> PeriodComparison:
+        """
+        Compare current period with previous period or same period last year.
+        """
+        now = datetime.now()
+
+        # Define current period
+        if period == 'month':
+            current_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+            if current_start.month == 1:
+                prev_start = current_start.replace(year=current_start.year - 1, month=12)
+            else:
+                prev_start = current_start.replace(month=current_start.month - 1)
+            period_name = 'Текущий месяц'
+            prev_name = 'Прошлый месяц'
+        elif period == 'quarter':
+            quarter = (now.month - 1) // 3
+            current_start = now.replace(month=quarter * 3 + 1, day=1, hour=0, minute=0, second=0, microsecond=0)
+            if quarter == 0:
+                prev_start = current_start.replace(year=current_start.year - 1, month=10)
+            else:
+                prev_start = current_start.replace(month=(quarter - 1) * 3 + 1)
+            period_name = 'Текущий квартал'
+            prev_name = 'Прошлый квартал'
+        else:  # year
+            current_start = now.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
+            prev_start = current_start.replace(year=current_start.year - 1)
+            period_name = 'Текущий год'
+            prev_name = 'Прошлый год'
+
+        current_end = now
+        prev_end = current_start
+
+        # For YoY comparison
+        if compare_with == 'yoy':
+            prev_start = current_start.replace(year=current_start.year - 1)
+            prev_end = current_end.replace(year=current_end.year - 1)
+            prev_name = f'Тот же период {current_start.year - 1}'
+
+        async def get_period_metrics(start: datetime, end: datetime, name: str) -> PeriodMetrics:
+            leads_q = select(func.count(LeadDB.id)).where(
+                LeadDB.kommo_created_at >= start,
+                LeadDB.kommo_created_at <= end,
+                LeadDB.is_deleted == False,  # noqa: E712
+            )
+            new_leads = (await self.session.execute(leads_q)).scalar() or 0
+
+            won_q = select(
+                func.count(LeadDB.id),
+                func.sum(LeadDB.price),
+            ).join(
+                StageDB, StageDB.id == LeadDB.status_id
+            ).where(
+                StageDB.type == 2,
+                LeadDB.closed_at >= start,
+                LeadDB.closed_at <= end,
+            )
+            won_result = (await self.session.execute(won_q)).one()
+            won_deals = won_result[0] or 0
+            revenue = float(won_result[1] or 0)
+
+            lost_q = select(func.count(LeadDB.id)).join(
+                StageDB, StageDB.id == LeadDB.status_id
+            ).where(
+                StageDB.type == 3,
+                LeadDB.closed_at >= start,
+                LeadDB.closed_at <= end,
+            )
+            lost_deals = (await self.session.execute(lost_q)).scalar() or 0
+
+            total_closed = won_deals + lost_deals
+            conversion = (won_deals / total_closed * 100) if total_closed > 0 else 0
+            avg_value = revenue / won_deals if won_deals > 0 else 0
+
+            return PeriodMetrics(
+                period_name=name,
+                date_from=start,
+                date_to=end,
+                new_leads=new_leads,
+                won_deals=won_deals,
+                lost_deals=lost_deals,
+                revenue=revenue,
+                conversion_rate=round(conversion, 1),
+                avg_deal_value=round(avg_value, 0),
+            )
+
+        current = await get_period_metrics(current_start, current_end, period_name)
+        previous = await get_period_metrics(prev_start, prev_end, prev_name)
+
+        def calc_change(curr: float, prev: float) -> float | None:
+            if prev == 0:
+                return 100.0 if curr > 0 else None
+            return round((curr - prev) / prev * 100, 1)
+
+        leads_change = calc_change(current.new_leads, previous.new_leads)
+        won_change = calc_change(current.won_deals, previous.won_deals)
+        revenue_change = calc_change(current.revenue, previous.revenue)
+        conversion_change = calc_change(current.conversion_rate, previous.conversion_rate)
+        avg_deal_change = calc_change(current.avg_deal_value, previous.avg_deal_value)
+
+        # Generate insights
+        insights = []
+        if revenue_change is not None:
+            if revenue_change > 10:
+                insights.append(f'📈 Выручка выросла на {revenue_change:.0f}%')
+            elif revenue_change < -10:
+                insights.append(f'📉 Выручка упала на {abs(revenue_change):.0f}%')
+
+        if leads_change is not None:
+            if leads_change > 20:
+                insights.append(f'🚀 Лидов стало больше на {leads_change:.0f}%')
+            elif leads_change < -20:
+                insights.append(f'⚠️ Лидов стало меньше на {abs(leads_change):.0f}%')
+
+        if conversion_change is not None and abs(conversion_change) > 5:
+            if conversion_change > 0:
+                insights.append(f'✅ Конверсия улучшилась на {conversion_change:.0f}%')
+            else:
+                insights.append(f'❌ Конверсия снизилась на {abs(conversion_change):.0f}%')
+
+        if not insights:
+            insights.append('📊 Показатели стабильны')
+
+        return PeriodComparison(
+            current=current,
+            previous=previous,
+            leads_change=leads_change,
+            won_change=won_change,
+            revenue_change=revenue_change,
+            conversion_change=conversion_change,
+            avg_deal_change=avg_deal_change,
+            insights=insights,
+        )
+
+    async def yoy_comparison(
+        self,
+        month: int | None = None,
+    ) -> YoYComparison:
+        """
+        Year-over-year comparison for a specific month.
+        """
+        now = datetime.now()
+        target_month = month or now.month
+        current_year = now.year
+        previous_year = current_year - 1
+
+        # Current year period
+        current_start = datetime(current_year, target_month, 1)
+        if target_month == 12:
+            current_end = datetime(current_year + 1, 1, 1) - timedelta(seconds=1)
+        else:
+            current_end = datetime(current_year, target_month + 1, 1) - timedelta(seconds=1)
+
+        # If we're comparing future month, adjust
+        if current_start > now:
+            current_end = now
+
+        # Previous year same month
+        prev_start = datetime(previous_year, target_month, 1)
+        if target_month == 12:
+            prev_end = datetime(previous_year + 1, 1, 1) - timedelta(seconds=1)
+        else:
+            prev_end = datetime(previous_year, target_month + 1, 1) - timedelta(seconds=1)
+
+        async def get_metrics(start: datetime, end: datetime, name: str) -> PeriodMetrics:
+            won_q = select(
+                func.count(LeadDB.id),
+                func.sum(LeadDB.price),
+            ).join(
+                StageDB, StageDB.id == LeadDB.status_id
+            ).where(
+                StageDB.type == 2,
+                LeadDB.closed_at >= start,
+                LeadDB.closed_at <= end,
+            )
+            result = (await self.session.execute(won_q)).one()
+            won = result[0] or 0
+            revenue = float(result[1] or 0)
+
+            leads_q = select(func.count(LeadDB.id)).where(
+                LeadDB.kommo_created_at >= start,
+                LeadDB.kommo_created_at <= end,
+                LeadDB.is_deleted == False,  # noqa: E712
+            )
+            leads = (await self.session.execute(leads_q)).scalar() or 0
+
+            return PeriodMetrics(
+                period_name=name,
+                date_from=start,
+                date_to=end,
+                new_leads=leads,
+                won_deals=won,
+                revenue=revenue,
+            )
+
+        current = await get_metrics(current_start, current_end, f'{target_month:02d}.{current_year}')
+        previous = await get_metrics(prev_start, prev_end, f'{target_month:02d}.{previous_year}')
+
+        def calc_change(curr: float, prev: float) -> float | None:
+            if prev == 0:
+                return 100.0 if curr > 0 else None
+            return round((curr - prev) / prev * 100, 1)
+
+        revenue_change = calc_change(current.revenue, previous.revenue)
+        deals_change = calc_change(current.won_deals, previous.won_deals)
+
+        insights = []
+        if revenue_change is not None:
+            if revenue_change > 0:
+                insights.append(f'📈 Выручка выросла на {revenue_change:.0f}% по сравнению с прошлым годом')
+            else:
+                insights.append(f'📉 Выручка упала на {abs(revenue_change):.0f}% по сравнению с прошлым годом')
+
+        return YoYComparison(
+            current_year=current_year,
+            previous_year=previous_year,
+            current_month=target_month,
+            current=current,
+            previous=previous,
+            revenue_change=revenue_change,
+            deals_change=deals_change,
+            insights=insights,
         )
