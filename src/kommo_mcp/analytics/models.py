@@ -421,3 +421,70 @@ class BigDealsReport(BaseModel):
     total_count: int = 0
     total_value: float = 0.0
     deals: list[BigDeal] = Field(default_factory=list)
+
+
+class Alert(BaseModel):
+    """Single alert item."""
+    
+    type: str  # stale_deals, overdue_tasks, performance_drop, churn_risk, big_deal
+    severity: str = 'medium'  # low, medium, high, critical
+    title: str
+    description: str
+    entity_type: str | None = None  # leads, contacts, users
+    entity_id: int | None = None
+    entity_name: str | None = None
+    value: float | None = None
+    action_suggested: str | None = None
+
+
+class AlertsReport(BaseModel):
+    """Alerts report."""
+    
+    generated_at: datetime
+    total_alerts: int = 0
+    critical: int = 0
+    high: int = 0
+    medium: int = 0
+    low: int = 0
+    alerts: list[Alert] = Field(default_factory=list)
+
+
+class DigestMetric(BaseModel):
+    """Single metric for digest."""
+    
+    name: str
+    value: float
+    previous_value: float | None = None
+    change_percent: float | None = None
+    trend: str = 'stable'  # up, down, stable
+
+
+class DailyDigest(BaseModel):
+    """Daily digest report."""
+    
+    date: datetime
+    period: str = 'day'  # day, week, month
+    
+    # Key metrics
+    new_leads: int = 0
+    won_deals: int = 0
+    lost_deals: int = 0
+    revenue: float = 0.0
+    
+    # Comparisons
+    new_leads_change: float | None = None
+    won_deals_change: float | None = None
+    revenue_change: float | None = None
+    
+    # Top performers
+    top_manager: str | None = None
+    top_manager_revenue: float = 0.0
+    
+    # Alerts summary
+    critical_alerts: int = 0
+    pending_tasks: int = 0
+    overdue_tasks: int = 0
+    
+    # Highlights
+    highlights: list[str] = Field(default_factory=list)
+    metrics: list[DigestMetric] = Field(default_factory=list)

@@ -9,10 +9,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from kommo_mcp.analytics.models import (
     ActivityReport,
+    Alert,
+    AlertsReport,
     BigDeal,
     BigDealsReport,
     ChurnRiskContact,
     ChurnRiskReport,
+    DailyDigest,
+    DigestMetric,
     DuplicateGroup,
     DuplicatesReport,
     FunnelAnalysis,
@@ -2073,4 +2077,359 @@ class AnalyticsEngine:
             total_count=len(deals),
             total_value=total_value,
             deals=deals,
+        )
+
+    async def generate_alerts(
+        self,
+        include_stale: bool = True,
+        include_overdue: bool = True,
+        include_churn: bool = True,
+        include_performance: bool = True,
+        stale_threshold_days: int = 14,
+        churn_threshold_days: int = 90,
+    ) -> AlertsReport:
+        """
+        Generate alerts based on CRM data analysis.
+        
+        Checks for:
+        - Stale deals without activity
+        - Overdue tasks
+        - Churn risk contacts
+        - Manager performance drops
+        """
+        now = datetime.now()
+        alerts: list[Alert] = []
+        
+        # 1. Stale deals alerts
+        if include_stale:
+            stale = await self.stale_deals(
+                threshold_days=stale_threshold_days,
+                limit=50,
+            )
+            if stale.total_stale > 0:
+                severity = 'critical' if stale.total_stale > 10 else 'high' if stale.total_stale > 5 else 'medium'
+                alerts.append(Alert(
+                    type='stale_deals',
+                    severity=severity,
+                    title=f'{stale.total_stale} зависших сделок',
+                    description=f'Сделки без активности более {stale_threshold_days} дней на сумму {stale.total_value:,.0f}',
+                    value=stale.total_value,
+                    action_suggested='kommo_automate(action="stale_followup")',
+                ))
+                # Add individual high-value stale deals
+                for deal in stale.deals[:5]:
+                    if deal.price and deal.price > 50000:
+                        alerts.append(Alert(
+                            type='stale_deal',
+                            severity='high',
+                            title=f'Зависла крупная сделка: {deal.lead_name}',
+                            description=f'Без активности {deal.days_inactive} дней, сумма {deal.price:,.0f}',
+                            entity_type='leads',
+                            entity_id=deal.lead_id,
+                            entity_name=deal.lead_name,
+                            value=deal.price,
+                            action_suggested=f'Связаться с клиентом по сделке {deal.lead_id}',
+                        ))
+
+        # 2. Overdue tasks alerts
+        if include_overdue:
+            query = select(
+                TaskDB.responsible_user_id,
+                UserDB.name.label('user_name'),
+                func.count(TaskDB.id).label('overdue_count'),
+            ).join(
+                UserDB, UserDB.id == TaskDB.responsible_user_id
+            ).where(
+                TaskDB.complete_till < now,
+                TaskDB.is_completed == False,  # noqa: E712
+            ).group_by(
+                TaskDB.responsible_user_id, UserDB.name
+            ).having(
+                func.count(TaskDB.id) > 0
+            )
+            
+            result = await self.session.execute(query)
+            for row in result.all():
+                severity = 'critical' if row.overdue_count > 10 else 'high' if row.overdue_count > 5 else 'medium'
+                alerts.append(Alert(
+                    type='overdue_tasks',
+                    severity=severity,
+                    title=f'{row.overdue_count} просроченных задач у {row.user_name}',
+                    description=f'Менеджер {row.user_name} имеет {row.overdue_count} просроченных задач',
+                    entity_type='users',
+                    entity_id=row.responsible_user_id,
+                    entity_name=row.user_name,
+                    value=float(row.overdue_count),
+                    action_suggested='Проверить задачи менеджера',
+                ))
+
+        # 3. Churn risk alerts
+        if include_churn:
+            churn = await self.churn_risk(
+                days_threshold=churn_threshold_days,
+                limit=20,
+            )
+            if churn.high_risk_count > 0:
+                severity = 'high' if churn.high_risk_count > 5 else 'medium'
+                alerts.append(Alert(
+                    type='churn_risk',
+                    severity=severity,
+                    title=f'{churn.high_risk_count} клиентов в зоне риска оттока',
+                    description=f'Клиенты не активны более {churn_threshold_days} дней',
+                    value=float(churn.high_risk_count),
+                    action_suggested='kommo_analytics(action="churn")',
+                ))
+
+        # 4. Performance drop alerts
+        if include_performance:
+            # Compare last 7 days vs previous 7 days
+            week_ago = now - timedelta(days=7)
+            two_weeks_ago = now - timedelta(days=14)
+            
+            current_query = select(
+                UserDB.id,
+                UserDB.name,
+                func.count(LeadDB.id).label('deals'),
+            ).join(
+                LeadDB, LeadDB.responsible_user_id == UserDB.id
+            ).join(
+                StageDB, StageDB.id == LeadDB.status_id
+            ).where(
+                StageDB.type == 2,  # Won
+                LeadDB.closed_at >= week_ago,
+            ).group_by(UserDB.id, UserDB.name)
+            
+            prev_query = select(
+                UserDB.id,
+                func.count(LeadDB.id).label('deals'),
+            ).join(
+                LeadDB, LeadDB.responsible_user_id == UserDB.id
+            ).join(
+                StageDB, StageDB.id == LeadDB.status_id
+            ).where(
+                StageDB.type == 2,
+                LeadDB.closed_at >= two_weeks_ago,
+                LeadDB.closed_at < week_ago,
+            ).group_by(UserDB.id)
+            
+            current_result = await self.session.execute(current_query)
+            current_data = {r.id: (r.name, r.deals) for r in current_result.all()}
+            
+            prev_result = await self.session.execute(prev_query)
+            prev_data = {r.id: r.deals for r in prev_result.all()}
+            
+            for user_id, (name, current_deals) in current_data.items():
+                prev_deals = prev_data.get(user_id, 0)
+                if prev_deals > 2 and current_deals < prev_deals * 0.5:
+                    drop_percent = (1 - current_deals / prev_deals) * 100
+                    alerts.append(Alert(
+                        type='performance_drop',
+                        severity='medium',
+                        title=f'Падение показателей: {name}',
+                        description=f'Закрытых сделок снизилось на {drop_percent:.0f}% ({prev_deals} → {current_deals})',
+                        entity_type='users',
+                        entity_id=user_id,
+                        entity_name=name,
+                        value=drop_percent,
+                        action_suggested='Провести 1-on-1 с менеджером',
+                    ))
+
+        # Count by severity
+        critical = sum(1 for a in alerts if a.severity == 'critical')
+        high = sum(1 for a in alerts if a.severity == 'high')
+        medium = sum(1 for a in alerts if a.severity == 'medium')
+        low = sum(1 for a in alerts if a.severity == 'low')
+        
+        # Sort by severity
+        severity_order = {'critical': 0, 'high': 1, 'medium': 2, 'low': 3}
+        alerts.sort(key=lambda x: severity_order.get(x.severity, 4))
+
+        return AlertsReport(
+            generated_at=now,
+            total_alerts=len(alerts),
+            critical=critical,
+            high=high,
+            medium=medium,
+            low=low,
+            alerts=alerts,
+        )
+
+    async def daily_digest(
+        self,
+        period: str = 'day',  # day, week, month
+    ) -> DailyDigest:
+        """
+        Generate daily/weekly/monthly digest with key metrics.
+        """
+        now = datetime.now()
+        
+        if period == 'day':
+            date_from = now.replace(hour=0, minute=0, second=0, microsecond=0)
+            prev_from = date_from - timedelta(days=1)
+            prev_to = date_from
+        elif period == 'week':
+            date_from = now - timedelta(days=7)
+            prev_from = date_from - timedelta(days=7)
+            prev_to = date_from
+        else:  # month
+            date_from = now - timedelta(days=30)
+            prev_from = date_from - timedelta(days=30)
+            prev_to = date_from
+
+        # Current period metrics
+        new_leads_query = select(func.count(LeadDB.id)).where(
+            LeadDB.kommo_created_at >= date_from,
+            LeadDB.is_deleted == False,  # noqa: E712
+        )
+        new_leads = (await self.session.execute(new_leads_query)).scalar() or 0
+
+        won_query = select(
+            func.count(LeadDB.id),
+            func.sum(LeadDB.price),
+        ).join(
+            StageDB, StageDB.id == LeadDB.status_id
+        ).where(
+            StageDB.type == 2,
+            LeadDB.closed_at >= date_from,
+        )
+        won_result = (await self.session.execute(won_query)).one()
+        won_deals = won_result[0] or 0
+        revenue = float(won_result[1] or 0)
+
+        lost_query = select(func.count(LeadDB.id)).join(
+            StageDB, StageDB.id == LeadDB.status_id
+        ).where(
+            StageDB.type == 3,
+            LeadDB.closed_at >= date_from,
+        )
+        lost_deals = (await self.session.execute(lost_query)).scalar() or 0
+
+        # Previous period for comparison
+        prev_leads_query = select(func.count(LeadDB.id)).where(
+            LeadDB.kommo_created_at >= prev_from,
+            LeadDB.kommo_created_at < prev_to,
+            LeadDB.is_deleted == False,  # noqa: E712
+        )
+        prev_leads = (await self.session.execute(prev_leads_query)).scalar() or 0
+
+        prev_won_query = select(
+            func.count(LeadDB.id),
+            func.sum(LeadDB.price),
+        ).join(
+            StageDB, StageDB.id == LeadDB.status_id
+        ).where(
+            StageDB.type == 2,
+            LeadDB.closed_at >= prev_from,
+            LeadDB.closed_at < prev_to,
+        )
+        prev_won_result = (await self.session.execute(prev_won_query)).one()
+        prev_won = prev_won_result[0] or 0
+        prev_revenue = float(prev_won_result[1] or 0)
+
+        # Calculate changes
+        def calc_change(current: float, previous: float) -> float | None:
+            if previous == 0:
+                return 100.0 if current > 0 else None
+            return round((current - previous) / previous * 100, 1)
+
+        new_leads_change = calc_change(new_leads, prev_leads)
+        won_deals_change = calc_change(won_deals, prev_won)
+        revenue_change = calc_change(revenue, prev_revenue)
+
+        # Top manager
+        top_manager_query = select(
+            UserDB.name,
+            func.sum(LeadDB.price).label('revenue'),
+        ).join(
+            LeadDB, LeadDB.responsible_user_id == UserDB.id
+        ).join(
+            StageDB, StageDB.id == LeadDB.status_id
+        ).where(
+            StageDB.type == 2,
+            LeadDB.closed_at >= date_from,
+        ).group_by(
+            UserDB.name
+        ).order_by(
+            func.sum(LeadDB.price).desc()
+        ).limit(1)
+        
+        top_result = (await self.session.execute(top_manager_query)).first()
+        top_manager = top_result[0] if top_result else None
+        top_manager_revenue = float(top_result[1]) if top_result else 0
+
+        # Tasks stats
+        overdue_query = select(func.count(TaskDB.id)).where(
+            TaskDB.complete_till < now,
+            TaskDB.is_completed == False,  # noqa: E712
+        )
+        overdue_tasks = (await self.session.execute(overdue_query)).scalar() or 0
+
+        pending_query = select(func.count(TaskDB.id)).where(
+            TaskDB.is_completed == False,  # noqa: E712
+        )
+        pending_tasks = (await self.session.execute(pending_query)).scalar() or 0
+
+        # Generate highlights
+        highlights = []
+        if revenue > 0:
+            highlights.append(f'Выручка: {revenue:,.0f} руб.')
+        if won_deals > 0:
+            highlights.append(f'Закрыто {won_deals} сделок')
+        if new_leads > 0:
+            highlights.append(f'Новых лидов: {new_leads}')
+        if top_manager:
+            highlights.append(f'Лучший менеджер: {top_manager} ({top_manager_revenue:,.0f} руб.)')
+        if overdue_tasks > 0:
+            highlights.append(f'⚠️ Просроченных задач: {overdue_tasks}')
+
+        # Build metrics list
+        metrics = [
+            DigestMetric(
+                name='Новые лиды',
+                value=float(new_leads),
+                previous_value=float(prev_leads),
+                change_percent=new_leads_change,
+                trend='up' if (new_leads_change or 0) > 0 else 'down' if (new_leads_change or 0) < 0 else 'stable',
+            ),
+            DigestMetric(
+                name='Закрытые сделки',
+                value=float(won_deals),
+                previous_value=float(prev_won),
+                change_percent=won_deals_change,
+                trend='up' if (won_deals_change or 0) > 0 else 'down' if (won_deals_change or 0) < 0 else 'stable',
+            ),
+            DigestMetric(
+                name='Выручка',
+                value=revenue,
+                previous_value=prev_revenue,
+                change_percent=revenue_change,
+                trend='up' if (revenue_change or 0) > 0 else 'down' if (revenue_change or 0) < 0 else 'stable',
+            ),
+        ]
+
+        # Get alerts count
+        alerts = await self.generate_alerts(
+            include_stale=True,
+            include_overdue=False,  # Already counted
+            include_churn=True,
+            include_performance=True,
+        )
+
+        return DailyDigest(
+            date=now,
+            period=period,
+            new_leads=new_leads,
+            won_deals=won_deals,
+            lost_deals=lost_deals,
+            revenue=revenue,
+            new_leads_change=new_leads_change,
+            won_deals_change=won_deals_change,
+            revenue_change=revenue_change,
+            top_manager=top_manager,
+            top_manager_revenue=top_manager_revenue,
+            critical_alerts=alerts.critical,
+            pending_tasks=pending_tasks,
+            overdue_tasks=overdue_tasks,
+            highlights=highlights,
+            metrics=metrics,
         )

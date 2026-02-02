@@ -1752,6 +1752,67 @@ async def _execute_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
             else:
                 return {'error': f'Unknown insights action: {action}'}
     
+    elif name == 'kommo_alerts':
+        from kommo_mcp.analytics.engine import AnalyticsEngine
+        
+        action = arguments.get('action')
+        if not action:
+            return {'error': 'action is required'}
+        
+        async with _get_session_factory()() as session:
+            engine = AnalyticsEngine(session)
+            
+            if action == 'check':
+                stale_days = arguments.get('stale_threshold_days', 14)
+                churn_days = arguments.get('churn_threshold_days', 90)
+                
+                result = await engine.generate_alerts(
+                    include_stale=True,
+                    include_overdue=True,
+                    include_churn=True,
+                    include_performance=True,
+                    stale_threshold_days=stale_days,
+                    churn_threshold_days=churn_days,
+                )
+                return result.model_dump()
+            
+            elif action == 'digest':
+                period = arguments.get('period', 'day')
+                result = await engine.daily_digest(period=period)
+                return result.model_dump()
+            
+            elif action == 'stale':
+                stale_days = arguments.get('stale_threshold_days', 14)
+                result = await engine.generate_alerts(
+                    include_stale=True,
+                    include_overdue=False,
+                    include_churn=False,
+                    include_performance=False,
+                    stale_threshold_days=stale_days,
+                )
+                return result.model_dump()
+            
+            elif action == 'overdue':
+                result = await engine.generate_alerts(
+                    include_stale=False,
+                    include_overdue=True,
+                    include_churn=False,
+                    include_performance=False,
+                )
+                return result.model_dump()
+            
+            elif action == 'performance':
+                result = await engine.generate_alerts(
+                    include_stale=False,
+                    include_overdue=False,
+                    include_churn=False,
+                    include_performance=True,
+                )
+                return result.model_dump()
+            
+            else:
+                return {'error': f'Unknown alerts action: {action}'}
+    
     elif name == 'kommo_task_create':
         # Parse complete_till - can be ISO string or Unix timestamp
         complete_till = arguments['complete_till']

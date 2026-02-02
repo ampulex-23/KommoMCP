@@ -4,12 +4,12 @@ MCP Server for Kommo/amoCRM with analytics focus. Enables AI assistants to inter
 
 ## Coverage
 
-**54 / 1000 user stories implemented** (5.4%)
+**59 / 1000 user stories implemented** (5.9%)
 
 | Category | Implemented | Total |
 |----------|-------------|-------|
-| Analytics & Reports | 19 | 100 |
-| Automation | 11 | 100 |
+| Analytics & Reports | 20 | 100 |
+| Automation | 15 | 100 |
 | Communications | 1 | 100 |
 | Search & Navigation | 11 | 100 |
 | Deal Management | 10 | 100 |
@@ -154,6 +154,14 @@ Use MCP Client node with HTTP transport:
   - `opportunities` - Upsell/reactivation opportunities
   - `big_deals` - Large deals in pipeline
 
+### Smart Alerts
+- `kommo_alerts` - **Notifications and digests** with actions:
+  - `check` - Generate all alerts (stale deals, overdue tasks, churn, performance)
+  - `digest` - Daily/weekly/monthly digest with key metrics
+  - `stale` - Stale deals alerts only
+  - `overdue` - Overdue tasks alerts only
+  - `performance` - Manager performance drop alerts
+
 ### Quick Actions
 - `kommo_task_create` - Create tasks linked to leads/contacts/companies
 - `kommo_note_create` - Add notes to any entity
@@ -179,6 +187,9 @@ Ask your AI assistant:
 - "Сделай RFM-анализ клиентов"
 - "Какая нагрузка на менеджеров?"
 - "Найди возможности для допродаж"
+- "Покажи все алерты"
+- "Дайжест за неделю"
+- "Какие задачи просрочены?"
 
 ## Deployment
 

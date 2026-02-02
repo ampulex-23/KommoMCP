@@ -664,6 +664,29 @@ Actions:
                 'required': ['action'],
             },
         },
+        {
+            'name': 'kommo_alerts',
+            'description': '''Smart alerts and notifications tool. Actions:
+- check: Generate all alerts (stale deals, overdue tasks, churn risk, performance drops)
+- digest: Daily/weekly/monthly digest with key metrics and comparisons
+- stale: Alerts for stale deals only
+- overdue: Alerts for overdue tasks only
+- performance: Alerts for manager performance drops''',
+            'inputSchema': {
+                'type': 'object',
+                'properties': {
+                    'action': {
+                        'type': 'string',
+                        'enum': ['check', 'digest', 'stale', 'overdue', 'performance'],
+                        'description': 'Alert action',
+                    },
+                    'period': {'type': 'string', 'enum': ['day', 'week', 'month'], 'description': 'Period for digest'},
+                    'stale_threshold_days': {'type': 'integer', 'description': 'Days threshold for stale deals (default 14)'},
+                    'churn_threshold_days': {'type': 'integer', 'description': 'Days threshold for churn risk (default 90)'},
+                },
+                'required': ['action'],
+            },
+        },
     ]
     
     return {'tools': tools}
