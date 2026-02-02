@@ -4,14 +4,14 @@ MCP Server for Kommo/amoCRM with analytics focus. Enables AI assistants to inter
 
 ## Coverage
 
-**100 / 1000 user stories implemented** (10.0%)
+**106 / 1000 user stories implemented** (10.6%)
 
 | Category | Implemented | Total |
 |----------|-------------|-------|
 | Analytics & Reports | 29 | 100 |
 | Automation | 23 | 100 |
-| Communications | 6 | 100 |
-| Contacts & Companies | 8 | 100 |
+| Communications | 9 | 100 |
+| Contacts & Companies | 11 | 100 |
 | Search & Navigation | 16 | 100 |
 | Deal Management | 15 | 100 |
 
@@ -187,6 +187,9 @@ Use MCP Client node with HTTP transport:
   - `linked` - Get linked entities (deals, companies, tasks)
   - `duplicates` - Find duplicate contacts
   - `merge_preview` - Preview merge of contacts
+  - `activity` - Contact activity summary
+  - `by_responsible` - Contacts by responsible user
+  - `recent` - Recently created contacts
 
 ### Search
 - `kommo_search` - **Advanced search** with actions:
@@ -204,6 +207,9 @@ Use MCP Client node with HTTP transport:
   - `calls` - Call statistics (incoming/outgoing, duration)
   - `timeline` - Activity timeline for period
   - `last_contact` - When was last contact with entity
+  - `by_user` - Communication stats by user
+  - `summary` - Overall communication summary
+  - `no_contact` - Clients with no recent contact
 
 ### CRM Setup
 - `kommo_setup` - **CRM configuration** with actions:
@@ -280,6 +286,9 @@ Ask your AI assistant:
 - "Здоровье сделок"
 - "Сделки под угрозой"
 - "Скорость закрытия сделок"
+- "Контакты по менеджерам"
+- "Клиенты без контакта"
+- "Сводка по коммуникациям"
 
 ## Deployment
 

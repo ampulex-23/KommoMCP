@@ -2291,6 +2291,27 @@ async def _execute_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
                 result = await engine.contacts_merge_preview(contact_ids=contact_ids)
                 return result
             
+            elif action == 'activity':
+                contact_id = arguments.get('contact_id')
+                if not contact_id:
+                    return {'error': 'contact_id is required'}
+                result = await engine.contact_activity(
+                    contact_id=contact_id,
+                    days=arguments.get('days', 90),
+                )
+                return result
+            
+            elif action == 'by_responsible':
+                result = await engine.contacts_by_responsible()
+                return result
+            
+            elif action == 'recent':
+                result = await engine.contacts_recent(
+                    days=arguments.get('days', 7),
+                    limit=arguments.get('limit', 50),
+                )
+                return result
+            
             else:
                 return {'error': f'Unknown contacts action: {action}'}
     
@@ -2351,6 +2372,25 @@ async def _execute_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
                 result = await engine.last_contact(
                     entity_type=entity_type,
                     entity_id=entity_id,
+                )
+                return result
+            
+            elif action == 'by_user':
+                result = await engine.communications_by_user(
+                    days=arguments.get('days', 30),
+                )
+                return result
+            
+            elif action == 'summary':
+                result = await engine.communications_summary(
+                    days=arguments.get('days', 30),
+                )
+                return result
+            
+            elif action == 'no_contact':
+                result = await engine.no_contact_clients(
+                    days=arguments.get('days', 30),
+                    limit=arguments.get('limit', 50),
                 )
                 return result
             

@@ -4662,3 +4662,370 @@ class AnalyticsEngine:
         return {
             'users': sorted(users, key=lambda x: x['total_value'], reverse=True)[:limit],
         }
+
+    # === Communications Extended ===
+
+    async def communications_by_user(
+        self,
+        days: int = 30,
+    ) -> dict:
+        """
+        Get communication statistics by user.
+        """
+        date_from = datetime.now() - timedelta(days=days)
+        
+        query = select(
+            NoteDB.responsible_user_id,
+            NoteDB.note_type,
+            func.count(NoteDB.id).label('count'),
+        ).where(
+            NoteDB.kommo_created_at >= date_from,
+            NoteDB.responsible_user_id.isnot(None),
+        ).group_by(NoteDB.responsible_user_id, NoteDB.note_type)
+        
+        result = await self.session.execute(query)
+        data = result.all()
+        
+        # Aggregate by user
+        users_stats: dict = {}
+        for row in data:
+            uid = row.responsible_user_id
+            if uid not in users_stats:
+                users_stats[uid] = {'calls': 0, 'emails': 0, 'notes': 0, 'total': 0}
+            
+            note_type = self.NOTE_TYPE_MAP.get(row.note_type, 'note')
+            if note_type in ('call_in', 'call_out'):
+                users_stats[uid]['calls'] += row.count
+            elif note_type in ('email_in', 'email_out'):
+                users_stats[uid]['emails'] += row.count
+            else:
+                users_stats[uid]['notes'] += row.count
+            users_stats[uid]['total'] += row.count
+        
+        # Get user names
+        user_names = {}
+        if users_stats:
+            users_q = select(UserDB.id, UserDB.name).where(UserDB.id.in_(users_stats.keys()))
+            users_result = await self.session.execute(users_q)
+            user_names = {u.id: u.name for u in users_result}
+        
+        users = [
+            {
+                'user_id': uid,
+                'user_name': user_names.get(uid, f'User {uid}'),
+                **stats,
+            }
+            for uid, stats in users_stats.items()
+        ]
+        
+        return {
+            'period_days': days,
+            'users': sorted(users, key=lambda x: x['total'], reverse=True),
+        }
+
+    async def communications_summary(
+        self,
+        days: int = 30,
+    ) -> dict:
+        """
+        Get overall communication summary.
+        """
+        date_from = datetime.now() - timedelta(days=days)
+        
+        query = select(
+            NoteDB.note_type,
+            func.count(NoteDB.id).label('count'),
+        ).where(
+            NoteDB.kommo_created_at >= date_from,
+        ).group_by(NoteDB.note_type)
+        
+        result = await self.session.execute(query)
+        data = result.all()
+        
+        summary = {
+            'calls_in': 0,
+            'calls_out': 0,
+            'emails_in': 0,
+            'emails_out': 0,
+            'notes': 0,
+            'sms': 0,
+        }
+        
+        for row in data:
+            note_type = self.NOTE_TYPE_MAP.get(row.note_type, 'note')
+            if note_type == 'call_in':
+                summary['calls_in'] = row.count
+            elif note_type == 'call_out':
+                summary['calls_out'] = row.count
+            elif note_type == 'email_in':
+                summary['emails_in'] = row.count
+            elif note_type == 'email_out':
+                summary['emails_out'] = row.count
+            elif note_type in ('sms_in', 'sms_out'):
+                summary['sms'] += row.count
+            else:
+                summary['notes'] += row.count
+        
+        summary['total_calls'] = summary['calls_in'] + summary['calls_out']
+        summary['total_emails'] = summary['emails_in'] + summary['emails_out']
+        summary['total'] = sum([summary['total_calls'], summary['total_emails'], summary['notes'], summary['sms']])
+        
+        return {
+            'period_days': days,
+            'summary': summary,
+        }
+
+    async def no_contact_clients(
+        self,
+        days: int = 30,
+        limit: int = 50,
+    ) -> dict:
+        """
+        Find clients with no recent contact.
+        """
+        date_threshold = datetime.now() - timedelta(days=days)
+        
+        # Contacts with recent notes
+        contacts_with_notes = select(NoteDB.entity_id).where(
+            NoteDB.entity_type == 'contacts',
+            NoteDB.kommo_created_at >= date_threshold,
+        ).distinct()
+        
+        # Contacts without recent notes but have deals
+        from kommo_mcp.db.models import lead_contacts
+        
+        contacts_with_deals = select(lead_contacts.c.contact_id).join(
+            LeadDB, LeadDB.id == lead_contacts.c.lead_id
+        ).join(
+            StageDB, StageDB.id == LeadDB.status_id
+        ).where(
+            LeadDB.is_deleted == False,  # noqa: E712
+            StageDB.type == 0,  # Open deals
+        ).distinct()
+        
+        query = select(
+            ContactDB.id,
+            ContactDB.name,
+            ContactDB.responsible_user_id,
+        ).where(
+            ContactDB.is_deleted == False,  # noqa: E712
+            ContactDB.id.in_(contacts_with_deals),
+            ContactDB.id.notin_(contacts_with_notes),
+        ).limit(limit)
+        
+        result = await self.session.execute(query)
+        contacts = result.all()
+        
+        # Get user names
+        user_ids = {c.responsible_user_id for c in contacts if c.responsible_user_id}
+        user_names = {}
+        if user_ids:
+            users_q = select(UserDB.id, UserDB.name).where(UserDB.id.in_(user_ids))
+            users_result = await self.session.execute(users_q)
+            user_names = {u.id: u.name for u in users_result}
+        
+        return {
+            'days_threshold': days,
+            'count': len(contacts),
+            'contacts': [
+                {
+                    'id': c.id,
+                    'name': c.name,
+                    'responsible': user_names.get(c.responsible_user_id),
+                }
+                for c in contacts
+            ],
+        }
+
+    # === Contacts Extended ===
+
+    async def contact_activity(
+        self,
+        contact_id: int,
+        days: int = 90,
+    ) -> dict:
+        """
+        Get activity summary for a contact.
+        """
+        date_from = datetime.now() - timedelta(days=days)
+        
+        # Get contact
+        contact_q = select(ContactDB).where(ContactDB.id == contact_id)
+        contact = (await self.session.execute(contact_q)).scalar()
+        
+        if not contact:
+            return {'error': f'Contact {contact_id} not found'}
+        
+        # Notes/communications
+        notes_q = select(
+            NoteDB.note_type,
+            func.count(NoteDB.id).label('count'),
+        ).where(
+            NoteDB.entity_type == 'contacts',
+            NoteDB.entity_id == contact_id,
+            NoteDB.kommo_created_at >= date_from,
+        ).group_by(NoteDB.note_type)
+        
+        notes_result = await self.session.execute(notes_q)
+        notes_data = notes_result.all()
+        
+        communications = {'calls': 0, 'emails': 0, 'notes': 0}
+        for row in notes_data:
+            note_type = self.NOTE_TYPE_MAP.get(row.note_type, 'note')
+            if note_type in ('call_in', 'call_out'):
+                communications['calls'] += row.count
+            elif note_type in ('email_in', 'email_out'):
+                communications['emails'] += row.count
+            else:
+                communications['notes'] += row.count
+        
+        # Tasks
+        tasks_q = select(
+            func.count(TaskDB.id).label('total'),
+            func.count(TaskDB.id).filter(TaskDB.is_completed == True).label('completed'),  # noqa: E712
+        ).where(
+            TaskDB.entity_type == 'contacts',
+            TaskDB.entity_id == contact_id,
+            TaskDB.kommo_created_at >= date_from,
+        )
+        tasks_result = (await self.session.execute(tasks_q)).one()
+        
+        # Deals via junction
+        from kommo_mcp.db.models import lead_contacts
+        
+        deals_q = select(
+            func.count(LeadDB.id).label('total'),
+            func.count(LeadDB.id).filter(StageDB.type == 2).label('won'),
+            func.sum(LeadDB.price).filter(StageDB.type == 2).label('revenue'),
+        ).join(
+            lead_contacts, lead_contacts.c.lead_id == LeadDB.id
+        ).join(
+            StageDB, StageDB.id == LeadDB.status_id
+        ).where(
+            lead_contacts.c.contact_id == contact_id,
+            LeadDB.is_deleted == False,  # noqa: E712
+        )
+        deals_result = (await self.session.execute(deals_q)).one()
+        
+        # Last contact
+        last_note_q = select(NoteDB.kommo_created_at).where(
+            NoteDB.entity_type == 'contacts',
+            NoteDB.entity_id == contact_id,
+        ).order_by(NoteDB.kommo_created_at.desc()).limit(1)
+        last_contact = (await self.session.execute(last_note_q)).scalar()
+        
+        days_since_contact = None
+        if last_contact:
+            days_since_contact = (datetime.now() - last_contact).days
+        
+        return {
+            'contact': {
+                'id': contact.id,
+                'name': contact.name,
+            },
+            'period_days': days,
+            'communications': communications,
+            'tasks': {
+                'total': tasks_result.total or 0,
+                'completed': tasks_result.completed or 0,
+            },
+            'deals': {
+                'total': deals_result.total or 0,
+                'won': deals_result.won or 0,
+                'revenue': float(deals_result.revenue or 0),
+            },
+            'last_contact': last_contact.isoformat() if last_contact else None,
+            'days_since_contact': days_since_contact,
+        }
+
+    async def contacts_by_responsible(
+        self,
+        include_stats: bool = True,
+    ) -> dict:
+        """
+        Get contacts grouped by responsible user.
+        """
+        query = select(
+            ContactDB.responsible_user_id,
+            func.count(ContactDB.id).label('count'),
+        ).where(
+            ContactDB.is_deleted == False,  # noqa: E712
+        ).group_by(ContactDB.responsible_user_id)
+        
+        result = await self.session.execute(query)
+        data = result.all()
+        
+        # Get user names
+        user_ids = {r.responsible_user_id for r in data if r.responsible_user_id}
+        user_names = {}
+        if user_ids:
+            users_q = select(UserDB.id, UserDB.name).where(UserDB.id.in_(user_ids))
+            users_result = await self.session.execute(users_q)
+            user_names = {u.id: u.name for u in users_result}
+        
+        users = [
+            {
+                'user_id': r.responsible_user_id,
+                'user_name': user_names.get(r.responsible_user_id, 'Unassigned'),
+                'contacts_count': r.count,
+            }
+            for r in data
+        ]
+        
+        return {
+            'total_contacts': sum(u['contacts_count'] for u in users),
+            'users': sorted(users, key=lambda x: x['contacts_count'], reverse=True),
+        }
+
+    async def contacts_recent(
+        self,
+        days: int = 7,
+        limit: int = 50,
+    ) -> dict:
+        """
+        Get recently created contacts.
+        """
+        date_from = datetime.now() - timedelta(days=days)
+        
+        query = select(
+            ContactDB.id,
+            ContactDB.name,
+            ContactDB.responsible_user_id,
+            ContactDB.kommo_created_at,
+        ).where(
+            ContactDB.is_deleted == False,  # noqa: E712
+            ContactDB.kommo_created_at >= date_from,
+        ).order_by(ContactDB.kommo_created_at.desc()).limit(limit)
+        
+        result = await self.session.execute(query)
+        contacts = result.all()
+        
+        # Get user names
+        user_ids = {c.responsible_user_id for c in contacts if c.responsible_user_id}
+        user_names = {}
+        if user_ids:
+            users_q = select(UserDB.id, UserDB.name).where(UserDB.id.in_(user_ids))
+            users_result = await self.session.execute(users_q)
+            user_names = {u.id: u.name for u in users_result}
+        
+        # Total count
+        count_q = select(func.count(ContactDB.id)).where(
+            ContactDB.is_deleted == False,  # noqa: E712
+            ContactDB.kommo_created_at >= date_from,
+        )
+        total = (await self.session.execute(count_q)).scalar() or 0
+        
+        return {
+            'period_days': days,
+            'total_new': total,
+            'showing': len(contacts),
+            'contacts': [
+                {
+                    'id': c.id,
+                    'name': c.name,
+                    'responsible': user_names.get(c.responsible_user_id),
+                    'created_at': c.kommo_created_at.isoformat() if c.kommo_created_at else None,
+                }
+                for c in contacts
+            ],
+        }

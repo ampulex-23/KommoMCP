@@ -783,13 +783,16 @@ Actions:
 - without_deals: Find contacts without any deals
 - linked: Get all linked entities (deals, companies, tasks)
 - duplicates: Find duplicate contacts
-- merge_preview: Preview merge of contacts''',
+- merge_preview: Preview merge of contacts
+- activity: Contact activity summary (calls, emails, deals)
+- by_responsible: Contacts grouped by responsible user
+- recent: Recently created contacts''',
             'inputSchema': {
                 'type': 'object',
                 'properties': {
                     'action': {
                         'type': 'string',
-                        'enum': ['search', 'without_deals', 'linked', 'duplicates', 'merge_preview'],
+                        'enum': ['search', 'without_deals', 'linked', 'duplicates', 'merge_preview', 'activity', 'by_responsible', 'recent'],
                         'description': 'Contact action',
                     },
                     'query': {'type': 'string', 'description': 'Search query for name'},
@@ -809,13 +812,16 @@ Actions:
 - history: Full communication history for entity (calls, emails, notes)
 - calls: Call statistics (incoming/outgoing, duration, by user)
 - timeline: Activity timeline for period
-- last_contact: When was last contact with entity''',
+- last_contact: When was last contact with entity
+- by_user: Communication stats by user
+- summary: Overall communication summary
+- no_contact: Clients with no recent contact''',
             'inputSchema': {
                 'type': 'object',
                 'properties': {
                     'action': {
                         'type': 'string',
-                        'enum': ['history', 'calls', 'timeline', 'last_contact'],
+                        'enum': ['history', 'calls', 'timeline', 'last_contact', 'by_user', 'summary', 'no_contact'],
                         'description': 'Communication action',
                     },
                     'entity_type': {'type': 'string', 'enum': ['leads', 'contacts', 'companies'], 'description': 'Entity type'},
