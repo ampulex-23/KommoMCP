@@ -246,33 +246,91 @@ MCP_TOOLS = [
             },
         },
     },
+    {
+        'type': 'function',
+        'function': {
+            'name': 'kommo_mock_data',
+            'description': 'Generate mock/test data for CRM. Creates realistic contacts, companies, leads, tasks.',
+            'parameters': {
+                'type': 'object',
+                'properties': {
+                    'action': {
+                        'type': 'string',
+                        'enum': ['generate_all', 'contacts', 'companies', 'leads', 'tasks'],
+                        'description': 'What to generate',
+                    },
+                    'count': {
+                        'type': 'integer',
+                        'description': 'Number of entities to create (default 10)',
+                        'default': 10,
+                    },
+                    'pipeline_id': {
+                        'type': 'integer',
+                        'description': 'Pipeline ID for leads (required for leads)',
+                    },
+                    'status_id': {
+                        'type': 'integer',
+                        'description': 'Status/stage ID for leads',
+                    },
+                    'responsible_user_id': {
+                        'type': 'integer',
+                        'description': 'Responsible user ID',
+                    },
+                    'locale': {
+                        'type': 'string',
+                        'enum': ['ru', 'en'],
+                        'description': 'Language for generated names (default ru)',
+                        'default': 'ru',
+                    },
+                },
+                'required': ['action'],
+            },
+        },
+    },
 ]
 
-SYSTEM_PROMPT = """Ты - AI-ассистент для КОМПЛЕКСНОЙ НАСТРОЙКИ CRM Kommo.
+SYSTEM_PROMPT = """Ты - AI-ассистент для работы с CRM Kommo. Ты умеешь:
+- Настраивать CRM (воронки, этапы, поля)
+- Генерировать тестовые данные
+- Показывать аналитику и списки
 
-ВАЖНО: Ты можешь выполнять МНОЖЕСТВЕННЫЕ операции последовательно!
+🔧 НАСТРОЙКА CRM (kommo_setup):
+- create_pipeline: создать воронку
+- create_stage: добавить этап (нужен pipeline_id)
+- create_field: создать поле
 
-АЛГОРИТМ КОМПЛЕКСНОЙ НАСТРОЙКИ:
-1. Создай воронку (action=create_pipeline) → получи pipeline_id
-2. Добавь этапы в воронку (action=create_stage) с полученным pipeline_id
-3. Создай кастомные поля (action=create_field)
-4. Повтори для каждой воронки из запроса
+📊 MOCK ДАННЫЕ (kommo_mock_data):
+- generate_all: создать контакты + компании + сделки
+- contacts: только контакты
+- companies: только компании  
+- leads: только сделки (нужен pipeline_id или возьмёт первую воронку)
 
-ПАРАМЕТРЫ:
-- Воронка: action=create_pipeline, pipeline_name="Название", dry_run=false
-- Этап: action=create_stage, pipeline_id=ID, stage_name="Название", stage_sort=10/20/30..., dry_run=false
-- Поле: action=create_field, field_name="Название", field_type="select", entity_type="leads", enums=["A","B"], dry_run=false
+📋 ПРОСМОТР (kommo_list_pipelines, kommo_search):
+- Список воронок с этапами
+- Поиск сделок, контактов
 
-ТИПЫ ПОЛЕЙ: text, numeric, checkbox, select, multiselect, date, url, textarea, price
-ENTITY TYPES: leads, contacts, companies
+ВАЖНО:
+- dry_run=false для реального создания
+- Выполняй операции последовательно
+- Используй pipeline_id из предыдущих операций
 
-ЦВЕТА ЭТАПОВ (только эти!): #fffeb2, #fffd7f, #fff000, #ffeab2, #ffdc7f, #ffce5a, #ffdbdb, #ffc8c8, #ff8f92, #d6eaff, #c1e0ff, #98cbff, #ebffb1, #deff81, #87f2c0, #f9deff, #f3beff, #ccc8f9
+ФОРМАТИРОВАНИЕ ОТВЕТОВ (Telegram HTML):
+- Используй <b>жирный</b> для заголовков
+- Используй <i>курсив</i> для пояснений
+- Используй <code>код</code> для ID и чисел
+- Используй эмодзи для визуализации: ✅❌📊📈💰👤🏢📋🔧⚡
+- Структурируй ответ с отступами и списками
+- Делай красивые сводки с разделителями ━━━
 
-ПРАВИЛА:
-- ВСЕГДА dry_run=false для реального создания
-- Выполняй ВСЕ операции из запроса последовательно
-- После каждой операции продолжай со следующей
-- В конце выдай СВОДКУ: что создано (воронки, этапы, поля)
+Пример красивого ответа:
+<b>📊 Сводка по воронкам</b>
+
+<b>1. Продажи</b> <code>#10548294</code>
+   ├ Новая заявка
+   ├ В работе  
+   └ Успешно
+
+<b>💰 Итого:</b> 3 воронки, 12 этапов
 """
 
 
@@ -481,6 +539,9 @@ class AIChat:
                         return {'contacts': data.get('_embedded', {}).get('contacts', [])}
                     return {'error': f'API error: {resp.status}'}
         
+        elif name == 'kommo_mock_data':
+            return await self._handle_mock_data(session, headers, args)
+        
         # Default - return info about available tools
         return {'message': f'Tool {name} not fully implemented yet', 'args': args}
     
@@ -612,3 +673,156 @@ class AIChat:
                 return {'error': f'Failed to create field: {error}'}
         
         return {'error': f'Unknown setup action: {action}'}
+    
+    async def _handle_mock_data(self, session, headers, args: dict) -> dict:
+        """Generate mock data for CRM testing."""
+        import random
+        
+        action = args.get('action')
+        count = args.get('count', 10)
+        pipeline_id = args.get('pipeline_id')
+        status_id = args.get('status_id')
+        responsible_user_id = args.get('responsible_user_id')
+        locale = args.get('locale', 'ru')
+        
+        # Russian mock data
+        first_names_ru = ['Александр', 'Дмитрий', 'Максим', 'Сергей', 'Андрей', 'Алексей', 'Артём', 'Илья', 'Кирилл', 'Михаил',
+                         'Анна', 'Мария', 'Елена', 'Ольга', 'Наталья', 'Екатерина', 'Татьяна', 'Ирина', 'Светлана', 'Юлия']
+        last_names_ru = ['Иванов', 'Петров', 'Сидоров', 'Козлов', 'Новиков', 'Морозов', 'Волков', 'Соколов', 'Лебедев', 'Кузнецов']
+        companies_ru = ['ООО "ТехноСервис"', 'ЗАО "Альфа"', 'ИП Смирнов', 'ООО "Бета Групп"', 'АО "Гамма"', 
+                       'ООО "Дельта Плюс"', 'ЗАО "Омега"', 'ООО "Сигма Тех"', 'ИП Козлова', 'ООО "Прогресс"']
+        deal_names_ru = ['Поставка оборудования', 'Разработка сайта', 'Консалтинг', 'Техподдержка', 'Интеграция CRM',
+                        'Обучение персонала', 'Аудит системы', 'Модернизация', 'Внедрение ERP', 'Автоматизация']
+        
+        # English mock data
+        first_names_en = ['John', 'Michael', 'David', 'James', 'Robert', 'William', 'Richard', 'Joseph', 'Thomas', 'Charles',
+                         'Mary', 'Patricia', 'Jennifer', 'Linda', 'Elizabeth', 'Barbara', 'Susan', 'Jessica', 'Sarah', 'Karen']
+        last_names_en = ['Smith', 'Johnson', 'Williams', 'Brown', 'Jones', 'Garcia', 'Miller', 'Davis', 'Rodriguez', 'Martinez']
+        companies_en = ['TechCorp Inc', 'Alpha Solutions', 'Beta Group LLC', 'Gamma Industries', 'Delta Services',
+                       'Omega Tech', 'Sigma Partners', 'Innovation Labs', 'Digital Dynamics', 'Cloud Systems']
+        deal_names_en = ['Equipment Supply', 'Website Development', 'Consulting Project', 'Tech Support', 'CRM Integration',
+                        'Staff Training', 'System Audit', 'Modernization', 'ERP Implementation', 'Process Automation']
+        
+        # Select locale
+        if locale == 'ru':
+            first_names, last_names, companies, deal_names = first_names_ru, last_names_ru, companies_ru, deal_names_ru
+        else:
+            first_names, last_names, companies, deal_names = first_names_en, last_names_en, companies_en, deal_names_en
+        
+        results = {'created': [], 'errors': []}
+        
+        if action == 'contacts':
+            url = f'{self.kommo_base_url}/api/v4/contacts'
+            contacts = []
+            for i in range(count):
+                name = f'{random.choice(first_names)} {random.choice(last_names)}'
+                phone = f'+7{random.randint(900, 999)}{random.randint(1000000, 9999999)}'
+                email = f'{name.split()[0].lower()}{random.randint(1, 99)}@example.com'
+                contacts.append({
+                    'name': name,
+                    'custom_fields_values': [
+                        {'field_code': 'PHONE', 'values': [{'value': phone}]},
+                        {'field_code': 'EMAIL', 'values': [{'value': email}]},
+                    ]
+                })
+            
+            async with session.post(url, headers=headers, json=contacts) as resp:
+                if resp.status in [200, 201]:
+                    data = await resp.json()
+                    created = data.get('_embedded', {}).get('contacts', [])
+                    return {'success': True, 'created_contacts': len(created), 'contacts': [{'id': c['id'], 'name': c['name']} for c in created[:5]]}
+                error = await resp.text()
+                return {'error': f'Failed to create contacts: {error[:200]}'}
+        
+        elif action == 'companies':
+            url = f'{self.kommo_base_url}/api/v4/companies'
+            comps = []
+            for i in range(count):
+                comps.append({'name': f'{random.choice(companies)} #{random.randint(1, 999)}'})
+            
+            async with session.post(url, headers=headers, json=comps) as resp:
+                if resp.status in [200, 201]:
+                    data = await resp.json()
+                    created = data.get('_embedded', {}).get('companies', [])
+                    return {'success': True, 'created_companies': len(created), 'companies': [{'id': c['id'], 'name': c['name']} for c in created[:5]]}
+                error = await resp.text()
+                return {'error': f'Failed to create companies: {error[:200]}'}
+        
+        elif action == 'leads':
+            if not pipeline_id:
+                # Get first pipeline
+                pipelines_url = f'{self.kommo_base_url}/api/v4/leads/pipelines'
+                async with session.get(pipelines_url, headers=headers) as resp:
+                    if resp.status == 200:
+                        data = await resp.json()
+                        pipelines = data.get('_embedded', {}).get('pipelines', [])
+                        if pipelines:
+                            pipeline_id = pipelines[0]['id']
+                            statuses = pipelines[0].get('_embedded', {}).get('statuses', [])
+                            if statuses and not status_id:
+                                status_id = statuses[0]['id']
+                    if not pipeline_id:
+                        return {'error': 'No pipeline found. Create a pipeline first or specify pipeline_id'}
+            
+            url = f'{self.kommo_base_url}/api/v4/leads'
+            leads = []
+            for i in range(count):
+                lead = {
+                    'name': f'{random.choice(deal_names)} #{random.randint(100, 999)}',
+                    'price': random.randint(10000, 500000),
+                    'pipeline_id': pipeline_id,
+                }
+                if status_id:
+                    lead['status_id'] = status_id
+                if responsible_user_id:
+                    lead['responsible_user_id'] = responsible_user_id
+                leads.append(lead)
+            
+            async with session.post(url, headers=headers, json=leads) as resp:
+                if resp.status in [200, 201]:
+                    data = await resp.json()
+                    created = data.get('_embedded', {}).get('leads', [])
+                    return {
+                        'success': True, 
+                        'created_leads': len(created), 
+                        'pipeline_id': pipeline_id,
+                        'leads': [{'id': l['id'], 'name': l['name'], 'price': l.get('price')} for l in created[:5]]
+                    }
+                error = await resp.text()
+                return {'error': f'Failed to create leads: {error[:200]}'}
+        
+        elif action == 'generate_all':
+            # Create contacts, companies, and leads
+            results = {'contacts': 0, 'companies': 0, 'leads': 0, 'errors': []}
+            
+            # Contacts
+            contacts_result = await self._handle_mock_data(session, headers, {'action': 'contacts', 'count': count, 'locale': locale})
+            if contacts_result.get('success'):
+                results['contacts'] = contacts_result.get('created_contacts', 0)
+            else:
+                results['errors'].append(f"Contacts: {contacts_result.get('error', 'unknown')}")
+            
+            # Companies
+            companies_result = await self._handle_mock_data(session, headers, {'action': 'companies', 'count': count, 'locale': locale})
+            if companies_result.get('success'):
+                results['companies'] = companies_result.get('created_companies', 0)
+            else:
+                results['errors'].append(f"Companies: {companies_result.get('error', 'unknown')}")
+            
+            # Leads
+            leads_result = await self._handle_mock_data(session, headers, {
+                'action': 'leads', 'count': count, 'locale': locale,
+                'pipeline_id': pipeline_id, 'status_id': status_id, 'responsible_user_id': responsible_user_id
+            })
+            if leads_result.get('success'):
+                results['leads'] = leads_result.get('created_leads', 0)
+            else:
+                results['errors'].append(f"Leads: {leads_result.get('error', 'unknown')}")
+            
+            return {
+                'success': len(results['errors']) == 0,
+                'summary': f"Created: {results['contacts']} contacts, {results['companies']} companies, {results['leads']} leads",
+                **results
+            }
+        
+        return {'error': f'Unknown mock_data action: {action}'}

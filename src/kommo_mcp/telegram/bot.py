@@ -371,7 +371,12 @@ class KommoBot:
             # Process with AI
             response = await self._process_ai_request(tenant, question)
             
-            await message.answer(response)
+            # Send with HTML parse mode for rich formatting
+            try:
+                await message.answer(response, parse_mode='HTML')
+            except Exception:
+                # Fallback to plain text if HTML parsing fails
+                await message.answer(response)
         
         @self.router.message(F.text & ~F.text.startswith('/'))
         async def handle_text(message: Message, state: FSMContext):
@@ -399,7 +404,13 @@ class KommoBot:
             await message.answer('🤔 Думаю...')
             
             response = await self._process_ai_request(tenant, message.text)
-            await message.answer(response)
+            
+            # Send with HTML parse mode for rich formatting
+            try:
+                await message.answer(response, parse_mode='HTML')
+            except Exception:
+                # Fallback to plain text if HTML parsing fails
+                await message.answer(response)
         
         # Register router
         self.dp.include_router(self.router)
