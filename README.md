@@ -4,7 +4,7 @@ MCP Server for Kommo/amoCRM with analytics focus. Enables AI assistants to inter
 
 ## Coverage
 
-**95 / 1000 user stories implemented** (9.5%)
+**100 / 1000 user stories implemented** (10.0%)
 
 | Category | Implemented | Total |
 |----------|-------------|-------|
@@ -13,7 +13,7 @@ MCP Server for Kommo/amoCRM with analytics focus. Enables AI assistants to inter
 | Communications | 6 | 100 |
 | Contacts & Companies | 8 | 100 |
 | Search & Navigation | 16 | 100 |
-| Deal Management | 10 | 100 |
+| Deal Management | 15 | 100 |
 
 ## Features
 
@@ -157,6 +157,14 @@ Use MCP Client node with HTTP transport:
   - `compare` - Period comparison (month/quarter/year)
   - `yoy` - Year-over-year comparison
 
+### Deals Extended
+- `kommo_deals_ext` - **Extended deal management** with actions:
+  - `by_stage` - Deals grouped by stage
+  - `health` - Deal health analysis (stale, no tasks)
+  - `velocity` - Win rate, cycle time, deals per day
+  - `at_risk` - Deals at risk of being lost
+  - `by_user` - Deals by responsible user
+
 ### LTV Analytics
 - `kommo_ltv` - **Customer Lifetime Value** with actions:
   - `by_source` - LTV by lead source
@@ -269,6 +277,9 @@ Ask your AI assistant:
 - "LTV клиентов по каналам"
 - "Когортный анализ клиентов"
 - "Сегментация клиентов"
+- "Здоровье сделок"
+- "Сделки под угрозой"
+- "Скорость закрытия сделок"
 
 ## Deployment
 

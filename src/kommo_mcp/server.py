@@ -2108,6 +2108,56 @@ async def _execute_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
         else:
             return {'error': f'Unknown setup action: {action}'}
     
+    elif name == 'kommo_deals_ext':
+        from kommo_mcp.analytics.engine import AnalyticsEngine
+        
+        action = arguments.get('action')
+        if not action:
+            return {'error': 'action is required'}
+        
+        async with _get_session_factory()() as session:
+            engine = AnalyticsEngine(session)
+            
+            if action == 'by_stage':
+                result = await engine.deals_by_stage(
+                    pipeline_id=arguments.get('pipeline_id'),
+                    include_closed=arguments.get('include_closed', False),
+                )
+                return result
+            
+            elif action == 'health':
+                result = await engine.deals_health(
+                    pipeline_id=arguments.get('pipeline_id'),
+                    days_threshold=arguments.get('stale_days', 14),
+                )
+                return result
+            
+            elif action == 'velocity':
+                result = await engine.deals_velocity(
+                    pipeline_id=arguments.get('pipeline_id'),
+                    days=arguments.get('days', 30),
+                )
+                return result
+            
+            elif action == 'at_risk':
+                result = await engine.deals_at_risk(
+                    pipeline_id=arguments.get('pipeline_id'),
+                    stale_days=arguments.get('stale_days', 14),
+                    limit=arguments.get('limit', 20),
+                )
+                return result
+            
+            elif action == 'by_user':
+                result = await engine.deals_by_user(
+                    user_id=arguments.get('user_id'),
+                    include_closed=arguments.get('include_closed', False),
+                    limit=arguments.get('limit', 50),
+                )
+                return result
+            
+            else:
+                return {'error': f'Unknown deals action: {action}'}
+    
     elif name == 'kommo_ltv':
         from kommo_mcp.analytics.engine import AnalyticsEngine
         

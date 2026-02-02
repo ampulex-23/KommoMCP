@@ -704,6 +704,32 @@ Actions:
             },
         },
         {
+            'name': 'kommo_deals_ext',
+            'description': '''Extended deal management and analytics. Actions:
+- by_stage: Deals grouped by stage with counts and values
+- health: Deal health analysis (stale, no tasks, no responsible)
+- velocity: Deal velocity metrics (win rate, cycle time)
+- at_risk: Find deals at risk of being lost
+- by_user: Deals grouped by responsible user''',
+            'inputSchema': {
+                'type': 'object',
+                'properties': {
+                    'action': {
+                        'type': 'string',
+                        'enum': ['by_stage', 'health', 'velocity', 'at_risk', 'by_user'],
+                        'description': 'Deal action',
+                    },
+                    'pipeline_id': {'type': 'integer', 'description': 'Filter by pipeline'},
+                    'user_id': {'type': 'integer', 'description': 'Filter by user'},
+                    'days': {'type': 'integer', 'description': 'Period in days'},
+                    'stale_days': {'type': 'integer', 'description': 'Days threshold for stale deals'},
+                    'include_closed': {'type': 'boolean', 'description': 'Include closed deals'},
+                    'limit': {'type': 'integer', 'description': 'Max items to return'},
+                },
+                'required': ['action'],
+            },
+        },
+        {
             'name': 'kommo_ltv',
             'description': '''Customer Lifetime Value analytics. Actions:
 - by_source: LTV by lead source

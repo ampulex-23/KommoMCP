@@ -4342,3 +4342,323 @@ class AnalyticsEngine:
             },
             'top_customers': vip[:10],
         }
+
+    # === Deals Extended ===
+
+    async def deals_by_stage(
+        self,
+        pipeline_id: int | None = None,
+        include_closed: bool = False,
+    ) -> dict:
+        """
+        Get deals grouped by stage with counts and values.
+        """
+        query = select(
+            StageDB.id.label('stage_id'),
+            StageDB.name.label('stage_name'),
+            StageDB.sort,
+            StageDB.type,
+            PipelineDB.id.label('pipeline_id'),
+            PipelineDB.name.label('pipeline_name'),
+            func.count(LeadDB.id).label('deals_count'),
+            func.sum(LeadDB.price).label('total_value'),
+        ).select_from(StageDB).join(
+            PipelineDB, PipelineDB.id == StageDB.pipeline_id
+        ).outerjoin(
+            LeadDB, (LeadDB.status_id == StageDB.id) & (LeadDB.is_deleted == False)  # noqa: E712
+        )
+        
+        if pipeline_id:
+            query = query.where(StageDB.pipeline_id == pipeline_id)
+        
+        if not include_closed:
+            query = query.where(StageDB.type == 0)  # Only open stages
+        
+        query = query.group_by(
+            StageDB.id, StageDB.name, StageDB.sort, StageDB.type,
+            PipelineDB.id, PipelineDB.name
+        ).order_by(PipelineDB.sort, StageDB.sort)
+        
+        result = await self.session.execute(query)
+        stages = result.all()
+        
+        # Group by pipeline
+        pipelines = {}
+        for s in stages:
+            if s.pipeline_id not in pipelines:
+                pipelines[s.pipeline_id] = {
+                    'pipeline_id': s.pipeline_id,
+                    'pipeline_name': s.pipeline_name,
+                    'stages': [],
+                    'total_deals': 0,
+                    'total_value': 0,
+                }
+            
+            pipelines[s.pipeline_id]['stages'].append({
+                'stage_id': s.stage_id,
+                'stage_name': s.stage_name,
+                'deals_count': s.deals_count or 0,
+                'total_value': float(s.total_value or 0),
+                'is_closed': s.type != 0,
+            })
+            pipelines[s.pipeline_id]['total_deals'] += s.deals_count or 0
+            pipelines[s.pipeline_id]['total_value'] += float(s.total_value or 0)
+        
+        return {
+            'pipelines': list(pipelines.values()),
+        }
+
+    async def deals_health(
+        self,
+        pipeline_id: int | None = None,
+        days_threshold: int = 14,
+    ) -> dict:
+        """
+        Analyze deal health: stale, no tasks, no activity.
+        """
+        now = datetime.now()
+        stale_threshold = now - timedelta(days=days_threshold)
+        
+        # Base query for open deals
+        base_filter = [
+            LeadDB.is_deleted == False,  # noqa: E712
+            StageDB.type == 0,  # Open
+        ]
+        if pipeline_id:
+            base_filter.append(LeadDB.pipeline_id == pipeline_id)
+        
+        # Stale deals (not updated recently)
+        stale_q = select(func.count(LeadDB.id)).join(
+            StageDB, StageDB.id == LeadDB.status_id
+        ).where(
+            *base_filter,
+            LeadDB.kommo_updated_at < stale_threshold,
+        )
+        stale_count = (await self.session.execute(stale_q)).scalar() or 0
+        
+        # Deals without tasks
+        deals_with_tasks = select(TaskDB.entity_id).where(
+            TaskDB.entity_type == 'leads',
+            TaskDB.is_completed == False,  # noqa: E712
+        ).distinct()
+        
+        no_tasks_q = select(func.count(LeadDB.id)).join(
+            StageDB, StageDB.id == LeadDB.status_id
+        ).where(
+            *base_filter,
+            LeadDB.id.notin_(deals_with_tasks),
+        )
+        no_tasks_count = (await self.session.execute(no_tasks_q)).scalar() or 0
+        
+        # Deals without responsible
+        no_responsible_q = select(func.count(LeadDB.id)).join(
+            StageDB, StageDB.id == LeadDB.status_id
+        ).where(
+            *base_filter,
+            LeadDB.responsible_user_id.is_(None),
+        )
+        no_responsible = (await self.session.execute(no_responsible_q)).scalar() or 0
+        
+        # Total open deals
+        total_q = select(func.count(LeadDB.id)).join(
+            StageDB, StageDB.id == LeadDB.status_id
+        ).where(*base_filter)
+        total_open = (await self.session.execute(total_q)).scalar() or 0
+        
+        # Health score (100 - problems percentage)
+        problems = stale_count + no_tasks_count + no_responsible
+        health_score = max(0, 100 - int(problems / max(total_open, 1) * 100))
+        
+        return {
+            'total_open_deals': total_open,
+            'health_score': health_score,
+            'issues': {
+                'stale_deals': stale_count,
+                'no_active_tasks': no_tasks_count,
+                'no_responsible': no_responsible,
+            },
+            'thresholds': {
+                'stale_days': days_threshold,
+            },
+        }
+
+    async def deals_velocity(
+        self,
+        pipeline_id: int | None = None,
+        days: int = 30,
+    ) -> dict:
+        """
+        Calculate deal velocity metrics.
+        """
+        date_from = datetime.now() - timedelta(days=days)
+        
+        base_filter = [
+            LeadDB.is_deleted == False,  # noqa: E712
+            LeadDB.closed_at >= date_from,
+            LeadDB.closed_at.isnot(None),
+        ]
+        if pipeline_id:
+            base_filter.append(LeadDB.pipeline_id == pipeline_id)
+        
+        # Won deals
+        won_q = select(
+            func.count(LeadDB.id).label('count'),
+            func.sum(LeadDB.price).label('revenue'),
+            func.avg(LeadDB.closed_at - LeadDB.kommo_created_at).label('avg_cycle'),
+        ).join(
+            StageDB, StageDB.id == LeadDB.status_id
+        ).where(
+            *base_filter,
+            StageDB.type == 2,
+        )
+        won_result = (await self.session.execute(won_q)).one()
+        
+        # Lost deals
+        lost_q = select(func.count(LeadDB.id)).join(
+            StageDB, StageDB.id == LeadDB.status_id
+        ).where(
+            *base_filter,
+            StageDB.type == 1,
+        )
+        lost_count = (await self.session.execute(lost_q)).scalar() or 0
+        
+        won_count = won_result.count or 0
+        total_closed = won_count + lost_count
+        win_rate = round(won_count / total_closed * 100, 1) if total_closed > 0 else 0
+        
+        # Average cycle time in days
+        avg_cycle_days = None
+        if won_result.avg_cycle:
+            avg_cycle_days = won_result.avg_cycle.days if hasattr(won_result.avg_cycle, 'days') else int(won_result.avg_cycle.total_seconds() / 86400)
+        
+        return {
+            'period_days': days,
+            'won_deals': won_count,
+            'lost_deals': lost_count,
+            'win_rate': win_rate,
+            'total_revenue': float(won_result.revenue or 0),
+            'avg_deal_value': round(float(won_result.revenue or 0) / won_count, 2) if won_count > 0 else 0,
+            'avg_cycle_days': avg_cycle_days,
+            'deals_per_day': round(won_count / days, 2),
+        }
+
+    async def deals_at_risk(
+        self,
+        pipeline_id: int | None = None,
+        stale_days: int = 14,
+        limit: int = 20,
+    ) -> dict:
+        """
+        Find deals at risk of being lost.
+        """
+        now = datetime.now()
+        stale_threshold = now - timedelta(days=stale_days)
+        
+        # Deals that are stale and have high value
+        query = select(
+            LeadDB.id,
+            LeadDB.name,
+            LeadDB.price,
+            LeadDB.responsible_user_id,
+            LeadDB.kommo_updated_at,
+            StageDB.name.label('stage_name'),
+            PipelineDB.name.label('pipeline_name'),
+        ).join(
+            StageDB, StageDB.id == LeadDB.status_id
+        ).join(
+            PipelineDB, PipelineDB.id == LeadDB.pipeline_id
+        ).where(
+            LeadDB.is_deleted == False,  # noqa: E712
+            StageDB.type == 0,
+            LeadDB.kommo_updated_at < stale_threshold,
+        )
+        
+        if pipeline_id:
+            query = query.where(LeadDB.pipeline_id == pipeline_id)
+        
+        query = query.order_by(LeadDB.price.desc()).limit(limit)
+        
+        result = await self.session.execute(query)
+        deals = result.all()
+        
+        # Get user names
+        user_ids = {d.responsible_user_id for d in deals if d.responsible_user_id}
+        user_names = {}
+        if user_ids:
+            users_q = select(UserDB.id, UserDB.name).where(UserDB.id.in_(user_ids))
+            users_result = await self.session.execute(users_q)
+            user_names = {u.id: u.name for u in users_result}
+        
+        total_at_risk = sum(float(d.price or 0) for d in deals)
+        
+        return {
+            'count': len(deals),
+            'total_value_at_risk': total_at_risk,
+            'deals': [
+                {
+                    'id': d.id,
+                    'name': d.name,
+                    'price': float(d.price or 0),
+                    'stage': d.stage_name,
+                    'pipeline': d.pipeline_name,
+                    'responsible': user_names.get(d.responsible_user_id),
+                    'days_stale': (now - d.kommo_updated_at).days if d.kommo_updated_at else 0,
+                    'last_update': d.kommo_updated_at.isoformat() if d.kommo_updated_at else None,
+                }
+                for d in deals
+            ],
+        }
+
+    async def deals_by_user(
+        self,
+        user_id: int | None = None,
+        include_closed: bool = False,
+        limit: int = 50,
+    ) -> dict:
+        """
+        Get deals grouped by responsible user.
+        """
+        base_filter = [LeadDB.is_deleted == False]  # noqa: E712
+        
+        if not include_closed:
+            base_filter.append(StageDB.type == 0)
+        
+        if user_id:
+            base_filter.append(LeadDB.responsible_user_id == user_id)
+        
+        query = select(
+            LeadDB.responsible_user_id,
+            func.count(LeadDB.id).label('deals_count'),
+            func.sum(LeadDB.price).label('total_value'),
+            func.count(LeadDB.id).filter(StageDB.type == 2).label('won'),
+            func.count(LeadDB.id).filter(StageDB.type == 1).label('lost'),
+        ).join(
+            StageDB, StageDB.id == LeadDB.status_id
+        ).where(*base_filter).group_by(LeadDB.responsible_user_id)
+        
+        result = await self.session.execute(query)
+        users_data = result.all()
+        
+        # Get user names
+        user_ids = {u.responsible_user_id for u in users_data if u.responsible_user_id}
+        user_names = {}
+        if user_ids:
+            users_q = select(UserDB.id, UserDB.name).where(UserDB.id.in_(user_ids))
+            users_result = await self.session.execute(users_q)
+            user_names = {u.id: u.name for u in users_result}
+        
+        users = [
+            {
+                'user_id': u.responsible_user_id,
+                'user_name': user_names.get(u.responsible_user_id, 'Unassigned'),
+                'deals_count': u.deals_count,
+                'total_value': float(u.total_value or 0),
+                'won': u.won or 0,
+                'lost': u.lost or 0,
+            }
+            for u in users_data
+        ]
+        
+        return {
+            'users': sorted(users, key=lambda x: x['total_value'], reverse=True)[:limit],
+        }
