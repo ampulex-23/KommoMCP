@@ -136,11 +136,12 @@ class KommoBot:
         @self.router.message(SetupStates.waiting_kommo_domain)
         async def process_kommo_domain(message: Message, state: FSMContext):
             """Process Kommo domain input."""
-            domain = message.text.strip()
+            domain = message.text.strip().lower()
             
-            # Normalize domain
-            if not domain.endswith('.kommo.com'):
-                domain = f'{domain}.kommo.com'
+            # Normalize domain - support both kommo.com and amocrm.ru
+            if not (domain.endswith('.kommo.com') or domain.endswith('.amocrm.ru')):
+                # Default to amocrm.ru for Russian users
+                domain = f'{domain}.amocrm.ru'
             
             await state.update_data(kommo_domain=domain)
             
@@ -446,13 +447,14 @@ class KommoBot:
             return False
     
     async def _process_ai_request(self, tenant, question: str) -> str:
-        """Process AI request using OpenAI and MCP."""
+        """Process AI request using OpenAI and direct Kommo API."""
         try:
             from kommo_mcp.telegram.ai_chat import AIChat
             
             ai = AIChat(
                 openai_api_key=tenant.openai_api_key,
-                mcp_url=tenant.get_mcp_url(),
+                kommo_domain=tenant.kommo_domain,
+                kommo_token=tenant.kommo_access_token,
             )
             
             response = await ai.chat(question)

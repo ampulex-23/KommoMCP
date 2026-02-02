@@ -3,6 +3,7 @@ Orchestrator - manages Docker containers and databases per tenant.
 """
 
 import asyncio
+import logging
 import subprocess
 import secrets
 from typing import Optional, Tuple
@@ -10,6 +11,8 @@ from datetime import datetime
 
 from .tenant import Tenant, TenantStatus
 from .manager import TenantManager
+
+logger = logging.getLogger(__name__)
 
 
 class Orchestrator:
@@ -66,20 +69,28 @@ class Orchestrator:
     async def _create_database(self, db_name: str) -> bool:
         """Create PostgreSQL database for tenant."""
         try:
+            import os
+            
             # Use psql to create database
-            env = {'PGPASSWORD': self.postgres_password} if self.postgres_password else {}
+            # Need to use 127.0.0.1 instead of localhost for TCP connection
+            host = '127.0.0.1' if self.postgres_host == 'localhost' else self.postgres_host
+            
+            env = os.environ.copy()
+            if self.postgres_password:
+                env['PGPASSWORD'] = self.postgres_password
             
             cmd = [
                 'psql',
-                '-h', self.postgres_host,
+                '-h', host,
                 '-p', str(self.postgres_port),
                 '-U', self.postgres_user,
+                '-d', 'postgres',
                 '-c', f'CREATE DATABASE {db_name};',
             ]
             
             proc = await asyncio.create_subprocess_exec(
                 *cmd,
-                env={**env},
+                env=env,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )
@@ -89,12 +100,13 @@ class Orchestrator:
                 # Check if database already exists
                 if b'already exists' in stderr:
                     return True
-                print(f'Error creating database: {stderr.decode()}')
+                logger.error(f'Error creating database: {stderr.decode()}')
                 return False
             
+            logger.info(f'Database {db_name} created successfully')
             return True
         except Exception as e:
-            print(f'Exception creating database: {e}')
+            logger.error(f'Exception creating database: {e}')
             return False
     
     async def _run_migrations(self, db_name: str) -> bool:
@@ -219,36 +231,19 @@ class Orchestrator:
             )
             return False, 'Failed to create database'
         
-        # 2. Run migrations
-        if not await self._run_migrations(db_name):
-            await self.tenant_manager.set_status(
-                tenant_id, TenantStatus.ERROR, 'Failed to run migrations'
-            )
-            return False, 'Failed to run migrations'
+        # 2. For MVP - skip container creation, use shared MCP server
+        # Each tenant gets their own DB but shares the MCP server instance
+        logger.info(f'Database {db_name} ready for tenant {tenant_id}')
         
-        # 3. Allocate port and start container
-        port = self._allocate_port()
-        
-        # Refresh tenant data
-        tenant = await self.tenant_manager.get_by_id(tenant_id)
-        container_id = await self._start_container(tenant, db_name, port)
-        
-        if not container_id:
-            self._allocated_ports.discard(port)
-            await self.tenant_manager.set_status(
-                tenant_id, TenantStatus.ERROR, 'Failed to start container'
-            )
-            return False, 'Failed to start container'
-        
-        # Update tenant with infrastructure details
+        # Update tenant with infrastructure details (no container for MVP)
         await self.tenant_manager.set_infrastructure(
-            tenant_id, db_name, container_id, port
+            tenant_id, db_name, None, 8001  # Use main MCP server port
         )
         
-        # Set status to syncing (initial sync will happen next)
-        await self.tenant_manager.set_status(tenant_id, TenantStatus.SYNCING)
+        # Set status to active (ready to use)
+        await self.tenant_manager.set_status(tenant_id, TenantStatus.ACTIVE)
         
-        return True, f'Provisioned successfully on port {port}'
+        return True, 'Provisioned successfully'
     
     async def deprovision(self, tenant_id: str) -> Tuple[bool, str]:
         """
