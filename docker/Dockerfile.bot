@@ -1,0 +1,29 @@
+# Dockerfile for Telegram Bot
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    libpq-dev \
+    gcc \
+    docker.io \
+    postgresql-client \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy requirements
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir aiogram aiohttp
+
+# Copy source code
+COPY src/ ./src/
+
+# Set Python path
+ENV PYTHONPATH=/app/src
+
+# Create data directory
+RUN mkdir -p /var/lib/kommo-saas
+
+# Run Telegram bot
+CMD ["python", "-m", "kommo_mcp.telegram"]

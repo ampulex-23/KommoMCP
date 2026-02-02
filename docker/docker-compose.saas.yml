@@ -1,0 +1,67 @@
+version: '3.8'
+
+services:
+  # Master PostgreSQL for tenant metadata
+  postgres-master:
+    image: postgres:15
+    container_name: kommo-postgres-master
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-kommo_secret}
+      POSTGRES_DB: kommo_master
+    volumes:
+      - postgres_master_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    networks:
+      - kommo-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis for caching and rate limiting
+  redis:
+    image: redis:7-alpine
+    container_name: kommo-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - kommo-network
+    restart: unless-stopped
+
+  # Telegram Bot (orchestrator)
+  telegram-bot:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.bot
+    container_name: kommo-telegram-bot
+    environment:
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
+      POSTGRES_HOST: postgres-master
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-kommo_secret}
+      DATA_DIR: /var/lib/kommo-saas
+    volumes:
+      - tenant_data:/var/lib/kommo-saas
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks:
+      - kommo-network
+    depends_on:
+      postgres-master:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  postgres_master_data:
+  redis_data:
+  tenant_data:
+
+networks:
+  kommo-network:
+    driver: bridge
