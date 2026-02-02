@@ -1840,6 +1840,45 @@ async def _execute_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
             else:
                 return {'error': f'Unknown alerts action: {action}'}
     
+    elif name == 'kommo_data_quality':
+        from kommo_mcp.analytics.engine import AnalyticsEngine
+        
+        action = arguments.get('action')
+        if not action:
+            return {'error': 'action is required'}
+        
+        async with _get_session_factory()() as session:
+            engine = AnalyticsEngine(session)
+            
+            if action == 'report':
+                result = await engine.data_quality_report()
+                return result.model_dump()
+            
+            elif action == 'deals':
+                pipeline_id = arguments.get('pipeline_id')
+                result = await engine.check_deal_quality(pipeline_id=pipeline_id)
+                return result.model_dump()
+            
+            elif action == 'duplicates':
+                entity_type = arguments.get('entity_type', 'contacts')
+                result = await engine.find_duplicates(entity_type=entity_type, limit=20)
+                return result.model_dump()
+            
+            elif action == 'validate':
+                # Run validation checks
+                leads = await engine._check_leads_quality()
+                contacts = await engine._check_entity_quality('contacts')
+                companies = await engine._check_entity_quality('companies')
+                
+                return {
+                    'leads': leads.model_dump(),
+                    'contacts': contacts.model_dump(),
+                    'companies': companies.model_dump(),
+                }
+            
+            else:
+                return {'error': f'Unknown data_quality action: {action}'}
+    
     elif name == 'kommo_task_create':
         # Parse complete_till - can be ISO string or Unix timestamp
         complete_till = arguments['complete_till']

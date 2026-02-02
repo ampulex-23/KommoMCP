@@ -672,6 +672,27 @@ Actions:
             },
         },
         {
+            'name': 'kommo_data_quality',
+            'description': '''Data quality analysis tool. Actions:
+- report: Full data quality report with scores and recommendations
+- deals: Check deal/lead quality (missing fields, zero prices)
+- duplicates: Find duplicate contacts/companies
+- validate: Validate data completeness''',
+            'inputSchema': {
+                'type': 'object',
+                'properties': {
+                    'action': {
+                        'type': 'string',
+                        'enum': ['report', 'deals', 'duplicates', 'validate'],
+                        'description': 'Quality check action',
+                    },
+                    'entity_type': {'type': 'string', 'enum': ['contacts', 'companies'], 'description': 'Entity type for duplicates'},
+                    'pipeline_id': {'type': 'integer', 'description': 'Pipeline ID for deal quality check'},
+                },
+                'required': ['action'],
+            },
+        },
+        {
             'name': 'kommo_alerts',
             'description': '''Smart alerts and notifications tool. Actions:
 - check: Generate all alerts (stale deals, overdue tasks, churn risk, performance drops)

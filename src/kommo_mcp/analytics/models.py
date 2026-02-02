@@ -571,3 +571,87 @@ class YoYComparison(BaseModel):
     deals_change: float | None = None
     
     insights: list[str] = Field(default_factory=list)
+
+
+class FieldCompleteness(BaseModel):
+    """Field completeness stats."""
+    
+    field_name: str
+    total_records: int = 0
+    filled_records: int = 0
+    empty_records: int = 0
+    completeness_percent: float = 0.0
+
+
+class EntityQuality(BaseModel):
+    """Quality metrics for an entity type."""
+    
+    entity_type: str  # leads, contacts, companies
+    total_records: int = 0
+    
+    # Completeness
+    fields: list[FieldCompleteness] = Field(default_factory=list)
+    avg_completeness: float = 0.0
+    
+    # Issues
+    missing_required: int = 0  # Records missing required fields
+    duplicates_count: int = 0
+    stale_records: int = 0  # Records without updates for long time
+
+
+class DataQualityIssue(BaseModel):
+    """Single data quality issue."""
+    
+    issue_type: str  # missing_field, duplicate, stale, invalid_format
+    severity: str = 'medium'  # low, medium, high
+    entity_type: str
+    entity_id: int | None = None
+    entity_name: str | None = None
+    field_name: str | None = None
+    description: str
+    suggestion: str | None = None
+
+
+class DataQualityReport(BaseModel):
+    """Overall data quality report."""
+    
+    generated_at: datetime
+    overall_score: int = 0  # 0-100
+    
+    # By entity
+    leads_quality: EntityQuality | None = None
+    contacts_quality: EntityQuality | None = None
+    companies_quality: EntityQuality | None = None
+    
+    # Summary
+    total_issues: int = 0
+    critical_issues: int = 0
+    
+    # Top issues
+    issues: list[DataQualityIssue] = Field(default_factory=list)
+    
+    # Recommendations
+    recommendations: list[str] = Field(default_factory=list)
+
+
+class DealQualityCheck(BaseModel):
+    """Quality check for deals/leads."""
+    
+    total_deals: int = 0
+    
+    # Completeness checks
+    missing_price: int = 0
+    missing_contact: int = 0
+    missing_company: int = 0
+    missing_responsible: int = 0
+    
+    # Quality checks
+    zero_price_deals: int = 0
+    no_tasks_deals: int = 0
+    no_notes_deals: int = 0
+    
+    # Score
+    quality_score: int = 0  # 0-100
+    
+    # Sample bad deals
+    sample_issues: list[DataQualityIssue] = Field(default_factory=list)

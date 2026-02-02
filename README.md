@@ -4,16 +4,16 @@ MCP Server for Kommo/amoCRM with analytics focus. Enables AI assistants to inter
 
 ## Coverage
 
-**63 / 1000 user stories implemented** (6.3%)
+**67 / 1000 user stories implemented** (6.7%)
 
 | Category | Implemented | Total |
 |----------|-------------|-------|
 | Analytics & Reports | 24 | 100 |
-| Automation | 15 | 100 |
+| Automation | 18 | 100 |
 | Communications | 1 | 100 |
 | Search & Navigation | 11 | 100 |
 | Deal Management | 10 | 100 |
-| Contacts & Companies | 2 | 100 |
+| Contacts & Companies | 3 | 100 |
 
 ## Features
 
@@ -157,6 +157,13 @@ Use MCP Client node with HTTP transport:
   - `compare` - Period comparison (month/quarter/year)
   - `yoy` - Year-over-year comparison
 
+### Data Quality
+- `kommo_data_quality` - **Data quality analysis** with actions:
+  - `report` - Full quality report with scores
+  - `deals` - Check deal quality (missing fields)
+  - `duplicates` - Find duplicate contacts/companies
+  - `validate` - Validate data completeness
+
 ### Smart Alerts
 - `kommo_alerts` - **Notifications and digests** with actions:
   - `check` - Generate all alerts (stale deals, overdue tasks, churn, performance)
@@ -196,6 +203,8 @@ Ask your AI assistant:
 - "Рейтинг менеджеров по конверсии"
 - "Сравни этот месяц с прошлым"
 - "Как мы работаем по сравнению с прошлым годом?"
+- "Проверь качество данных"
+- "Найди дубликаты контактов"
 
 ## Deployment
 

@@ -49,6 +49,11 @@ from kommo_mcp.analytics.models import (
     TopClientsReport,
     WorkloadReport,
     YoYComparison,
+    DataQualityIssue,
+    DataQualityReport,
+    DealQualityCheck,
+    EntityQuality,
+    FieldCompleteness,
 )
 from kommo_mcp.db.models import (
     CompanyDB,
@@ -2787,3 +2792,190 @@ class AnalyticsEngine:
             deals_change=deals_change,
             insights=insights,
         )
+
+    async def data_quality_report(self) -> DataQualityReport:
+        """
+        Generate overall data quality report.
+        """
+        now = datetime.now()
+        issues: list[DataQualityIssue] = []
+        recommendations: list[str] = []
+        
+        # Check leads quality
+        leads_quality = await self._check_leads_quality()
+        if leads_quality.missing_responsible > 0:
+            issues.append(DataQualityIssue(
+                issue_type='missing_field',
+                severity='high',
+                entity_type='leads',
+                description=f'{leads_quality.missing_responsible} сделок без ответственного',
+                suggestion='Назначить ответственного менеджера',
+            ))
+        
+        # Check contacts quality
+        contacts_quality = await self._check_entity_quality('contacts')
+        
+        # Check companies quality
+        companies_quality = await self._check_entity_quality('companies')
+        
+        # Check for duplicates
+        duplicates = await self.find_duplicates(entity_type='contacts', limit=10)
+        if duplicates.total_duplicates > 0:
+            issues.append(DataQualityIssue(
+                issue_type='duplicate',
+                severity='medium',
+                entity_type='contacts',
+                description=f'{duplicates.total_duplicates} дубликатов контактов в {duplicates.total_groups} группах',
+                suggestion='kommo_analytics(action="duplicates")',
+            ))
+            contacts_quality.duplicates_count = duplicates.total_duplicates
+        
+        # Calculate overall score
+        scores = []
+        if leads_quality:
+            scores.append(leads_quality.quality_score)
+        if contacts_quality:
+            scores.append(contacts_quality.avg_completeness)
+        if companies_quality:
+            scores.append(companies_quality.avg_completeness)
+        
+        overall_score = int(sum(scores) / len(scores)) if scores else 0
+        
+        # Penalty for issues
+        overall_score = max(0, overall_score - len(issues) * 5)
+        
+        # Generate recommendations
+        if overall_score < 50:
+            recommendations.append('⚠️ Качество данных требует внимания')
+        if leads_quality and leads_quality.missing_responsible > 10:
+            recommendations.append('Заполните цены и ответственных в сделках')
+        if contacts_quality and contacts_quality.duplicates_count > 5:
+            recommendations.append('Объедините дубликаты контактов')
+        if not recommendations:
+            recommendations.append('✅ Данные в хорошем состоянии')
+        
+        critical = sum(1 for i in issues if i.severity == 'high')
+        
+        return DataQualityReport(
+            generated_at=now,
+            overall_score=overall_score,
+            leads_quality=EntityQuality(
+                entity_type='leads',
+                total_records=leads_quality.total_deals,
+                avg_completeness=leads_quality.quality_score,
+                missing_required=leads_quality.missing_responsible,
+            ),
+            contacts_quality=contacts_quality,
+            companies_quality=companies_quality,
+            total_issues=len(issues),
+            critical_issues=critical,
+            issues=issues,
+            recommendations=recommendations,
+        )
+
+    async def _check_leads_quality(self) -> DealQualityCheck:
+        """Check quality of leads/deals."""
+        # Total deals
+        total_q = select(func.count(LeadDB.id)).where(
+            LeadDB.is_deleted == False,  # noqa: E712
+        )
+        total = (await self.session.execute(total_q)).scalar() or 0
+        
+        if total == 0:
+            return DealQualityCheck(total_deals=0, quality_score=100)
+        
+        # Missing price (price = 0 or NULL)
+        zero_price_q = select(func.count(LeadDB.id)).where(
+            LeadDB.is_deleted == False,  # noqa: E712
+            (LeadDB.price == 0) | (LeadDB.price == None),  # noqa: E711
+        )
+        zero_price = (await self.session.execute(zero_price_q)).scalar() or 0
+        
+        # Missing responsible
+        no_resp_q = select(func.count(LeadDB.id)).where(
+            LeadDB.is_deleted == False,  # noqa: E712
+            LeadDB.responsible_user_id == None,  # noqa: E711
+        )
+        no_resp = (await self.session.execute(no_resp_q)).scalar() or 0
+        
+        # Calculate score
+        issues_count = zero_price + no_resp
+        quality_score = max(0, 100 - int(issues_count / total * 100))
+        
+        sample_issues = []
+        if zero_price > 0:
+            sample_issues.append(DataQualityIssue(
+                issue_type='missing_field',
+                severity='medium',
+                entity_type='leads',
+                field_name='price',
+                description=f'{zero_price} сделок без цены',
+            ))
+        if no_resp > 0:
+            sample_issues.append(DataQualityIssue(
+                issue_type='missing_field',
+                severity='high',
+                entity_type='leads',
+                field_name='responsible_user_id',
+                description=f'{no_resp} сделок без ответственного',
+            ))
+        
+        return DealQualityCheck(
+            total_deals=total,
+            zero_price_deals=zero_price,
+            missing_responsible=no_resp,
+            quality_score=quality_score,
+            sample_issues=sample_issues,
+        )
+
+    async def _check_entity_quality(self, entity_type: str) -> EntityQuality:
+        """Check quality of contacts or companies."""
+        if entity_type == 'contacts':
+            model = ContactDB
+        else:
+            model = CompanyDB
+        
+        # Total
+        total_q = select(func.count(model.id)).where(
+            model.is_deleted == False,  # noqa: E712
+        )
+        total = (await self.session.execute(total_q)).scalar() or 0
+        
+        if total == 0:
+            return EntityQuality(entity_type=entity_type, total_records=0, avg_completeness=100)
+        
+        # Check name field
+        no_name_q = select(func.count(model.id)).where(
+            model.is_deleted == False,  # noqa: E712
+            (model.name == None) | (model.name == ''),  # noqa: E711
+        )
+        no_name = (await self.session.execute(no_name_q)).scalar() or 0
+        
+        name_completeness = ((total - no_name) / total * 100) if total > 0 else 0
+        
+        fields = [
+            FieldCompleteness(
+                field_name='name',
+                total_records=total,
+                filled_records=total - no_name,
+                empty_records=no_name,
+                completeness_percent=round(name_completeness, 1),
+            ),
+        ]
+        
+        return EntityQuality(
+            entity_type=entity_type,
+            total_records=total,
+            fields=fields,
+            avg_completeness=round(name_completeness, 1),
+            missing_required=no_name,
+        )
+
+    async def check_deal_quality(
+        self,
+        pipeline_id: int | None = None,
+    ) -> DealQualityCheck:
+        """
+        Check quality of deals in a pipeline.
+        """
+        return await self._check_leads_quality()
