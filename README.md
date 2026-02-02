@@ -24,6 +24,68 @@ MCP Server for Kommo/amoCRM with analytics focus. Enables AI assistants to inter
 - 🗄️ **PostgreSQL** - Local database for big data analytics
 - 🌐 **HTTP Transport** - REST API for n8n and other integrations
 
+## Architecture Overview
+
+```
+┌─────────────────┐     ┌──────────────────┐     ┌─────────────────┐
+│   AI Assistant  │────▶│   MCP Server     │────▶│   Kommo API     │
+│ (Claude/Cursor) │     │                  │     │                 │
+└─────────────────┘     └────────┬─────────┘     └─────────────────┘
+                                 │
+                                 ▼
+                        ┌──────────────────┐
+                        │   PostgreSQL     │
+                        │   (Big Data)     │
+                        └──────────────────┘
+```
+
+### AI-Powered Analytics Engine
+
+The system uses **AI scripting** approach where natural language queries are translated into structured tool calls:
+
+1. **Natural Language → Tool Selection**: AI assistant analyzes user request and selects appropriate MCP tool
+2. **Tool Execution**: MCP server executes the tool against local PostgreSQL or Kommo API
+3. **Big Data Processing**: Complex analytics run on local PostgreSQL for speed (millions of records)
+4. **Response Generation**: AI formats results into human-readable insights
+
+### Big Data Strategy
+
+Instead of querying Kommo API for every analytics request (slow, rate-limited), we:
+
+1. **Sync Once**: `kommo_sync_start` pulls all data to local PostgreSQL
+2. **Analyze Locally**: All analytics tools query local DB (fast, no limits)
+3. **Incremental Updates**: Only new/changed records synced on subsequent runs
+
+This enables:
+- **Complex aggregations** across millions of deals/contacts
+- **Historical analysis** without API pagination limits
+- **Real-time dashboards** without hitting rate limits
+- **Custom SQL** for advanced analytics not available in Kommo UI
+
+### Multi-Tenant SaaS Mode
+
+For production deployments, the system supports multi-tenant architecture:
+
+```
+┌─────────────────┐     ┌──────────────────┐
+│  Telegram Bot   │────▶│  Tenant Manager  │
+│  (@kommo_wizard)│     │                  │
+└─────────────────┘     └────────┬─────────┘
+                                 │
+                    ┌────────────┼────────────┐
+                    ▼            ▼            ▼
+              ┌──────────┐ ┌──────────┐ ┌──────────┐
+              │ Tenant A │ │ Tenant B │ │ Tenant C │
+              │ (own DB) │ │ (own DB) │ │ (own DB) │
+              └──────────┘ └──────────┘ └──────────┘
+```
+
+Each tenant gets:
+- Isolated PostgreSQL database
+- Own Kommo API credentials
+- Own OpenAI API key for AI features
+- Rate limiting per tenant
+
 ## Quick Start
 
 ### Prerequisites
