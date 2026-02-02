@@ -2108,6 +2108,41 @@ async def _execute_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
         else:
             return {'error': f'Unknown setup action: {action}'}
     
+    elif name == 'kommo_ltv':
+        from kommo_mcp.analytics.engine import AnalyticsEngine
+        
+        action = arguments.get('action')
+        if not action:
+            return {'error': 'action is required'}
+        
+        async with _get_session_factory()() as session:
+            engine = AnalyticsEngine(session)
+            
+            if action == 'by_source':
+                result = await engine.ltv_by_source(
+                    limit=arguments.get('limit', 20),
+                )
+                return result
+            
+            elif action == 'by_pipeline':
+                result = await engine.ltv_by_pipeline()
+                return result
+            
+            elif action == 'cohorts':
+                result = await engine.cohort_analysis(
+                    months=arguments.get('months', 6),
+                )
+                return result
+            
+            elif action == 'segments':
+                result = await engine.customer_segments(
+                    limit=arguments.get('limit', 100),
+                )
+                return result
+            
+            else:
+                return {'error': f'Unknown LTV action: {action}'}
+    
     elif name == 'kommo_tasks_ext':
         from kommo_mcp.analytics.engine import AnalyticsEngine
         

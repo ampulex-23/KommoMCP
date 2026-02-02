@@ -4,11 +4,11 @@ MCP Server for Kommo/amoCRM with analytics focus. Enables AI assistants to inter
 
 ## Coverage
 
-**90 / 1000 user stories implemented** (9.0%)
+**95 / 1000 user stories implemented** (9.5%)
 
 | Category | Implemented | Total |
 |----------|-------------|-------|
-| Analytics & Reports | 24 | 100 |
+| Analytics & Reports | 29 | 100 |
 | Automation | 23 | 100 |
 | Communications | 6 | 100 |
 | Contacts & Companies | 8 | 100 |
@@ -157,6 +157,13 @@ Use MCP Client node with HTTP transport:
   - `compare` - Period comparison (month/quarter/year)
   - `yoy` - Year-over-year comparison
 
+### LTV Analytics
+- `kommo_ltv` - **Customer Lifetime Value** with actions:
+  - `by_source` - LTV by lead source
+  - `by_pipeline` - LTV by pipeline
+  - `cohorts` - Cohort analysis by first purchase
+  - `segments` - Customer segmentation (VIP, Regular, Low)
+
 ### Tasks
 - `kommo_tasks_ext` - **Extended task management** with actions:
   - `overdue` - Get overdue tasks
@@ -259,6 +266,9 @@ Ask your AI assistant:
 - "Покажи просроченные задачи"
 - "Статистика задач за месяц"
 - "Задачи на сегодня"
+- "LTV клиентов по каналам"
+- "Когортный анализ клиентов"
+- "Сегментация клиентов"
 
 ## Deployment
 

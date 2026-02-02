@@ -704,6 +704,27 @@ Actions:
             },
         },
         {
+            'name': 'kommo_ltv',
+            'description': '''Customer Lifetime Value analytics. Actions:
+- by_source: LTV by lead source
+- by_pipeline: LTV by pipeline
+- cohorts: Cohort analysis by first purchase month
+- segments: Customer segmentation (VIP, Regular, Low)''',
+            'inputSchema': {
+                'type': 'object',
+                'properties': {
+                    'action': {
+                        'type': 'string',
+                        'enum': ['by_source', 'by_pipeline', 'cohorts', 'segments'],
+                        'description': 'LTV action',
+                    },
+                    'months': {'type': 'integer', 'description': 'Period in months for cohort analysis'},
+                    'limit': {'type': 'integer', 'description': 'Max items to return'},
+                },
+                'required': ['action'],
+            },
+        },
+        {
             'name': 'kommo_tasks_ext',
             'description': '''Extended task management. Actions:
 - overdue: Get overdue tasks

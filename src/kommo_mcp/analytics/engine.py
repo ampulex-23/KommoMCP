@@ -4091,3 +4091,254 @@ class AnalyticsEngine:
                 for t in tasks
             ],
         }
+
+    # === LTV Analytics ===
+
+    async def ltv_by_source(
+        self,
+        limit: int = 20,
+    ) -> dict:
+        """
+        Calculate LTV by lead source.
+        """
+        from kommo_mcp.db.models import lead_contacts
+        
+        # Get won deals grouped by source
+        query = select(
+            LeadDB.source_id,
+            func.count(LeadDB.id).label('deals_count'),
+            func.sum(LeadDB.price).label('total_revenue'),
+        ).join(
+            StageDB, StageDB.id == LeadDB.status_id
+        ).where(
+            LeadDB.is_deleted == False,  # noqa: E712
+            StageDB.type == 2,  # Won deals
+        ).group_by(LeadDB.source_id)
+        
+        result = await self.session.execute(query)
+        sources_data = result.all()
+        
+        sources = []
+        for row in sources_data:
+            source_name = f'Source {row.source_id}' if row.source_id else 'Direct'
+            
+            # Count unique clients for this source
+            clients_q = select(func.count(lead_contacts.c.contact_id.distinct())).join(
+                LeadDB, LeadDB.id == lead_contacts.c.lead_id
+            ).join(
+                StageDB, StageDB.id == LeadDB.status_id
+            ).where(
+                LeadDB.source_id == row.source_id,
+                LeadDB.is_deleted == False,  # noqa: E712
+                StageDB.type == 2,
+            )
+            unique_clients = (await self.session.execute(clients_q)).scalar() or 1
+            
+            ltv = float(row.total_revenue or 0) / unique_clients
+            
+            sources.append({
+                'source_id': row.source_id,
+                'source_name': source_name,
+                'deals_count': row.deals_count,
+                'total_revenue': float(row.total_revenue or 0),
+                'unique_clients': unique_clients,
+                'ltv': round(ltv, 2),
+                'avg_deal': round(float(row.total_revenue or 0) / row.deals_count, 2) if row.deals_count > 0 else 0,
+            })
+        
+        sources = sorted(sources, key=lambda x: x['ltv'], reverse=True)[:limit]
+        
+        return {
+            'total_sources': len(sources_data),
+            'sources': sources,
+        }
+
+    async def ltv_by_pipeline(self) -> dict:
+        """
+        Calculate LTV by pipeline.
+        """
+        from kommo_mcp.db.models import lead_contacts
+        
+        query = select(
+            LeadDB.pipeline_id,
+            PipelineDB.name.label('pipeline_name'),
+            func.count(LeadDB.id).label('deals_count'),
+            func.sum(LeadDB.price).label('total_revenue'),
+        ).join(
+            StageDB, StageDB.id == LeadDB.status_id
+        ).join(
+            PipelineDB, PipelineDB.id == LeadDB.pipeline_id
+        ).where(
+            LeadDB.is_deleted == False,  # noqa: E712
+            StageDB.type == 2,
+        ).group_by(LeadDB.pipeline_id, PipelineDB.name)
+        
+        result = await self.session.execute(query)
+        pipelines_data = result.all()
+        
+        pipelines = []
+        for row in pipelines_data:
+            clients_q = select(func.count(lead_contacts.c.contact_id.distinct())).join(
+                LeadDB, LeadDB.id == lead_contacts.c.lead_id
+            ).join(
+                StageDB, StageDB.id == LeadDB.status_id
+            ).where(
+                LeadDB.pipeline_id == row.pipeline_id,
+                LeadDB.is_deleted == False,  # noqa: E712
+                StageDB.type == 2,
+            )
+            unique_clients = (await self.session.execute(clients_q)).scalar() or 1
+            
+            ltv = float(row.total_revenue or 0) / unique_clients
+            
+            pipelines.append({
+                'pipeline_id': row.pipeline_id,
+                'pipeline_name': row.pipeline_name,
+                'deals_count': row.deals_count,
+                'total_revenue': float(row.total_revenue or 0),
+                'unique_clients': unique_clients,
+                'ltv': round(ltv, 2),
+            })
+        
+        return {
+            'pipelines': sorted(pipelines, key=lambda x: x['ltv'], reverse=True),
+        }
+
+    async def cohort_analysis(self, months: int = 6) -> dict:
+        """
+        Cohort analysis by first purchase month.
+        """
+        from kommo_mcp.db.models import lead_contacts
+        
+        date_from = datetime.now() - timedelta(days=months * 30)
+        
+        # Get first purchase for each contact
+        first_purchase_subq = select(
+            lead_contacts.c.contact_id,
+            func.min(LeadDB.closed_at).label('first_purchase'),
+        ).join(
+            LeadDB, LeadDB.id == lead_contacts.c.lead_id
+        ).join(
+            StageDB, StageDB.id == LeadDB.status_id
+        ).where(
+            LeadDB.is_deleted == False,  # noqa: E712
+            StageDB.type == 2,
+            LeadDB.closed_at.isnot(None),
+            LeadDB.closed_at >= date_from,
+        ).group_by(lead_contacts.c.contact_id).subquery()
+        
+        # Group by month
+        cohorts_q = select(
+            func.date_trunc('month', first_purchase_subq.c.first_purchase).label('cohort_month'),
+            func.count(first_purchase_subq.c.contact_id).label('clients'),
+        ).group_by(
+            func.date_trunc('month', first_purchase_subq.c.first_purchase)
+        ).order_by(
+            func.date_trunc('month', first_purchase_subq.c.first_purchase)
+        )
+        
+        result = await self.session.execute(cohorts_q)
+        cohorts_data = result.all()
+        
+        cohorts = []
+        for row in cohorts_data:
+            if not row.cohort_month:
+                continue
+            
+            # Get revenue for contacts in this cohort
+            revenue_q = select(func.sum(LeadDB.price)).join(
+                lead_contacts, lead_contacts.c.lead_id == LeadDB.id
+            ).join(
+                StageDB, StageDB.id == LeadDB.status_id
+            ).join(
+                first_purchase_subq, first_purchase_subq.c.contact_id == lead_contacts.c.contact_id
+            ).where(
+                func.date_trunc('month', first_purchase_subq.c.first_purchase) == row.cohort_month,
+                LeadDB.is_deleted == False,  # noqa: E712
+                StageDB.type == 2,
+            )
+            total_revenue = (await self.session.execute(revenue_q)).scalar() or 0
+            
+            ltv = float(total_revenue) / row.clients if row.clients > 0 else 0
+            
+            cohorts.append({
+                'cohort': row.cohort_month.strftime('%Y-%m'),
+                'clients': row.clients,
+                'total_revenue': float(total_revenue),
+                'ltv': round(ltv, 2),
+            })
+        
+        return {
+            'period_months': months,
+            'cohorts': cohorts,
+        }
+
+    async def customer_segments(self, limit: int = 100) -> dict:
+        """
+        Segment customers by value (VIP, Regular, Low).
+        """
+        from kommo_mcp.db.models import lead_contacts
+        
+        customer_stats_q = select(
+            lead_contacts.c.contact_id,
+            ContactDB.name,
+            func.count(LeadDB.id).label('deals_count'),
+            func.sum(LeadDB.price).label('total_revenue'),
+            func.max(LeadDB.closed_at).label('last_purchase'),
+        ).join(
+            LeadDB, LeadDB.id == lead_contacts.c.lead_id
+        ).join(
+            ContactDB, ContactDB.id == lead_contacts.c.contact_id
+        ).join(
+            StageDB, StageDB.id == LeadDB.status_id
+        ).where(
+            LeadDB.is_deleted == False,  # noqa: E712
+            StageDB.type == 2,
+        ).group_by(
+            lead_contacts.c.contact_id, ContactDB.name
+        ).order_by(
+            func.sum(LeadDB.price).desc()
+        ).limit(limit)
+        
+        result = await self.session.execute(customer_stats_q)
+        customers = result.all()
+        
+        if not customers:
+            return {'segments': {}, 'customers': []}
+        
+        total = len(customers)
+        vip, regular, low = [], [], []
+        
+        for i, c in enumerate(customers):
+            data = {
+                'contact_id': c.contact_id,
+                'name': c.name,
+                'deals_count': c.deals_count,
+                'total_revenue': float(c.total_revenue or 0),
+                'last_purchase': c.last_purchase.isoformat() if c.last_purchase else None,
+            }
+            
+            if i < total * 0.2:
+                data['segment'] = 'VIP'
+                vip.append(data)
+            elif i < total * 0.8:
+                data['segment'] = 'Regular'
+                regular.append(data)
+            else:
+                data['segment'] = 'Low'
+                low.append(data)
+        
+        vip_rev = sum(c['total_revenue'] for c in vip)
+        reg_rev = sum(c['total_revenue'] for c in regular)
+        low_rev = sum(c['total_revenue'] for c in low)
+        total_rev = vip_rev + reg_rev + low_rev
+        
+        return {
+            'total_customers': total,
+            'segments': {
+                'VIP': {'count': len(vip), 'revenue': vip_rev, 'share': round(vip_rev / total_rev * 100, 1) if total_rev else 0},
+                'Regular': {'count': len(regular), 'revenue': reg_rev, 'share': round(reg_rev / total_rev * 100, 1) if total_rev else 0},
+                'Low': {'count': len(low), 'revenue': low_rev, 'share': round(low_rev / total_rev * 100, 1) if total_rev else 0},
+            },
+            'top_customers': vip[:10],
+        }
