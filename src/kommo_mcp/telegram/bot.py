@@ -15,6 +15,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.enums import ParseMode
+from aiogram.client.default import DefaultBotProperties
 
 from kommo_mcp.saas.manager import TenantManager
 from kommo_mcp.saas.orchestrator import Orchestrator
@@ -38,7 +39,7 @@ class KommoBot:
         tenant_manager: TenantManager,
         orchestrator: Orchestrator,
     ):
-        self.bot = Bot(token=token, parse_mode=ParseMode.HTML)
+        self.bot = Bot(token=token, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
         self.dp = Dispatcher(storage=MemoryStorage())
         self.router = Router()
         self.tenant_manager = tenant_manager

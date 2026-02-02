@@ -1,0 +1,21 @@
+[Unit]
+Description=KommoMCP Telegram Bot
+After=network.target postgresql.service
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/kommo-mcp
+Environment=PYTHONPATH=/opt/kommo-mcp/src
+Environment=TELEGRAM_BOT_TOKEN=8135043294:AAGeyRwRmJzUMOXOzhKYhIGV50XCBji3OOk
+Environment=POSTGRES_HOST=localhost
+Environment=POSTGRES_PORT=5432
+Environment=POSTGRES_USER=kommo
+Environment=POSTGRES_PASSWORD=kommo_password
+Environment=DATA_DIR=/var/lib/kommo-saas
+ExecStart=/opt/kommo-mcp/venv/bin/python -m kommo_mcp.telegram
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
