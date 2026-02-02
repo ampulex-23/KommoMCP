@@ -3783,3 +3783,311 @@ class AnalyticsEngine:
             'field_value': field_value,
             'hint': 'Use Kommo API directly for custom field filtering',
         }
+
+    # === Tasks ===
+
+    async def tasks_overdue(
+        self,
+        user_id: int | None = None,
+        days_overdue: int = 0,
+        limit: int = 50,
+    ) -> dict:
+        """
+        Get overdue tasks.
+        """
+        now = datetime.now()
+        
+        query = select(
+            TaskDB.id,
+            TaskDB.text,
+            TaskDB.entity_type,
+            TaskDB.entity_id,
+            TaskDB.responsible_user_id,
+            TaskDB.complete_till,
+            TaskDB.task_type_id,
+        ).where(
+            TaskDB.is_completed == False,  # noqa: E712
+            TaskDB.complete_till < now - timedelta(days=days_overdue),
+        )
+        
+        if user_id:
+            query = query.where(TaskDB.responsible_user_id == user_id)
+        
+        query = query.order_by(TaskDB.complete_till.asc()).limit(limit)
+        
+        result = await self.session.execute(query)
+        tasks = result.all()
+        
+        # Get user names
+        user_ids = {t.responsible_user_id for t in tasks if t.responsible_user_id}
+        user_names = {}
+        if user_ids:
+            users_q = select(UserDB.id, UserDB.name).where(UserDB.id.in_(user_ids))
+            users_result = await self.session.execute(users_q)
+            user_names = {u.id: u.name for u in users_result}
+        
+        # Total count
+        count_q = select(func.count(TaskDB.id)).where(
+            TaskDB.is_completed == False,  # noqa: E712
+            TaskDB.complete_till < now,
+        )
+        if user_id:
+            count_q = count_q.where(TaskDB.responsible_user_id == user_id)
+        total = (await self.session.execute(count_q)).scalar() or 0
+        
+        return {
+            'total_overdue': total,
+            'showing': len(tasks),
+            'tasks': [
+                {
+                    'id': t.id,
+                    'text': t.text[:100] if t.text else None,
+                    'entity_type': t.entity_type,
+                    'entity_id': t.entity_id,
+                    'responsible': user_names.get(t.responsible_user_id),
+                    'due': t.complete_till.isoformat() if t.complete_till else None,
+                    'days_overdue': (now - t.complete_till).days if t.complete_till else 0,
+                }
+                for t in tasks
+            ],
+        }
+
+    async def tasks_stats(
+        self,
+        user_id: int | None = None,
+        days: int = 30,
+    ) -> dict:
+        """
+        Get task statistics.
+        """
+        date_from = datetime.now() - timedelta(days=days)
+        now = datetime.now()
+        
+        base_filter = [TaskDB.kommo_created_at >= date_from]
+        if user_id:
+            base_filter.append(TaskDB.responsible_user_id == user_id)
+        
+        # Total tasks
+        total_q = select(func.count(TaskDB.id)).where(*base_filter)
+        total = (await self.session.execute(total_q)).scalar() or 0
+        
+        # Completed
+        completed_q = select(func.count(TaskDB.id)).where(
+            *base_filter,
+            TaskDB.is_completed == True,  # noqa: E712
+        )
+        completed = (await self.session.execute(completed_q)).scalar() or 0
+        
+        # Overdue (not completed and past due)
+        overdue_q = select(func.count(TaskDB.id)).where(
+            TaskDB.is_completed == False,  # noqa: E712
+            TaskDB.complete_till < now,
+        )
+        if user_id:
+            overdue_q = overdue_q.where(TaskDB.responsible_user_id == user_id)
+        overdue = (await self.session.execute(overdue_q)).scalar() or 0
+        
+        # By user
+        by_user_q = select(
+            TaskDB.responsible_user_id,
+            func.count(TaskDB.id).label('total'),
+            func.count(TaskDB.id).filter(TaskDB.is_completed == True).label('completed'),  # noqa: E712
+        ).where(*base_filter).group_by(TaskDB.responsible_user_id)
+        
+        by_user_result = await self.session.execute(by_user_q)
+        by_user_data = by_user_result.all()
+        
+        # Get user names
+        user_ids = {r.responsible_user_id for r in by_user_data if r.responsible_user_id}
+        user_names = {}
+        if user_ids:
+            users_q = select(UserDB.id, UserDB.name).where(UserDB.id.in_(user_ids))
+            users_result = await self.session.execute(users_q)
+            user_names = {u.id: u.name for u in users_result}
+        
+        by_user = [
+            {
+                'user': user_names.get(r.responsible_user_id, f'User {r.responsible_user_id}'),
+                'total': r.total,
+                'completed': r.completed,
+                'completion_rate': round(r.completed / r.total * 100, 1) if r.total > 0 else 0,
+            }
+            for r in by_user_data if r.responsible_user_id
+        ]
+        
+        completion_rate = round(completed / total * 100, 1) if total > 0 else 0
+        
+        return {
+            'period_days': days,
+            'total_tasks': total,
+            'completed': completed,
+            'overdue': overdue,
+            'completion_rate': completion_rate,
+            'by_user': sorted(by_user, key=lambda x: x['total'], reverse=True),
+        }
+
+    async def tasks_by_entity(
+        self,
+        entity_type: str,
+        entity_id: int,
+        include_completed: bool = False,
+        limit: int = 20,
+    ) -> dict:
+        """
+        Get tasks for a specific entity.
+        """
+        query = select(
+            TaskDB.id,
+            TaskDB.text,
+            TaskDB.is_completed,
+            TaskDB.complete_till,
+            TaskDB.responsible_user_id,
+            TaskDB.task_type_id,
+        ).where(
+            TaskDB.entity_type == entity_type,
+            TaskDB.entity_id == entity_id,
+        )
+        
+        if not include_completed:
+            query = query.where(TaskDB.is_completed == False)  # noqa: E712
+        
+        query = query.order_by(TaskDB.complete_till.asc()).limit(limit)
+        
+        result = await self.session.execute(query)
+        tasks = result.all()
+        
+        # Get user names
+        user_ids = {t.responsible_user_id for t in tasks if t.responsible_user_id}
+        user_names = {}
+        if user_ids:
+            users_q = select(UserDB.id, UserDB.name).where(UserDB.id.in_(user_ids))
+            users_result = await self.session.execute(users_q)
+            user_names = {u.id: u.name for u in users_result}
+        
+        now = datetime.now()
+        
+        return {
+            'entity_type': entity_type,
+            'entity_id': entity_id,
+            'count': len(tasks),
+            'tasks': [
+                {
+                    'id': t.id,
+                    'text': t.text[:100] if t.text else None,
+                    'completed': t.is_completed,
+                    'due': t.complete_till.isoformat() if t.complete_till else None,
+                    'is_overdue': t.complete_till < now if t.complete_till and not t.is_completed else False,
+                    'responsible': user_names.get(t.responsible_user_id),
+                }
+                for t in tasks
+            ],
+        }
+
+    async def tasks_today(
+        self,
+        user_id: int | None = None,
+        limit: int = 50,
+    ) -> dict:
+        """
+        Get tasks due today.
+        """
+        today_start = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+        today_end = today_start + timedelta(days=1)
+        
+        query = select(
+            TaskDB.id,
+            TaskDB.text,
+            TaskDB.entity_type,
+            TaskDB.entity_id,
+            TaskDB.responsible_user_id,
+            TaskDB.complete_till,
+            TaskDB.is_completed,
+        ).where(
+            TaskDB.complete_till >= today_start,
+            TaskDB.complete_till < today_end,
+        )
+        
+        if user_id:
+            query = query.where(TaskDB.responsible_user_id == user_id)
+        
+        query = query.order_by(TaskDB.complete_till.asc()).limit(limit)
+        
+        result = await self.session.execute(query)
+        tasks = result.all()
+        
+        # Get user names
+        user_ids = {t.responsible_user_id for t in tasks if t.responsible_user_id}
+        user_names = {}
+        if user_ids:
+            users_q = select(UserDB.id, UserDB.name).where(UserDB.id.in_(user_ids))
+            users_result = await self.session.execute(users_q)
+            user_names = {u.id: u.name for u in users_result}
+        
+        completed = sum(1 for t in tasks if t.is_completed)
+        pending = len(tasks) - completed
+        
+        return {
+            'date': today_start.strftime('%Y-%m-%d'),
+            'total': len(tasks),
+            'completed': completed,
+            'pending': pending,
+            'tasks': [
+                {
+                    'id': t.id,
+                    'text': t.text[:100] if t.text else None,
+                    'entity_type': t.entity_type,
+                    'entity_id': t.entity_id,
+                    'responsible': user_names.get(t.responsible_user_id),
+                    'due': t.complete_till.strftime('%H:%M') if t.complete_till else None,
+                    'completed': t.is_completed,
+                }
+                for t in tasks
+            ],
+        }
+
+    async def tasks_without_responsible(
+        self,
+        limit: int = 50,
+    ) -> dict:
+        """
+        Find tasks without responsible user.
+        """
+        query = select(
+            TaskDB.id,
+            TaskDB.text,
+            TaskDB.entity_type,
+            TaskDB.entity_id,
+            TaskDB.complete_till,
+            TaskDB.is_completed,
+        ).where(
+            TaskDB.responsible_user_id.is_(None),
+            TaskDB.is_completed == False,  # noqa: E712
+        ).order_by(TaskDB.complete_till.asc()).limit(limit)
+        
+        result = await self.session.execute(query)
+        tasks = result.all()
+        
+        # Total count
+        count_q = select(func.count(TaskDB.id)).where(
+            TaskDB.responsible_user_id.is_(None),
+            TaskDB.is_completed == False,  # noqa: E712
+        )
+        total = (await self.session.execute(count_q)).scalar() or 0
+        
+        now = datetime.now()
+        
+        return {
+            'total_without_responsible': total,
+            'showing': len(tasks),
+            'tasks': [
+                {
+                    'id': t.id,
+                    'text': t.text[:100] if t.text else None,
+                    'entity_type': t.entity_type,
+                    'entity_id': t.entity_id,
+                    'due': t.complete_till.isoformat() if t.complete_till else None,
+                    'is_overdue': t.complete_till < now if t.complete_till else False,
+                }
+                for t in tasks
+            ],
+        }

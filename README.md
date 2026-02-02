@@ -4,12 +4,12 @@ MCP Server for Kommo/amoCRM with analytics focus. Enables AI assistants to inter
 
 ## Coverage
 
-**85 / 1000 user stories implemented** (8.5%)
+**90 / 1000 user stories implemented** (9.0%)
 
 | Category | Implemented | Total |
 |----------|-------------|-------|
 | Analytics & Reports | 24 | 100 |
-| Automation | 18 | 100 |
+| Automation | 23 | 100 |
 | Communications | 6 | 100 |
 | Contacts & Companies | 8 | 100 |
 | Search & Navigation | 16 | 100 |
@@ -157,6 +157,14 @@ Use MCP Client node with HTTP transport:
   - `compare` - Period comparison (month/quarter/year)
   - `yoy` - Year-over-year comparison
 
+### Tasks
+- `kommo_tasks_ext` - **Extended task management** with actions:
+  - `overdue` - Get overdue tasks
+  - `stats` - Task statistics (completion rate, by user)
+  - `today` - Tasks due today
+  - `by_entity` - Tasks for specific entity
+  - `without_responsible` - Tasks without assigned user
+
 ### Contacts
 - `kommo_contacts_ext` - **Extended contact management** with actions:
   - `search` - Smart contact search with filters
@@ -248,6 +256,9 @@ Ask your AI assistant:
 - "Найди контакты без сделок"
 - "Поиск сделок дороже 100к"
 - "Какие сделки связаны с контактом?"
+- "Покажи просроченные задачи"
+- "Статистика задач за месяц"
+- "Задачи на сегодня"
 
 ## Deployment
 

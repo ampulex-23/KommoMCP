@@ -704,6 +704,32 @@ Actions:
             },
         },
         {
+            'name': 'kommo_tasks_ext',
+            'description': '''Extended task management. Actions:
+- overdue: Get overdue tasks
+- stats: Task statistics (completion rate, by user)
+- today: Tasks due today
+- by_entity: Tasks for specific entity
+- without_responsible: Tasks without assigned user''',
+            'inputSchema': {
+                'type': 'object',
+                'properties': {
+                    'action': {
+                        'type': 'string',
+                        'enum': ['overdue', 'stats', 'today', 'by_entity', 'without_responsible'],
+                        'description': 'Task action',
+                    },
+                    'user_id': {'type': 'integer', 'description': 'Filter by user ID'},
+                    'entity_type': {'type': 'string', 'enum': ['leads', 'contacts', 'companies'], 'description': 'Entity type for by_entity'},
+                    'entity_id': {'type': 'integer', 'description': 'Entity ID for by_entity'},
+                    'days': {'type': 'integer', 'description': 'Period in days for stats'},
+                    'include_completed': {'type': 'boolean', 'description': 'Include completed tasks'},
+                    'limit': {'type': 'integer', 'description': 'Max items to return'},
+                },
+                'required': ['action'],
+            },
+        },
+        {
             'name': 'kommo_contacts_ext',
             'description': '''Extended contact management. Actions:
 - search: Smart contact search with filters

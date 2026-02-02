@@ -2108,6 +2108,60 @@ async def _execute_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
         else:
             return {'error': f'Unknown setup action: {action}'}
     
+    elif name == 'kommo_tasks_ext':
+        from kommo_mcp.analytics.engine import AnalyticsEngine
+        
+        action = arguments.get('action')
+        if not action:
+            return {'error': 'action is required'}
+        
+        async with _get_session_factory()() as session:
+            engine = AnalyticsEngine(session)
+            
+            if action == 'overdue':
+                result = await engine.tasks_overdue(
+                    user_id=arguments.get('user_id'),
+                    days_overdue=arguments.get('days_overdue', 0),
+                    limit=arguments.get('limit', 50),
+                )
+                return result
+            
+            elif action == 'stats':
+                result = await engine.tasks_stats(
+                    user_id=arguments.get('user_id'),
+                    days=arguments.get('days', 30),
+                )
+                return result
+            
+            elif action == 'today':
+                result = await engine.tasks_today(
+                    user_id=arguments.get('user_id'),
+                    limit=arguments.get('limit', 50),
+                )
+                return result
+            
+            elif action == 'by_entity':
+                entity_type = arguments.get('entity_type')
+                entity_id = arguments.get('entity_id')
+                if not entity_type or not entity_id:
+                    return {'error': 'entity_type and entity_id are required'}
+                result = await engine.tasks_by_entity(
+                    entity_type=entity_type,
+                    entity_id=entity_id,
+                    include_completed=arguments.get('include_completed', False),
+                    limit=arguments.get('limit', 20),
+                )
+                return result
+            
+            elif action == 'without_responsible':
+                result = await engine.tasks_without_responsible(
+                    limit=arguments.get('limit', 50),
+                )
+                return result
+            
+            else:
+                return {'error': f'Unknown tasks action: {action}'}
+    
     elif name == 'kommo_contacts_ext':
         from kommo_mcp.analytics.engine import AnalyticsEngine
         
