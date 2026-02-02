@@ -2,6 +2,19 @@
 
 MCP Server for Kommo/amoCRM with analytics focus. Enables AI assistants to interact with your CRM data through natural language.
 
+## Coverage
+
+**54 / 1000 user stories implemented** (5.4%)
+
+| Category | Implemented | Total |
+|----------|-------------|-------|
+| Analytics & Reports | 19 | 100 |
+| Automation | 11 | 100 |
+| Communications | 1 | 100 |
+| Search & Navigation | 11 | 100 |
+| Deal Management | 10 | 100 |
+| Contacts & Companies | 2 | 100 |
+
 ## Features
 
 - 🔌 **MCP Protocol** - Works with Claude Desktop, Cursor, Windsurf, n8n
