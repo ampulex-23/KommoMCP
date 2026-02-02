@@ -489,28 +489,80 @@ class AIChat:
                 return {'error': f'API error {resp.status}', 'details': error[:200]}
         
         elif name == 'kommo_pipeline_analytics':
-            # Get pipelines info
-            url = f'{self.kommo_base_url}/api/v4/leads/pipelines'
-            logger.info(f'Getting pipelines from {url}')
-            async with session.get(url, headers=headers) as resp:
-                logger.info(f'Pipelines response status: {resp.status}')
-                if resp.status == 200:
-                    data = await resp.json()
-                    pipelines = data.get('_embedded', {}).get('pipelines', [])
-                    # Simplify response for AI
-                    result = []
-                    for p in pipelines:
-                        result.append({
-                            'id': p.get('id'),
-                            'name': p.get('name'),
-                            'is_main': p.get('is_main'),
-                            'statuses': [{'id': s.get('id'), 'name': s.get('name')} for s in p.get('_embedded', {}).get('statuses', [])]
-                        })
-                    logger.info(f'Found {len(result)} pipelines')
-                    return {'pipelines': result, 'count': len(result)}
-                error = await resp.text()
-                logger.error(f'Pipelines error: {error}')
-                return {'error': f'API error: {resp.status}', 'details': error[:200]}
+            # Get pipelines with deal counts per stage
+            pipeline_id = args.get('pipeline_id')
+            
+            # First get pipelines structure
+            pipelines_url = f'{self.kommo_base_url}/api/v4/leads/pipelines'
+            async with session.get(pipelines_url, headers=headers) as resp:
+                if resp.status != 200:
+                    return {'error': f'Failed to get pipelines: {resp.status}'}
+                pipelines_data = await resp.json()
+                pipelines = pipelines_data.get('_embedded', {}).get('pipelines', [])
+            
+            # Filter by pipeline_id if specified
+            if pipeline_id:
+                pipelines = [p for p in pipelines if p.get('id') == pipeline_id]
+            
+            result = []
+            total_deals = 0
+            total_revenue = 0
+            
+            for p in pipelines:
+                p_id = p.get('id')
+                statuses = p.get('_embedded', {}).get('statuses', [])
+                
+                # Get deals for this pipeline
+                leads_url = f'{self.kommo_base_url}/api/v4/leads'
+                params = {'filter[pipeline_id]': p_id, 'limit': 250}
+                
+                async with session.get(leads_url, headers=headers, params=params) as resp:
+                    if resp.status == 200:
+                        leads_data = await resp.json()
+                        leads = leads_data.get('_embedded', {}).get('leads', [])
+                    else:
+                        leads = []
+                
+                # Count deals per status
+                status_counts = {}
+                status_revenue = {}
+                for lead in leads:
+                    status_id = lead.get('status_id')
+                    price = lead.get('price', 0) or 0
+                    status_counts[status_id] = status_counts.get(status_id, 0) + 1
+                    status_revenue[status_id] = status_revenue.get(status_id, 0) + price
+                    total_deals += 1
+                    total_revenue += price
+                
+                # Build stages with counts
+                stages_with_counts = []
+                for s in statuses:
+                    s_id = s.get('id')
+                    stages_with_counts.append({
+                        'name': s.get('name'),
+                        'deals': status_counts.get(s_id, 0),
+                        'revenue': status_revenue.get(s_id, 0),
+                    })
+                
+                pipeline_deals = sum(status_counts.values())
+                pipeline_revenue = sum(status_revenue.values())
+                
+                result.append({
+                    'id': p_id,
+                    'name': p.get('name'),
+                    'total_deals': pipeline_deals,
+                    'total_revenue': pipeline_revenue,
+                    'stages': stages_with_counts,
+                })
+            
+            return {
+                'pipelines': result,
+                'summary': {
+                    'total_pipelines': len(result),
+                    'total_deals': total_deals,
+                    'total_revenue': total_revenue,
+                }
+            }
         
         elif name == 'kommo_search':
             action = args.get('action', 'all')
