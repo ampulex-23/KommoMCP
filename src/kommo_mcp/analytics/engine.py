@@ -54,6 +54,10 @@ from kommo_mcp.analytics.models import (
     DealQualityCheck,
     EntityQuality,
     FieldCompleteness,
+    ActivityTimeline,
+    CallStats,
+    CommunicationHistory,
+    CommunicationItem,
 )
 from kommo_mcp.db.models import (
     CompanyDB,
@@ -2979,3 +2983,337 @@ class AnalyticsEngine:
         Check quality of deals in a pipeline.
         """
         return await self._check_leads_quality()
+
+    # === Communications ===
+
+    # Note types in Kommo:
+    # 4 = common note
+    # 10 = incoming call
+    # 11 = outgoing call
+    # 102 = incoming SMS
+    # 103 = outgoing SMS
+    # 25 = incoming email
+    # 26 = outgoing email
+
+    NOTE_TYPE_MAP = {
+        4: 'note',
+        10: 'call_in',
+        11: 'call_out',
+        102: 'sms_in',
+        103: 'sms_out',
+        25: 'email_in',
+        26: 'email_out',
+    }
+
+    async def communication_history(
+        self,
+        entity_type: str,
+        entity_id: int,
+        limit: int = 50,
+    ) -> CommunicationHistory:
+        """
+        Get communication history for an entity.
+        """
+        # Get entity name
+        entity_name = None
+        if entity_type == 'leads':
+            lead_q = select(LeadDB.name).where(LeadDB.id == entity_id)
+            entity_name = (await self.session.execute(lead_q)).scalar()
+        elif entity_type == 'contacts':
+            contact_q = select(ContactDB.name).where(ContactDB.id == entity_id)
+            entity_name = (await self.session.execute(contact_q)).scalar()
+        elif entity_type == 'companies':
+            company_q = select(CompanyDB.name).where(CompanyDB.id == entity_id)
+            entity_name = (await self.session.execute(company_q)).scalar()
+        
+        # Get notes/communications
+        notes_q = (
+            select(NoteDB)
+            .where(
+                NoteDB.entity_type == entity_type,
+                NoteDB.entity_id == entity_id,
+            )
+            .order_by(NoteDB.kommo_created_at.desc())
+            .limit(limit)
+        )
+        
+        result = await self.session.execute(notes_q)
+        notes = result.scalars().all()
+        
+        # Count by type
+        calls_in = 0
+        calls_out = 0
+        emails = 0
+        notes_count = 0
+        chats = 0
+        
+        items = []
+        for note in notes:
+            note_type = self.NOTE_TYPE_MAP.get(note.note_type, 'note')
+            
+            if note_type == 'call_in':
+                calls_in += 1
+            elif note_type == 'call_out':
+                calls_out += 1
+            elif note_type in ('email_in', 'email_out'):
+                emails += 1
+            elif note_type == 'note':
+                notes_count += 1
+            
+            # Extract duration from params for calls
+            duration = None
+            if note.params and isinstance(note.params, dict):
+                duration = note.params.get('duration')
+            
+            items.append(CommunicationItem(
+                id=note.id,
+                type=note_type,
+                entity_type=entity_type,
+                entity_id=entity_id,
+                entity_name=entity_name,
+                text=note.text,
+                duration=duration,
+                created_at=note.kommo_created_at,
+                created_by=note.created_by,
+            ))
+        
+        # Last contact
+        last_contact_at = items[0].created_at if items else None
+        last_contact_type = items[0].type if items else None
+        days_since = None
+        if last_contact_at:
+            days_since = (datetime.now() - last_contact_at).days
+        
+        return CommunicationHistory(
+            entity_type=entity_type,
+            entity_id=entity_id,
+            entity_name=entity_name,
+            total_communications=len(items),
+            calls_in=calls_in,
+            calls_out=calls_out,
+            emails=emails,
+            notes=notes_count,
+            chats=chats,
+            last_contact_at=last_contact_at,
+            last_contact_type=last_contact_type,
+            days_since_contact=days_since,
+            items=items,
+        )
+
+    async def call_stats(
+        self,
+        user_id: int | None = None,
+        days: int = 30,
+        limit: int = 20,
+    ) -> CallStats:
+        """
+        Get call statistics.
+        """
+        date_from = datetime.now() - timedelta(days=days)
+        
+        # Base query for calls (note_type 10 = incoming, 11 = outgoing)
+        base_q = select(NoteDB).where(
+            NoteDB.note_type.in_([10, 11]),
+            NoteDB.kommo_created_at >= date_from,
+        )
+        
+        if user_id:
+            base_q = base_q.where(NoteDB.responsible_user_id == user_id)
+        
+        result = await self.session.execute(base_q.order_by(NoteDB.kommo_created_at.desc()))
+        calls = result.scalars().all()
+        
+        incoming = 0
+        outgoing = 0
+        total_duration = 0
+        by_user: dict[int, int] = {}
+        by_day: dict[str, int] = {}
+        
+        recent_calls = []
+        
+        for call in calls:
+            if call.note_type == 10:
+                incoming += 1
+            else:
+                outgoing += 1
+            
+            # Duration
+            if call.params and isinstance(call.params, dict):
+                duration = call.params.get('duration', 0)
+                if isinstance(duration, int):
+                    total_duration += duration
+            
+            # By user
+            if call.responsible_user_id:
+                by_user[call.responsible_user_id] = by_user.get(call.responsible_user_id, 0) + 1
+            
+            # By day
+            day_key = call.kommo_created_at.strftime('%Y-%m-%d')
+            by_day[day_key] = by_day.get(day_key, 0) + 1
+            
+            # Recent calls
+            if len(recent_calls) < limit:
+                recent_calls.append(CommunicationItem(
+                    id=call.id,
+                    type='call_in' if call.note_type == 10 else 'call_out',
+                    entity_type=call.entity_type,
+                    entity_id=call.entity_id,
+                    text=call.text,
+                    duration=call.params.get('duration') if call.params else None,
+                    created_at=call.kommo_created_at,
+                    created_by=call.created_by,
+                ))
+        
+        total_calls = incoming + outgoing
+        avg_duration = total_duration // total_calls if total_calls > 0 else 0
+        
+        # Get user names
+        user_names = {}
+        if by_user:
+            users_q = select(UserDB.id, UserDB.name).where(UserDB.id.in_(by_user.keys()))
+            users_result = await self.session.execute(users_q)
+            user_names = {u.id: u.name for u in users_result}
+        
+        by_user_named = {user_names.get(uid, f'User {uid}'): count for uid, count in by_user.items()}
+        
+        return CallStats(
+            total_calls=total_calls,
+            incoming=incoming,
+            outgoing=outgoing,
+            total_duration=total_duration,
+            avg_duration=avg_duration,
+            by_user=by_user_named,
+            by_day=by_day,
+            recent_calls=recent_calls,
+        )
+
+    async def activity_timeline(
+        self,
+        entity_type: str | None = None,
+        entity_id: int | None = None,
+        days: int = 7,
+        limit: int = 50,
+    ) -> ActivityTimeline:
+        """
+        Get activity timeline for entity or period.
+        """
+        date_from = datetime.now() - timedelta(days=days)
+        date_to = datetime.now()
+        
+        # Notes query
+        notes_q = select(NoteDB).where(NoteDB.kommo_created_at >= date_from)
+        
+        if entity_type and entity_id:
+            notes_q = notes_q.where(
+                NoteDB.entity_type == entity_type,
+                NoteDB.entity_id == entity_id,
+            )
+        
+        notes_q = notes_q.order_by(NoteDB.kommo_created_at.desc()).limit(limit)
+        
+        result = await self.session.execute(notes_q)
+        notes = result.scalars().all()
+        
+        calls = 0
+        emails = 0
+        notes_count = 0
+        
+        items = []
+        for note in notes:
+            note_type = self.NOTE_TYPE_MAP.get(note.note_type, 'note')
+            
+            if note_type in ('call_in', 'call_out'):
+                calls += 1
+            elif note_type in ('email_in', 'email_out'):
+                emails += 1
+            else:
+                notes_count += 1
+            
+            items.append(CommunicationItem(
+                id=note.id,
+                type=note_type,
+                entity_type=note.entity_type,
+                entity_id=note.entity_id,
+                text=note.text,
+                created_at=note.kommo_created_at,
+                created_by=note.created_by,
+            ))
+        
+        # Tasks created in period
+        tasks_q = select(func.count(TaskDB.id)).where(
+            TaskDB.kommo_created_at >= date_from,
+        )
+        if entity_type and entity_id:
+            tasks_q = tasks_q.where(
+                TaskDB.entity_type == entity_type,
+                TaskDB.entity_id == entity_id,
+            )
+        tasks_created = (await self.session.execute(tasks_q)).scalar() or 0
+        
+        # Tasks completed
+        completed_q = select(func.count(TaskDB.id)).where(
+            TaskDB.is_completed == True,  # noqa: E712
+            TaskDB.kommo_updated_at >= date_from,
+        )
+        if entity_type and entity_id:
+            completed_q = completed_q.where(
+                TaskDB.entity_type == entity_type,
+                TaskDB.entity_id == entity_id,
+            )
+        tasks_completed = (await self.session.execute(completed_q)).scalar() or 0
+        
+        return ActivityTimeline(
+            entity_type=entity_type,
+            entity_id=entity_id,
+            period_start=date_from,
+            period_end=date_to,
+            total_activities=len(items),
+            calls=calls,
+            emails=emails,
+            notes=notes_count,
+            tasks_created=tasks_created,
+            tasks_completed=tasks_completed,
+            items=items,
+        )
+
+    async def last_contact(
+        self,
+        entity_type: str,
+        entity_id: int,
+    ) -> dict:
+        """
+        Get last contact info for entity.
+        """
+        note_q = (
+            select(NoteDB)
+            .where(
+                NoteDB.entity_type == entity_type,
+                NoteDB.entity_id == entity_id,
+            )
+            .order_by(NoteDB.kommo_created_at.desc())
+            .limit(1)
+        )
+        
+        result = await self.session.execute(note_q)
+        note = result.scalar()
+        
+        if not note:
+            return {
+                'entity_type': entity_type,
+                'entity_id': entity_id,
+                'last_contact': None,
+                'days_ago': None,
+                'type': None,
+            }
+        
+        days_ago = (datetime.now() - note.kommo_created_at).days
+        note_type = self.NOTE_TYPE_MAP.get(note.note_type, 'note')
+        
+        return {
+            'entity_type': entity_type,
+            'entity_id': entity_id,
+            'last_contact': note.kommo_created_at.isoformat(),
+            'days_ago': days_ago,
+            'type': note_type,
+            'text': note.text[:100] if note.text else None,
+        }

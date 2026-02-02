@@ -655,3 +655,82 @@ class DealQualityCheck(BaseModel):
     
     # Sample bad deals
     sample_issues: list[DataQualityIssue] = Field(default_factory=list)
+
+
+# === Communications ===
+
+class CommunicationItem(BaseModel):
+    """Single communication event."""
+    
+    id: int
+    type: str  # call_in, call_out, sms_in, sms_out, email, note, chat
+    entity_type: str  # leads, contacts, companies
+    entity_id: int
+    entity_name: str | None = None
+    
+    text: str | None = None
+    duration: int | None = None  # For calls, in seconds
+    
+    created_at: datetime
+    created_by: int | None = None
+    created_by_name: str | None = None
+
+
+class CommunicationHistory(BaseModel):
+    """Communication history for entity."""
+    
+    entity_type: str
+    entity_id: int
+    entity_name: str | None = None
+    
+    total_communications: int = 0
+    calls_in: int = 0
+    calls_out: int = 0
+    emails: int = 0
+    notes: int = 0
+    chats: int = 0
+    
+    last_contact_at: datetime | None = None
+    last_contact_type: str | None = None
+    days_since_contact: int | None = None
+    
+    items: list[CommunicationItem] = Field(default_factory=list)
+
+
+class CallStats(BaseModel):
+    """Call statistics."""
+    
+    total_calls: int = 0
+    incoming: int = 0
+    outgoing: int = 0
+    
+    total_duration: int = 0  # seconds
+    avg_duration: int = 0
+    
+    by_user: dict[str, int] = Field(default_factory=dict)
+    by_day: dict[str, int] = Field(default_factory=dict)
+    
+    recent_calls: list[CommunicationItem] = Field(default_factory=list)
+
+
+class ActivityTimeline(BaseModel):
+    """Activity timeline for entity or period."""
+    
+    entity_type: str | None = None
+    entity_id: int | None = None
+    
+    period_start: datetime | None = None
+    period_end: datetime | None = None
+    
+    total_activities: int = 0
+    
+    # By type
+    calls: int = 0
+    emails: int = 0
+    notes: int = 0
+    tasks_created: int = 0
+    tasks_completed: int = 0
+    deals_created: int = 0
+    deals_closed: int = 0
+    
+    items: list[CommunicationItem] = Field(default_factory=list)

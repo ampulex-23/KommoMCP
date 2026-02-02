@@ -2057,6 +2057,69 @@ async def _execute_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
         else:
             return {'error': f'Unknown setup action: {action}'}
     
+    elif name == 'kommo_communications':
+        from kommo_mcp.analytics.engine import AnalyticsEngine
+        
+        action = arguments.get('action')
+        if not action:
+            return {'error': 'action is required'}
+        
+        async with _get_session_factory()() as session:
+            engine = AnalyticsEngine(session)
+            
+            if action == 'history':
+                entity_type = arguments.get('entity_type')
+                entity_id = arguments.get('entity_id')
+                if not entity_type or not entity_id:
+                    return {'error': 'entity_type and entity_id are required'}
+                
+                limit = arguments.get('limit', 50)
+                result = await engine.communication_history(
+                    entity_type=entity_type,
+                    entity_id=entity_id,
+                    limit=limit,
+                )
+                return result.model_dump()
+            
+            elif action == 'calls':
+                user_id = arguments.get('user_id')
+                days = arguments.get('days', 30)
+                limit = arguments.get('limit', 20)
+                result = await engine.call_stats(
+                    user_id=user_id,
+                    days=days,
+                    limit=limit,
+                )
+                return result.model_dump()
+            
+            elif action == 'timeline':
+                entity_type = arguments.get('entity_type')
+                entity_id = arguments.get('entity_id')
+                days = arguments.get('days', 7)
+                limit = arguments.get('limit', 50)
+                result = await engine.activity_timeline(
+                    entity_type=entity_type,
+                    entity_id=entity_id,
+                    days=days,
+                    limit=limit,
+                )
+                return result.model_dump()
+            
+            elif action == 'last_contact':
+                entity_type = arguments.get('entity_type')
+                entity_id = arguments.get('entity_id')
+                if not entity_type or not entity_id:
+                    return {'error': 'entity_type and entity_id are required'}
+                
+                result = await engine.last_contact(
+                    entity_type=entity_type,
+                    entity_id=entity_id,
+                )
+                return result
+            
+            else:
+                return {'error': f'Unknown communications action: {action}'}
+    
     elif name == 'kommo_task_create':
         # Parse complete_till - can be ISO string or Unix timestamp
         complete_till = arguments['complete_till']

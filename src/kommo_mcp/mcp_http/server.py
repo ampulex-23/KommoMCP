@@ -672,6 +672,30 @@ Actions:
             },
         },
         {
+            'name': 'kommo_communications',
+            'description': '''Communication history and activity tracking. Actions:
+- history: Full communication history for entity (calls, emails, notes)
+- calls: Call statistics (incoming/outgoing, duration, by user)
+- timeline: Activity timeline for period
+- last_contact: When was last contact with entity''',
+            'inputSchema': {
+                'type': 'object',
+                'properties': {
+                    'action': {
+                        'type': 'string',
+                        'enum': ['history', 'calls', 'timeline', 'last_contact'],
+                        'description': 'Communication action',
+                    },
+                    'entity_type': {'type': 'string', 'enum': ['leads', 'contacts', 'companies'], 'description': 'Entity type'},
+                    'entity_id': {'type': 'integer', 'description': 'Entity ID'},
+                    'user_id': {'type': 'integer', 'description': 'Filter by user ID'},
+                    'days': {'type': 'integer', 'description': 'Period in days (default 30)'},
+                    'limit': {'type': 'integer', 'description': 'Max items to return'},
+                },
+                'required': ['action'],
+            },
+        },
+        {
             'name': 'kommo_setup',
             'description': '''CRM setup and configuration tool. Actions:
 - templates: List available pipeline templates

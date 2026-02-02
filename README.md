@@ -4,13 +4,13 @@ MCP Server for Kommo/amoCRM with analytics focus. Enables AI assistants to inter
 
 ## Coverage
 
-**70 / 1000 user stories implemented** (7.0%)
+**75 / 1000 user stories implemented** (7.5%)
 
 | Category | Implemented | Total |
 |----------|-------------|-------|
 | Analytics & Reports | 24 | 100 |
 | Automation | 18 | 100 |
-| Communications | 1 | 100 |
+| Communications | 6 | 100 |
 | Search & Navigation | 11 | 100 |
 | Deal Management | 10 | 100 |
 | Contacts & Companies | 3 | 100 |
@@ -157,6 +157,13 @@ Use MCP Client node with HTTP transport:
   - `compare` - Period comparison (month/quarter/year)
   - `yoy` - Year-over-year comparison
 
+### Communications
+- `kommo_communications` - **Communication history** with actions:
+  - `history` - Full communication history for entity
+  - `calls` - Call statistics (incoming/outgoing, duration)
+  - `timeline` - Activity timeline for period
+  - `last_contact` - When was last contact with entity
+
 ### CRM Setup
 - `kommo_setup` - **CRM configuration** with actions:
   - `templates` - List available pipeline templates
@@ -217,6 +224,9 @@ Ask your AI assistant:
 - "Настрой CRM для автосервиса"
 - "Покажи шаблоны воронок"
 - "Создай воронку для интернет-магазина"
+- "Покажи историю общения с клиентом"
+- "Когда последний раз звонили клиенту?"
+- "Статистика звонков за месяц"
 
 ## Deployment
 
