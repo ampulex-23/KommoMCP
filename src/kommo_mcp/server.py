@@ -1879,6 +1879,184 @@ async def _execute_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any]:
             else:
                 return {'error': f'Unknown data_quality action: {action}'}
     
+    elif name == 'kommo_setup':
+        from kommo_mcp.api.client import KommoClient
+        from kommo_mcp.setup.templates import get_template, list_templates
+        
+        action = arguments.get('action')
+        if not action:
+            return {'error': 'action is required'}
+        
+        dry_run = arguments.get('dry_run', True)  # Default to dry_run for safety
+        
+        if action == 'templates':
+            return {'templates': list_templates()}
+        
+        elif action == 'apply_template':
+            template_name = arguments.get('template')
+            if not template_name:
+                return {'error': 'template is required', 'available': [t['id'] for t in list_templates()]}
+            
+            template = get_template(template_name)
+            if not template:
+                return {'error': f'Unknown template: {template_name}', 'available': [t['id'] for t in list_templates()]}
+            
+            if dry_run:
+                return {
+                    'dry_run': True,
+                    'message': 'Preview of what will be created',
+                    'pipeline': template['name'],
+                    'stages': [s['name'] for s in template['stages']],
+                    'fields': [f['name'] for f in template.get('fields', [])],
+                    'sources': template.get('sources', []),
+                    'hint': 'Set dry_run=false to actually create',
+                }
+            
+            # Actually create pipeline with stages
+            async with KommoClient() as client:
+                # Create pipeline with stages
+                pipeline = await client.create_pipeline(
+                    name=template['name'],
+                    statuses=template['stages'],
+                )
+                
+                pipeline_id = pipeline.get('id')
+                if not pipeline_id:
+                    return {'error': 'Failed to create pipeline', 'response': pipeline}
+                
+                # Create custom fields
+                created_fields = []
+                for field in template.get('fields', []):
+                    try:
+                        result = await client.create_custom_field(
+                            entity_type='leads',
+                            name=field['name'],
+                            field_type=field.get('type', 'text'),
+                            enums=field.get('enums'),
+                        )
+                        created_fields.append(result.get('name', field['name']))
+                    except Exception as e:
+                        created_fields.append(f"{field['name']} (error: {e})")
+                
+                # Create sources
+                created_sources = []
+                for source_name in template.get('sources', []):
+                    try:
+                        result = await client.create_source(pipeline_id, source_name)
+                        created_sources.append(result.get('name', source_name))
+                    except Exception as e:
+                        created_sources.append(f"{source_name} (error: {e})")
+                
+                return {
+                    'success': True,
+                    'pipeline_id': pipeline_id,
+                    'pipeline_name': pipeline.get('name'),
+                    'stages_created': len(template['stages']),
+                    'fields_created': created_fields,
+                    'sources_created': created_sources,
+                }
+        
+        elif action == 'create_pipeline':
+            pipeline_name = arguments.get('pipeline_name')
+            if not pipeline_name:
+                return {'error': 'pipeline_name is required'}
+            
+            if dry_run:
+                return {
+                    'dry_run': True,
+                    'message': f'Will create pipeline: {pipeline_name}',
+                    'hint': 'Set dry_run=false to actually create',
+                }
+            
+            async with KommoClient() as client:
+                pipeline = await client.create_pipeline(name=pipeline_name)
+                return {
+                    'success': True,
+                    'pipeline_id': pipeline.get('id'),
+                    'pipeline_name': pipeline.get('name'),
+                }
+        
+        elif action == 'create_stage':
+            pipeline_id = arguments.get('pipeline_id')
+            stage_name = arguments.get('stage_name')
+            stage_sort = arguments.get('stage_sort', 100)
+            stage_color = arguments.get('stage_color', '#fffeb2')
+            
+            if not pipeline_id or not stage_name:
+                return {'error': 'pipeline_id and stage_name are required'}
+            
+            if dry_run:
+                return {
+                    'dry_run': True,
+                    'message': f'Will create stage "{stage_name}" in pipeline {pipeline_id}',
+                    'hint': 'Set dry_run=false to actually create',
+                }
+            
+            async with KommoClient() as client:
+                stage = await client.create_stage(
+                    pipeline_id=pipeline_id,
+                    name=stage_name,
+                    sort=stage_sort,
+                    color=stage_color,
+                )
+                return {
+                    'success': True,
+                    'stage_id': stage.get('id'),
+                    'stage_name': stage.get('name'),
+                }
+        
+        elif action == 'create_field':
+            field_name = arguments.get('field_name')
+            field_type = arguments.get('field_type', 'text')
+            entity_type = arguments.get('entity_type', 'leads')
+            
+            if not field_name:
+                return {'error': 'field_name is required'}
+            
+            if dry_run:
+                return {
+                    'dry_run': True,
+                    'message': f'Will create {field_type} field "{field_name}" for {entity_type}',
+                    'hint': 'Set dry_run=false to actually create',
+                }
+            
+            async with KommoClient() as client:
+                field = await client.create_custom_field(
+                    entity_type=entity_type,
+                    name=field_name,
+                    field_type=field_type,
+                )
+                return {
+                    'success': True,
+                    'field_id': field.get('id'),
+                    'field_name': field.get('name'),
+                }
+        
+        elif action == 'create_source':
+            pipeline_id = arguments.get('pipeline_id')
+            source_name = arguments.get('source_name')
+            
+            if not pipeline_id or not source_name:
+                return {'error': 'pipeline_id and source_name are required'}
+            
+            if dry_run:
+                return {
+                    'dry_run': True,
+                    'message': f'Will create source "{source_name}" in pipeline {pipeline_id}',
+                    'hint': 'Set dry_run=false to actually create',
+                }
+            
+            async with KommoClient() as client:
+                source = await client.create_source(pipeline_id, source_name)
+                return {
+                    'success': True,
+                    'source_id': source.get('id'),
+                    'source_name': source.get('name'),
+                }
+        
+        else:
+            return {'error': f'Unknown setup action: {action}'}
+    
     elif name == 'kommo_task_create':
         # Parse complete_till - can be ISO string or Unix timestamp
         complete_till = arguments['complete_till']

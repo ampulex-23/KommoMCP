@@ -672,6 +672,38 @@ Actions:
             },
         },
         {
+            'name': 'kommo_setup',
+            'description': '''CRM setup and configuration tool. Actions:
+- templates: List available pipeline templates
+- create_pipeline: Create a new pipeline with stages
+- create_stage: Add a stage to existing pipeline
+- create_field: Create a custom field
+- apply_template: Apply a template to create pipeline with stages and fields
+- create_source: Add a lead source to pipeline''',
+            'inputSchema': {
+                'type': 'object',
+                'properties': {
+                    'action': {
+                        'type': 'string',
+                        'enum': ['templates', 'create_pipeline', 'create_stage', 'create_field', 'apply_template', 'create_source'],
+                        'description': 'Setup action',
+                    },
+                    'template': {'type': 'string', 'description': 'Template name: sales, services, rental, realestate, education, ecommerce'},
+                    'pipeline_name': {'type': 'string', 'description': 'Pipeline name'},
+                    'pipeline_id': {'type': 'integer', 'description': 'Pipeline ID for adding stages/sources'},
+                    'stage_name': {'type': 'string', 'description': 'Stage name'},
+                    'stage_sort': {'type': 'integer', 'description': 'Stage sort order (10, 20, 30...)'},
+                    'stage_color': {'type': 'string', 'description': 'Stage color hex (#fffeb2)'},
+                    'field_name': {'type': 'string', 'description': 'Custom field name'},
+                    'field_type': {'type': 'string', 'enum': ['text', 'numeric', 'checkbox', 'select', 'multiselect', 'date', 'url', 'textarea'], 'description': 'Field type'},
+                    'entity_type': {'type': 'string', 'enum': ['leads', 'contacts', 'companies'], 'description': 'Entity type for custom field'},
+                    'source_name': {'type': 'string', 'description': 'Lead source name'},
+                    'dry_run': {'type': 'boolean', 'description': 'Preview without creating (default true)'},
+                },
+                'required': ['action'],
+            },
+        },
+        {
             'name': 'kommo_data_quality',
             'description': '''Data quality analysis tool. Actions:
 - report: Full data quality report with scores and recommendations

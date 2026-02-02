@@ -4,7 +4,7 @@ MCP Server for Kommo/amoCRM with analytics focus. Enables AI assistants to inter
 
 ## Coverage
 
-**67 / 1000 user stories implemented** (6.7%)
+**70 / 1000 user stories implemented** (7.0%)
 
 | Category | Implemented | Total |
 |----------|-------------|-------|
@@ -157,6 +157,15 @@ Use MCP Client node with HTTP transport:
   - `compare` - Period comparison (month/quarter/year)
   - `yoy` - Year-over-year comparison
 
+### CRM Setup
+- `kommo_setup` - **CRM configuration** with actions:
+  - `templates` - List available pipeline templates
+  - `apply_template` - Apply template (sales, services, rental, realestate, education, ecommerce)
+  - `create_pipeline` - Create a new pipeline
+  - `create_stage` - Add stage to pipeline
+  - `create_field` - Create custom field
+  - `create_source` - Add lead source
+
 ### Data Quality
 - `kommo_data_quality` - **Data quality analysis** with actions:
   - `report` - Full quality report with scores
@@ -205,6 +214,9 @@ Ask your AI assistant:
 - "Как мы работаем по сравнению с прошлым годом?"
 - "Проверь качество данных"
 - "Найди дубликаты контактов"
+- "Настрой CRM для автосервиса"
+- "Покажи шаблоны воронок"
+- "Создай воронку для интернет-магазина"
 
 ## Deployment
 

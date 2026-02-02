@@ -238,3 +238,196 @@ class KommoClient:
     async def get_account(self) -> dict:
         """Get account info."""
         return await self.get('account')
+
+    # === Pipeline management ===
+
+    async def create_pipeline(
+        self,
+        name: str,
+        sort: int = 1,
+        is_main: bool = False,
+        is_unsorted_on: bool = True,
+        statuses: list[dict] | None = None,
+    ) -> dict:
+        """
+        Create a new pipeline with stages.
+        
+        Args:
+            name: Pipeline name.
+            sort: Sort order.
+            is_main: Is this the main pipeline.
+            is_unsorted_on: Enable unsorted leads.
+            statuses: List of stages with name, sort, color.
+        
+        Returns:
+            Created pipeline data.
+        """
+        pipeline_data = {
+            'name': name,
+            'sort': sort,
+            'is_main': is_main,
+            'is_unsorted_on': is_unsorted_on,
+        }
+        
+        if statuses:
+            pipeline_data['_embedded'] = {'statuses': statuses}
+        
+        result = await self.post('leads/pipelines', json=[pipeline_data])
+        pipelines = result.get('_embedded', {}).get('pipelines', [])
+        return pipelines[0] if pipelines else {}
+
+    async def update_pipeline(
+        self,
+        pipeline_id: int,
+        name: str | None = None,
+        sort: int | None = None,
+        is_main: bool | None = None,
+    ) -> dict:
+        """Update pipeline settings."""
+        data: dict = {}
+        if name is not None:
+            data['name'] = name
+        if sort is not None:
+            data['sort'] = sort
+        if is_main is not None:
+            data['is_main'] = is_main
+        
+        return await self.patch(f'leads/pipelines/{pipeline_id}', json=data)
+
+    async def create_stage(
+        self,
+        pipeline_id: int,
+        name: str,
+        sort: int,
+        color: str = '#fffeb2',
+    ) -> dict:
+        """
+        Create a new stage in pipeline.
+        
+        Args:
+            pipeline_id: Pipeline ID.
+            name: Stage name.
+            sort: Sort order (10, 20, 30...).
+            color: Stage color hex.
+        
+        Returns:
+            Created stage data.
+        """
+        stage_data = {
+            'name': name,
+            'sort': sort,
+            'color': color,
+        }
+        
+        result = await self.post(
+            f'leads/pipelines/{pipeline_id}/statuses',
+            json=[stage_data],
+        )
+        statuses = result.get('_embedded', {}).get('statuses', [])
+        return statuses[0] if statuses else {}
+
+    async def update_stage(
+        self,
+        pipeline_id: int,
+        status_id: int,
+        name: str | None = None,
+        sort: int | None = None,
+        color: str | None = None,
+    ) -> dict:
+        """Update stage settings."""
+        data: dict = {}
+        if name is not None:
+            data['name'] = name
+        if sort is not None:
+            data['sort'] = sort
+        if color is not None:
+            data['color'] = color
+        
+        return await self.patch(
+            f'leads/pipelines/{pipeline_id}/statuses/{status_id}',
+            json=data,
+        )
+
+    async def delete_stage(self, pipeline_id: int, status_id: int) -> dict:
+        """Delete a stage from pipeline."""
+        return await self.delete(
+            f'leads/pipelines/{pipeline_id}/statuses/{status_id}'
+        )
+
+    # === Custom fields ===
+
+    async def get_custom_fields(self, entity_type: str = 'leads') -> list[dict]:
+        """
+        Get custom fields for entity type.
+        
+        Args:
+            entity_type: leads, contacts, companies, customers.
+        """
+        data = await self.get(f'{entity_type}/custom_fields')
+        return data.get('_embedded', {}).get('custom_fields', [])
+
+    async def create_custom_field(
+        self,
+        entity_type: str,
+        name: str,
+        field_type: str = 'text',
+        sort: int = 100,
+        enums: list[dict] | None = None,
+        is_required: bool = False,
+    ) -> dict:
+        """
+        Create a custom field.
+        
+        Args:
+            entity_type: leads, contacts, companies.
+            name: Field name.
+            field_type: text, numeric, checkbox, select, multiselect, date, url, textarea, price, etc.
+            sort: Sort order.
+            enums: For select/multiselect - list of {value, sort}.
+            is_required: Is field required.
+        
+        Returns:
+            Created field data.
+        """
+        field_data: dict = {
+            'name': name,
+            'type': field_type,
+            'sort': sort,
+        }
+        
+        if enums:
+            field_data['enums'] = enums
+        if is_required:
+            field_data['is_required'] = is_required
+        
+        result = await self.post(
+            f'{entity_type}/custom_fields',
+            json=[field_data],
+        )
+        fields = result.get('_embedded', {}).get('custom_fields', [])
+        return fields[0] if fields else {}
+
+    # === Sources ===
+
+    async def get_sources(self, pipeline_id: int) -> list[dict]:
+        """Get lead sources for pipeline."""
+        data = await self.get(f'leads/pipelines/{pipeline_id}/sources')
+        return data.get('_embedded', {}).get('sources', [])
+
+    async def create_source(
+        self,
+        pipeline_id: int,
+        name: str,
+        external_id: str | None = None,
+    ) -> dict:
+        """Create a lead source."""
+        source_data = {'name': name}
+        if external_id:
+            source_data['external_id'] = external_id
+        
+        result = await self.post(
+            f'leads/pipelines/{pipeline_id}/sources',
+            json=[source_data],
+        )
+        sources = result.get('_embedded', {}).get('sources', [])
+        return sources[0] if sources else {}
