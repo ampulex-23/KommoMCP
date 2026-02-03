@@ -299,48 +299,154 @@ MCP_TOOLS = [
             },
         },
     },
+    {
+        'type': 'function',
+        'function': {
+            'name': 'kommo_entity_actions',
+            'description': 'Work with leads, contacts, companies: add notes, create tasks, view history, update fields',
+            'parameters': {
+                'type': 'object',
+                'properties': {
+                    'action': {
+                        'type': 'string',
+                        'enum': [
+                            'add_note', 'get_notes', 'get_history',
+                            'create_task', 'get_tasks', 'complete_task',
+                            'update_lead', 'update_contact', 'move_lead',
+                            'link_contact', 'unlink_contact'
+                        ],
+                        'description': 'Action to perform',
+                    },
+                    'entity_type': {
+                        'type': 'string',
+                        'enum': ['leads', 'contacts', 'companies'],
+                        'description': 'Entity type',
+                    },
+                    'entity_id': {
+                        'type': 'integer',
+                        'description': 'Entity ID (lead_id, contact_id, company_id)',
+                    },
+                    'note_text': {
+                        'type': 'string',
+                        'description': 'Note text for add_note',
+                    },
+                    'task_text': {
+                        'type': 'string',
+                        'description': 'Task description for create_task',
+                    },
+                    'task_type_id': {
+                        'type': 'integer',
+                        'description': 'Task type: 1=call, 2=meeting, 3=email (default 1)',
+                    },
+                    'complete_till': {
+                        'type': 'string',
+                        'description': 'Task deadline (YYYY-MM-DD or +1d, +3h)',
+                    },
+                    'task_id': {
+                        'type': 'integer',
+                        'description': 'Task ID for complete_task',
+                    },
+                    'pipeline_id': {
+                        'type': 'integer',
+                        'description': 'Pipeline ID for move_lead',
+                    },
+                    'status_id': {
+                        'type': 'integer',
+                        'description': 'Status ID for move_lead',
+                    },
+                    'contact_id': {
+                        'type': 'integer',
+                        'description': 'Contact ID for link/unlink',
+                    },
+                    'fields': {
+                        'type': 'object',
+                        'description': 'Fields to update {field_id: value}',
+                    },
+                },
+                'required': ['action'],
+            },
+        },
+    },
+    {
+        'type': 'function',
+        'function': {
+            'name': 'kommo_bulk_actions',
+            'description': 'Bulk operations on multiple entities',
+            'parameters': {
+                'type': 'object',
+                'properties': {
+                    'action': {
+                        'type': 'string',
+                        'enum': ['mass_update', 'mass_move', 'mass_tag', 'mass_assign', 'mass_delete'],
+                        'description': 'Bulk action',
+                    },
+                    'entity_type': {
+                        'type': 'string',
+                        'enum': ['leads', 'contacts', 'companies'],
+                        'description': 'Entity type',
+                    },
+                    'entity_ids': {
+                        'type': 'array',
+                        'items': {'type': 'integer'},
+                        'description': 'Array of entity IDs',
+                    },
+                    'pipeline_id': {'type': 'integer', 'description': 'Target pipeline for mass_move'},
+                    'status_id': {'type': 'integer', 'description': 'Target status for mass_move'},
+                    'tags': {
+                        'type': 'array',
+                        'items': {'type': 'string'},
+                        'description': 'Tags to add for mass_tag',
+                    },
+                    'responsible_user_id': {'type': 'integer', 'description': 'User ID for mass_assign'},
+                    'fields': {'type': 'object', 'description': 'Fields to update for mass_update'},
+                },
+                'required': ['action', 'entity_ids'],
+            },
+        },
+    },
 ]
 
 SYSTEM_PROMPT = """Ты - AI-ассистент для ПОЛНОГО управления CRM Kommo.
 
 🔧 ВОРОНКИ (kommo_setup):
-- create_pipeline: создать воронку (pipeline_name)
-- update_pipeline: переименовать (pipeline_id, pipeline_name)
-- delete_pipeline: удалить воронку (pipeline_id) ⚠️
+- create_pipeline, update_pipeline, delete_pipeline
 
-� ЭТАПЫ/КОЛОНКИ (kommo_setup):
-- create_stage: создать этап (pipeline_id, stage_name, stage_sort, stage_color)
-- update_stage: изменить этап (pipeline_id, stage_id, stage_name/sort/color)
-- delete_stage: удалить этап (pipeline_id, stage_id) ⚠️
-- reorder_stages: изменить порядок (pipeline_id, stages_order=[id1,id2,id3])
+📊 ЭТАПЫ (kommo_setup):
+- create_stage, update_stage, delete_stage, reorder_stages
 
 📝 ПОЛЯ (kommo_setup):
-- create_field: создать поле (field_name, field_type, entity_type, enums)
-- update_field: изменить поле (field_id, field_name, enums)
-- delete_field: удалить поле (field_id, entity_type) ⚠️
+- create_field, update_field, delete_field
 
 🎲 MOCK ДАННЫЕ (kommo_mock_data):
-- generate_all: контакты + компании + сделки
-- contacts/companies/leads: по отдельности
-- Параметры: count, pipeline_id, locale (ru/en)
+- generate_all, contacts, companies, leads
 
 📋 ПРОСМОТР:
-- kommo_list_pipelines: список воронок с этапами и ID
-- kommo_pipeline_analytics: сделки и выручка по этапам
-- kommo_search: поиск сделок, контактов
+- kommo_list_pipelines, kommo_pipeline_analytics, kommo_search
 
-ЦВЕТА ЭТАПОВ: #fffeb2, #fffd7f, #fff000, #ffeab2, #ffdc7f, #ffce5a, #ffdbdb, #ffc8c8, #ff8f92, #d6eaff, #c1e0ff, #98cbff, #ebffb1, #deff81, #87f2c0, #f9deff, #f3beff, #ccc8f9
+✏️ РАБОТА С СУЩНОСТЯМИ (kommo_entity_actions):
+- add_note: добавить заметку (entity_type, entity_id, note_text)
+- get_notes: получить заметки (entity_type, entity_id)
+- get_history: история изменений (entity_type, entity_id)
+- create_task: создать задачу (entity_id, task_text, task_type_id=1/2/3, complete_till)
+- get_tasks: получить задачи (entity_id)
+- complete_task: завершить задачу (task_id)
+- update_lead: обновить сделку (entity_id, fields)
+- move_lead: переместить сделку (entity_id, pipeline_id, status_id)
+- link_contact: привязать контакт (entity_id, contact_id)
 
-ВАЖНО:
-- dry_run=false для реального выполнения
-- Сначала получи список воронок чтобы узнать ID
-- Для удаления ВСЕГДА предупреждай пользователя
+� МАССОВЫЕ ОПЕРАЦИИ (kommo_bulk_actions):
+- mass_move: переместить сделки (entity_ids, pipeline_id, status_id)
+- mass_tag: добавить теги (entity_ids, tags)
+- mass_assign: назначить ответственного (entity_ids, responsible_user_id)
+- mass_update: обновить поля (entity_ids, fields)
+
+ТИПЫ ЗАДАЧ: 1=звонок, 2=встреча, 3=email
+ДЕДЛАЙН: YYYY-MM-DD или +1d, +3h, +30m
 
 ФОРМАТИРОВАНИЕ (Telegram HTML):
 - <b>жирный</b> для заголовков
 - <code>ID</code> для идентификаторов
-- Эмодзи: ✅❌📊📈💰👤🏢📋🔧⚡🗑️✏️
-- Структура с ├ └ для списков
+- Эмодзи: ✅❌📊📈💰👤🏢📋🔧⚡🗑️✏️📌
 """
 
 
@@ -603,6 +709,12 @@ class AIChat:
         
         elif name == 'kommo_mock_data':
             return await self._handle_mock_data(session, headers, args)
+        
+        elif name == 'kommo_entity_actions':
+            return await self._handle_entity_actions(session, headers, args)
+        
+        elif name == 'kommo_bulk_actions':
+            return await self._handle_bulk_actions(session, headers, args)
         
         # Default - return info about available tools
         return {'message': f'Tool {name} not fully implemented yet', 'args': args}
@@ -1067,3 +1179,319 @@ class AIChat:
             }
         
         return {'error': f'Unknown mock_data action: {action}'}
+    
+    async def _handle_entity_actions(self, session, headers, args: dict) -> dict:
+        """Handle entity actions: notes, tasks, history, updates."""
+        import time
+        from datetime import datetime, timedelta
+        
+        action = args.get('action')
+        entity_type = args.get('entity_type', 'leads')
+        entity_id = args.get('entity_id')
+        
+        if action == 'add_note':
+            note_text = args.get('note_text')
+            if not entity_id or not note_text:
+                return {'error': 'entity_id and note_text are required'}
+            
+            url = f'{self.kommo_base_url}/api/v4/{entity_type}/{entity_id}/notes'
+            payload = [{'note_type': 'common', 'params': {'text': note_text}}]
+            
+            async with session.post(url, headers=headers, json=payload) as resp:
+                if resp.status in [200, 201]:
+                    data = await resp.json()
+                    notes = data.get('_embedded', {}).get('notes', [])
+                    if notes:
+                        return {'success': True, 'note_id': notes[0].get('id'), 'text': note_text[:50]}
+                error = await resp.text()
+                return {'error': f'Failed to add note: {error[:200]}'}
+        
+        elif action == 'get_notes':
+            if not entity_id:
+                return {'error': 'entity_id is required'}
+            
+            url = f'{self.kommo_base_url}/api/v4/{entity_type}/{entity_id}/notes'
+            async with session.get(url, headers=headers) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    notes = data.get('_embedded', {}).get('notes', [])
+                    return {
+                        'notes': [
+                            {'id': n.get('id'), 'type': n.get('note_type'), 
+                             'text': n.get('params', {}).get('text', '')[:100],
+                             'created_at': n.get('created_at')}
+                            for n in notes[:20]
+                        ]
+                    }
+                return {'error': f'API error: {resp.status}'}
+        
+        elif action == 'get_history':
+            if not entity_id:
+                return {'error': 'entity_id is required'}
+            
+            url = f'{self.kommo_base_url}/api/v4/{entity_type}/{entity_id}/notes'
+            params = {'limit': 50}
+            async with session.get(url, headers=headers, params=params) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    notes = data.get('_embedded', {}).get('notes', [])
+                    history = []
+                    for n in notes:
+                        note_type = n.get('note_type')
+                        params_data = n.get('params', {})
+                        text = params_data.get('text', '') if isinstance(params_data, dict) else ''
+                        history.append({
+                            'type': note_type,
+                            'text': text[:100] if text else note_type,
+                            'created_at': n.get('created_at'),
+                        })
+                    return {'history': history}
+                return {'error': f'API error: {resp.status}'}
+        
+        elif action == 'create_task':
+            task_text = args.get('task_text')
+            if not entity_id or not task_text:
+                return {'error': 'entity_id and task_text are required'}
+            
+            task_type_id = args.get('task_type_id', 1)  # 1=call, 2=meeting, 3=email
+            complete_till = args.get('complete_till', '+1d')
+            
+            # Parse deadline
+            if complete_till.startswith('+'):
+                now = datetime.now()
+                if 'd' in complete_till:
+                    days = int(complete_till.replace('+', '').replace('d', ''))
+                    deadline = now + timedelta(days=days)
+                elif 'h' in complete_till:
+                    hours = int(complete_till.replace('+', '').replace('h', ''))
+                    deadline = now + timedelta(hours=hours)
+                elif 'm' in complete_till:
+                    minutes = int(complete_till.replace('+', '').replace('m', ''))
+                    deadline = now + timedelta(minutes=minutes)
+                else:
+                    deadline = now + timedelta(days=1)
+                complete_till_ts = int(deadline.timestamp())
+            else:
+                try:
+                    deadline = datetime.strptime(complete_till, '%Y-%m-%d')
+                    complete_till_ts = int(deadline.timestamp())
+                except:
+                    complete_till_ts = int(time.time()) + 86400
+            
+            url = f'{self.kommo_base_url}/api/v4/tasks'
+            payload = [{
+                'text': task_text,
+                'complete_till': complete_till_ts,
+                'task_type_id': task_type_id,
+                'entity_id': entity_id,
+                'entity_type': entity_type,
+            }]
+            
+            async with session.post(url, headers=headers, json=payload) as resp:
+                if resp.status in [200, 201]:
+                    data = await resp.json()
+                    tasks = data.get('_embedded', {}).get('tasks', [])
+                    if tasks:
+                        return {'success': True, 'task_id': tasks[0].get('id'), 'text': task_text[:50]}
+                error = await resp.text()
+                return {'error': f'Failed to create task: {error[:200]}'}
+        
+        elif action == 'get_tasks':
+            if not entity_id:
+                return {'error': 'entity_id is required'}
+            
+            url = f'{self.kommo_base_url}/api/v4/tasks'
+            params = {'filter[entity_id]': entity_id, 'filter[entity_type]': entity_type}
+            async with session.get(url, headers=headers, params=params) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    tasks = data.get('_embedded', {}).get('tasks', [])
+                    return {
+                        'tasks': [
+                            {'id': t.get('id'), 'text': t.get('text', '')[:50], 
+                             'is_completed': t.get('is_completed'),
+                             'complete_till': t.get('complete_till')}
+                            for t in tasks[:20]
+                        ]
+                    }
+                return {'error': f'API error: {resp.status}'}
+        
+        elif action == 'complete_task':
+            task_id = args.get('task_id')
+            if not task_id:
+                return {'error': 'task_id is required'}
+            
+            url = f'{self.kommo_base_url}/api/v4/tasks/{task_id}'
+            payload = {'is_completed': True, 'result': {'text': 'Completed via AI assistant'}}
+            
+            async with session.patch(url, headers=headers, json=payload) as resp:
+                if resp.status == 200:
+                    return {'success': True, 'task_id': task_id, 'completed': True}
+                error = await resp.text()
+                return {'error': f'Failed to complete task: {error[:200]}'}
+        
+        elif action == 'update_lead':
+            if not entity_id:
+                return {'error': 'entity_id is required'}
+            
+            fields = args.get('fields', {})
+            url = f'{self.kommo_base_url}/api/v4/leads/{entity_id}'
+            
+            async with session.patch(url, headers=headers, json=fields) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    return {'success': True, 'lead_id': entity_id, 'updated': list(fields.keys())}
+                error = await resp.text()
+                return {'error': f'Failed to update lead: {error[:200]}'}
+        
+        elif action == 'move_lead':
+            if not entity_id:
+                return {'error': 'entity_id is required'}
+            
+            pipeline_id = args.get('pipeline_id')
+            status_id = args.get('status_id')
+            
+            if not pipeline_id and not status_id:
+                return {'error': 'pipeline_id or status_id is required'}
+            
+            url = f'{self.kommo_base_url}/api/v4/leads/{entity_id}'
+            payload = {}
+            if pipeline_id:
+                payload['pipeline_id'] = pipeline_id
+            if status_id:
+                payload['status_id'] = status_id
+            
+            async with session.patch(url, headers=headers, json=payload) as resp:
+                if resp.status == 200:
+                    return {'success': True, 'lead_id': entity_id, 'moved_to': payload}
+                error = await resp.text()
+                return {'error': f'Failed to move lead: {error[:200]}'}
+        
+        elif action == 'link_contact':
+            if not entity_id:
+                return {'error': 'entity_id (lead_id) is required'}
+            
+            contact_id = args.get('contact_id')
+            if not contact_id:
+                return {'error': 'contact_id is required'}
+            
+            url = f'{self.kommo_base_url}/api/v4/leads/{entity_id}/link'
+            payload = [{'to_entity_id': contact_id, 'to_entity_type': 'contacts'}]
+            
+            async with session.post(url, headers=headers, json=payload) as resp:
+                if resp.status in [200, 201]:
+                    return {'success': True, 'lead_id': entity_id, 'linked_contact': contact_id}
+                error = await resp.text()
+                return {'error': f'Failed to link contact: {error[:200]}'}
+        
+        elif action == 'unlink_contact':
+            if not entity_id:
+                return {'error': 'entity_id (lead_id) is required'}
+            
+            contact_id = args.get('contact_id')
+            if not contact_id:
+                return {'error': 'contact_id is required'}
+            
+            url = f'{self.kommo_base_url}/api/v4/leads/{entity_id}/unlink'
+            payload = [{'to_entity_id': contact_id, 'to_entity_type': 'contacts'}]
+            
+            async with session.post(url, headers=headers, json=payload) as resp:
+                if resp.status in [200, 201, 204]:
+                    return {'success': True, 'lead_id': entity_id, 'unlinked_contact': contact_id}
+                error = await resp.text()
+                return {'error': f'Failed to unlink contact: {error[:200]}'}
+        
+        return {'error': f'Unknown entity action: {action}'}
+    
+    async def _handle_bulk_actions(self, session, headers, args: dict) -> dict:
+        """Handle bulk operations on multiple entities."""
+        action = args.get('action')
+        entity_type = args.get('entity_type', 'leads')
+        entity_ids = args.get('entity_ids', [])
+        
+        if not entity_ids:
+            return {'error': 'entity_ids array is required'}
+        
+        if action == 'mass_move':
+            pipeline_id = args.get('pipeline_id')
+            status_id = args.get('status_id')
+            
+            if not status_id:
+                return {'error': 'status_id is required for mass_move'}
+            
+            url = f'{self.kommo_base_url}/api/v4/leads'
+            payload = []
+            for eid in entity_ids:
+                item = {'id': eid, 'status_id': status_id}
+                if pipeline_id:
+                    item['pipeline_id'] = pipeline_id
+                payload.append(item)
+            
+            async with session.patch(url, headers=headers, json=payload) as resp:
+                if resp.status == 200:
+                    return {'success': True, 'moved': len(entity_ids), 'to_status': status_id}
+                error = await resp.text()
+                return {'error': f'Failed to mass move: {error[:200]}'}
+        
+        elif action == 'mass_tag':
+            tags = args.get('tags', [])
+            if not tags:
+                return {'error': 'tags array is required'}
+            
+            url = f'{self.kommo_base_url}/api/v4/{entity_type}'
+            payload = []
+            for eid in entity_ids:
+                payload.append({
+                    'id': eid,
+                    '_embedded': {'tags': [{'name': t} for t in tags]}
+                })
+            
+            async with session.patch(url, headers=headers, json=payload) as resp:
+                if resp.status == 200:
+                    return {'success': True, 'tagged': len(entity_ids), 'tags': tags}
+                error = await resp.text()
+                return {'error': f'Failed to mass tag: {error[:200]}'}
+        
+        elif action == 'mass_assign':
+            responsible_user_id = args.get('responsible_user_id')
+            if not responsible_user_id:
+                return {'error': 'responsible_user_id is required'}
+            
+            url = f'{self.kommo_base_url}/api/v4/{entity_type}'
+            payload = [{'id': eid, 'responsible_user_id': responsible_user_id} for eid in entity_ids]
+            
+            async with session.patch(url, headers=headers, json=payload) as resp:
+                if resp.status == 200:
+                    return {'success': True, 'assigned': len(entity_ids), 'to_user': responsible_user_id}
+                error = await resp.text()
+                return {'error': f'Failed to mass assign: {error[:200]}'}
+        
+        elif action == 'mass_update':
+            fields = args.get('fields', {})
+            if not fields:
+                return {'error': 'fields object is required'}
+            
+            url = f'{self.kommo_base_url}/api/v4/{entity_type}'
+            payload = [{**{'id': eid}, **fields} for eid in entity_ids]
+            
+            async with session.patch(url, headers=headers, json=payload) as resp:
+                if resp.status == 200:
+                    return {'success': True, 'updated': len(entity_ids), 'fields': list(fields.keys())}
+                error = await resp.text()
+                return {'error': f'Failed to mass update: {error[:200]}'}
+        
+        elif action == 'mass_delete':
+            # Delete entities one by one (Kommo API limitation)
+            deleted = 0
+            errors = []
+            for eid in entity_ids:
+                url = f'{self.kommo_base_url}/api/v4/{entity_type}/{eid}'
+                async with session.delete(url, headers=headers) as resp:
+                    if resp.status in [200, 204]:
+                        deleted += 1
+                    else:
+                        errors.append(eid)
+            
+            return {'success': deleted > 0, 'deleted': deleted, 'failed': errors}
+        
+        return {'error': f'Unknown bulk action: {action}'}
