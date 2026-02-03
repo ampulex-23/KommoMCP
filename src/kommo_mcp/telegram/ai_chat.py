@@ -204,14 +204,19 @@ MCP_TOOLS = [
         'type': 'function',
         'function': {
             'name': 'kommo_setup',
-            'description': 'Setup CRM: create pipelines, stages, custom fields, sources. IMPORTANT: set dry_run=false to actually create!',
+            'description': 'Full CRM management: create/update/delete pipelines, stages, fields. IMPORTANT: set dry_run=false to actually execute!',
             'parameters': {
                 'type': 'object',
                 'properties': {
                     'action': {
                         'type': 'string',
-                        'enum': ['templates', 'apply_template', 'create_pipeline', 'create_stage', 'create_field', 'create_source'],
-                        'description': 'Setup action',
+                        'enum': [
+                            'create_pipeline', 'update_pipeline', 'delete_pipeline',
+                            'create_stage', 'update_stage', 'delete_stage', 'reorder_stages',
+                            'create_field', 'update_field', 'delete_field',
+                            'create_source', 'templates', 'apply_template'
+                        ],
+                        'description': 'Action to perform',
                     },
                     'dry_run': {
                         'type': 'boolean',
@@ -219,11 +224,18 @@ MCP_TOOLS = [
                         'default': False,
                     },
                     'template': {'type': 'string', 'description': 'Template name for apply_template'},
-                    'pipeline_name': {'type': 'string', 'description': 'Pipeline name for create_pipeline'},
-                    'pipeline_id': {'type': 'integer', 'description': 'Pipeline ID for create_stage/create_source'},
-                    'stage_name': {'type': 'string', 'description': 'Stage name'},
-                    'stage_sort': {'type': 'integer', 'description': 'Stage sort order'},
-                    'stage_color': {'type': 'string', 'description': 'Stage color hex'},
+                    'pipeline_name': {'type': 'string', 'description': 'Pipeline name (for create/update)'},
+                    'pipeline_id': {'type': 'integer', 'description': 'Pipeline ID (required for most operations)'},
+                    'stage_id': {'type': 'integer', 'description': 'Stage/status ID (for update/delete stage)'},
+                    'stage_name': {'type': 'string', 'description': 'Stage name (for create/update)'},
+                    'stage_sort': {'type': 'integer', 'description': 'Stage sort order (10, 20, 30...)'},
+                    'stage_color': {'type': 'string', 'description': 'Stage color hex (#fffeb2, #fffd7f, etc)'},
+                    'stages_order': {
+                        'type': 'array',
+                        'items': {'type': 'integer'},
+                        'description': 'Array of stage IDs in desired order (for reorder_stages)',
+                    },
+                    'field_id': {'type': 'integer', 'description': 'Field ID (for update/delete field)'},
                     'field_name': {'type': 'string', 'description': 'Field name'},
                     'field_type': {
                         'type': 'string',
@@ -289,48 +301,46 @@ MCP_TOOLS = [
     },
 ]
 
-SYSTEM_PROMPT = """Ты - AI-ассистент для работы с CRM Kommo. Ты умеешь:
-- Настраивать CRM (воронки, этапы, поля)
-- Генерировать тестовые данные
-- Показывать аналитику и списки
+SYSTEM_PROMPT = """Ты - AI-ассистент для ПОЛНОГО управления CRM Kommo.
 
-🔧 НАСТРОЙКА CRM (kommo_setup):
-- create_pipeline: создать воронку
-- create_stage: добавить этап (нужен pipeline_id)
-- create_field: создать поле
+🔧 ВОРОНКИ (kommo_setup):
+- create_pipeline: создать воронку (pipeline_name)
+- update_pipeline: переименовать (pipeline_id, pipeline_name)
+- delete_pipeline: удалить воронку (pipeline_id) ⚠️
 
-📊 MOCK ДАННЫЕ (kommo_mock_data):
-- generate_all: создать контакты + компании + сделки
-- contacts: только контакты
-- companies: только компании  
-- leads: только сделки (нужен pipeline_id или возьмёт первую воронку)
+� ЭТАПЫ/КОЛОНКИ (kommo_setup):
+- create_stage: создать этап (pipeline_id, stage_name, stage_sort, stage_color)
+- update_stage: изменить этап (pipeline_id, stage_id, stage_name/sort/color)
+- delete_stage: удалить этап (pipeline_id, stage_id) ⚠️
+- reorder_stages: изменить порядок (pipeline_id, stages_order=[id1,id2,id3])
 
-📋 ПРОСМОТР (kommo_list_pipelines, kommo_search):
-- Список воронок с этапами
-- Поиск сделок, контактов
+📝 ПОЛЯ (kommo_setup):
+- create_field: создать поле (field_name, field_type, entity_type, enums)
+- update_field: изменить поле (field_id, field_name, enums)
+- delete_field: удалить поле (field_id, entity_type) ⚠️
+
+🎲 MOCK ДАННЫЕ (kommo_mock_data):
+- generate_all: контакты + компании + сделки
+- contacts/companies/leads: по отдельности
+- Параметры: count, pipeline_id, locale (ru/en)
+
+📋 ПРОСМОТР:
+- kommo_list_pipelines: список воронок с этапами и ID
+- kommo_pipeline_analytics: сделки и выручка по этапам
+- kommo_search: поиск сделок, контактов
+
+ЦВЕТА ЭТАПОВ: #fffeb2, #fffd7f, #fff000, #ffeab2, #ffdc7f, #ffce5a, #ffdbdb, #ffc8c8, #ff8f92, #d6eaff, #c1e0ff, #98cbff, #ebffb1, #deff81, #87f2c0, #f9deff, #f3beff, #ccc8f9
 
 ВАЖНО:
-- dry_run=false для реального создания
-- Выполняй операции последовательно
-- Используй pipeline_id из предыдущих операций
+- dry_run=false для реального выполнения
+- Сначала получи список воронок чтобы узнать ID
+- Для удаления ВСЕГДА предупреждай пользователя
 
-ФОРМАТИРОВАНИЕ ОТВЕТОВ (Telegram HTML):
-- Используй <b>жирный</b> для заголовков
-- Используй <i>курсив</i> для пояснений
-- Используй <code>код</code> для ID и чисел
-- Используй эмодзи для визуализации: ✅❌📊📈💰👤🏢📋🔧⚡
-- Структурируй ответ с отступами и списками
-- Делай красивые сводки с разделителями ━━━
-
-Пример красивого ответа:
-<b>📊 Сводка по воронкам</b>
-
-<b>1. Продажи</b> <code>#10548294</code>
-   ├ Новая заявка
-   ├ В работе  
-   └ Успешно
-
-<b>💰 Итого:</b> 3 воронки, 12 этапов
+ФОРМАТИРОВАНИЕ (Telegram HTML):
+- <b>жирный</b> для заголовков
+- <code>ID</code> для идентификаторов
+- Эмодзи: ✅❌📊📈💰👤🏢📋🔧⚡🗑️✏️
+- Структура с ├ └ для списков
 """
 
 
@@ -723,6 +733,162 @@ class AIChat:
                         }
                 error = await resp.text()
                 return {'error': f'Failed to create field: {error}'}
+        
+        elif action == 'update_pipeline':
+            pipeline_id = args.get('pipeline_id')
+            pipeline_name = args.get('pipeline_name')
+            
+            if not pipeline_id:
+                return {'error': 'pipeline_id is required'}
+            
+            if dry_run:
+                return {'dry_run': True, 'message': f'Would update pipeline {pipeline_id}'}
+            
+            url = f'{self.kommo_base_url}/api/v4/leads/pipelines/{pipeline_id}'
+            payload = {}
+            if pipeline_name:
+                payload['name'] = pipeline_name
+            
+            async with session.patch(url, headers=headers, json=payload) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    return {'success': True, 'pipeline_id': pipeline_id, 'name': data.get('name')}
+                error = await resp.text()
+                return {'error': f'Failed to update pipeline: {error[:200]}'}
+        
+        elif action == 'delete_pipeline':
+            pipeline_id = args.get('pipeline_id')
+            
+            if not pipeline_id:
+                return {'error': 'pipeline_id is required'}
+            
+            if dry_run:
+                return {'dry_run': True, 'message': f'Would DELETE pipeline {pipeline_id}. This is irreversible!'}
+            
+            url = f'{self.kommo_base_url}/api/v4/leads/pipelines/{pipeline_id}'
+            
+            async with session.delete(url, headers=headers) as resp:
+                if resp.status in [200, 204]:
+                    return {'success': True, 'deleted_pipeline_id': pipeline_id}
+                error = await resp.text()
+                return {'error': f'Failed to delete pipeline: {error[:200]}'}
+        
+        elif action == 'update_stage':
+            pipeline_id = args.get('pipeline_id')
+            stage_id = args.get('stage_id')
+            stage_name = args.get('stage_name')
+            stage_sort = args.get('stage_sort')
+            stage_color = args.get('stage_color')
+            
+            if not pipeline_id or not stage_id:
+                return {'error': 'pipeline_id and stage_id are required'}
+            
+            if dry_run:
+                return {'dry_run': True, 'message': f'Would update stage {stage_id} in pipeline {pipeline_id}'}
+            
+            url = f'{self.kommo_base_url}/api/v4/leads/pipelines/{pipeline_id}/statuses/{stage_id}'
+            payload = {}
+            if stage_name:
+                payload['name'] = stage_name
+            if stage_sort is not None:
+                payload['sort'] = stage_sort
+            if stage_color:
+                payload['color'] = stage_color
+            
+            async with session.patch(url, headers=headers, json=payload) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    return {'success': True, 'stage_id': stage_id, 'name': data.get('name'), 'sort': data.get('sort')}
+                error = await resp.text()
+                return {'error': f'Failed to update stage: {error[:200]}'}
+        
+        elif action == 'delete_stage':
+            pipeline_id = args.get('pipeline_id')
+            stage_id = args.get('stage_id')
+            
+            if not pipeline_id or not stage_id:
+                return {'error': 'pipeline_id and stage_id are required'}
+            
+            if dry_run:
+                return {'dry_run': True, 'message': f'Would DELETE stage {stage_id}. Deals will be moved to first stage!'}
+            
+            url = f'{self.kommo_base_url}/api/v4/leads/pipelines/{pipeline_id}/statuses/{stage_id}'
+            
+            async with session.delete(url, headers=headers) as resp:
+                if resp.status in [200, 204]:
+                    return {'success': True, 'deleted_stage_id': stage_id}
+                error = await resp.text()
+                return {'error': f'Failed to delete stage: {error[:200]}'}
+        
+        elif action == 'reorder_stages':
+            pipeline_id = args.get('pipeline_id')
+            stages_order = args.get('stages_order', [])
+            
+            if not pipeline_id or not stages_order:
+                return {'error': 'pipeline_id and stages_order (array of stage IDs) are required'}
+            
+            if dry_run:
+                return {'dry_run': True, 'message': f'Would reorder stages in pipeline {pipeline_id}: {stages_order}'}
+            
+            # Update sort for each stage
+            results = []
+            for i, stage_id in enumerate(stages_order):
+                sort_value = (i + 1) * 10  # 10, 20, 30...
+                url = f'{self.kommo_base_url}/api/v4/leads/pipelines/{pipeline_id}/statuses/{stage_id}'
+                payload = {'sort': sort_value}
+                
+                async with session.patch(url, headers=headers, json=payload) as resp:
+                    if resp.status == 200:
+                        results.append({'stage_id': stage_id, 'sort': sort_value, 'success': True})
+                    else:
+                        error = await resp.text()
+                        results.append({'stage_id': stage_id, 'error': error[:100]})
+            
+            return {'success': True, 'reordered': results}
+        
+        elif action == 'update_field':
+            field_id = args.get('field_id')
+            field_name = args.get('field_name')
+            entity_type = args.get('entity_type', 'leads')
+            enums = args.get('enums', [])
+            
+            if not field_id:
+                return {'error': 'field_id is required'}
+            
+            if dry_run:
+                return {'dry_run': True, 'message': f'Would update field {field_id}'}
+            
+            url = f'{self.kommo_base_url}/api/v4/{entity_type}/custom_fields/{field_id}'
+            payload = {}
+            if field_name:
+                payload['name'] = field_name
+            if enums:
+                payload['enums'] = [{'value': e} for e in enums]
+            
+            async with session.patch(url, headers=headers, json=payload) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    return {'success': True, 'field_id': field_id, 'name': data.get('name')}
+                error = await resp.text()
+                return {'error': f'Failed to update field: {error[:200]}'}
+        
+        elif action == 'delete_field':
+            field_id = args.get('field_id')
+            entity_type = args.get('entity_type', 'leads')
+            
+            if not field_id:
+                return {'error': 'field_id is required'}
+            
+            if dry_run:
+                return {'dry_run': True, 'message': f'Would DELETE field {field_id}. Data in this field will be lost!'}
+            
+            url = f'{self.kommo_base_url}/api/v4/{entity_type}/custom_fields/{field_id}'
+            
+            async with session.delete(url, headers=headers) as resp:
+                if resp.status in [200, 204]:
+                    return {'success': True, 'deleted_field_id': field_id}
+                error = await resp.text()
+                return {'error': f'Failed to delete field: {error[:200]}'}
         
         return {'error': f'Unknown setup action: {action}'}
     
