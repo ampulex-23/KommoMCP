@@ -4,7 +4,7 @@ MCP Server for Kommo/amoCRM with analytics focus. Enables AI assistants to inter
 
 ## Coverage
 
-**170 / 1000 user stories implemented** (17.0%)
+**186 / 1000 user stories implemented** (18.6%)
 
 | Category | Implemented | Total |
 |----------|-------------|-------|
@@ -17,6 +17,7 @@ MCP Server for Kommo/amoCRM with analytics focus. Enables AI assistants to inter
 | Users & Reports | 19 | - |
 | Bulk Operations | 13 | - |
 | Tags/Fields/Sources | 14 | - |
+| Companies/Duplicates/Links | 16 | - |
 
 ## Features
 

@@ -602,6 +602,116 @@ MCP_TOOLS = [
             },
         },
     },
+    {
+        'type': 'function',
+        'function': {
+            'name': 'kommo_companies',
+            'description': 'Manage companies: list, get details, create, update, link to contacts/leads',
+            'parameters': {
+                'type': 'object',
+                'properties': {
+                    'action': {
+                        'type': 'string',
+                        'enum': ['list', 'get', 'create', 'update', 'get_contacts', 'get_leads', 'link_contact'],
+                        'description': 'Action to perform',
+                    },
+                    'company_id': {
+                        'type': 'integer',
+                        'description': 'Company ID for get/update/get_contacts/get_leads',
+                    },
+                    'name': {
+                        'type': 'string',
+                        'description': 'Company name for create/search',
+                    },
+                    'contact_id': {
+                        'type': 'integer',
+                        'description': 'Contact ID for link_contact',
+                    },
+                    'query': {
+                        'type': 'string',
+                        'description': 'Search query for list',
+                    },
+                    'fields': {
+                        'type': 'object',
+                        'description': 'Fields to update',
+                    },
+                    'limit': {
+                        'type': 'integer',
+                        'description': 'Limit results (default 20)',
+                        'default': 20,
+                    },
+                },
+                'required': ['action'],
+            },
+        },
+    },
+    {
+        'type': 'function',
+        'function': {
+            'name': 'kommo_duplicates',
+            'description': 'Find and manage duplicate contacts/companies',
+            'parameters': {
+                'type': 'object',
+                'properties': {
+                    'action': {
+                        'type': 'string',
+                        'enum': ['find_contacts', 'find_companies', 'merge_contacts'],
+                        'description': 'Action: find duplicates or merge',
+                    },
+                    'threshold': {
+                        'type': 'number',
+                        'description': 'Similarity threshold 0-1 (default 0.8)',
+                        'default': 0.8,
+                    },
+                    'primary_id': {
+                        'type': 'integer',
+                        'description': 'Primary contact ID for merge (keeps this one)',
+                    },
+                    'duplicate_id': {
+                        'type': 'integer',
+                        'description': 'Duplicate contact ID for merge (will be deleted)',
+                    },
+                },
+                'required': ['action'],
+            },
+        },
+    },
+    {
+        'type': 'function',
+        'function': {
+            'name': 'kommo_links',
+            'description': 'Manage links between entities (leads, contacts, companies)',
+            'parameters': {
+                'type': 'object',
+                'properties': {
+                    'action': {
+                        'type': 'string',
+                        'enum': ['get', 'link', 'unlink'],
+                        'description': 'Action: get links, create link, remove link',
+                    },
+                    'entity_type': {
+                        'type': 'string',
+                        'enum': ['leads', 'contacts', 'companies'],
+                        'description': 'Source entity type',
+                    },
+                    'entity_id': {
+                        'type': 'integer',
+                        'description': 'Source entity ID',
+                    },
+                    'to_entity_type': {
+                        'type': 'string',
+                        'enum': ['leads', 'contacts', 'companies', 'catalog_elements'],
+                        'description': 'Target entity type',
+                    },
+                    'to_entity_id': {
+                        'type': 'integer',
+                        'description': 'Target entity ID',
+                    },
+                },
+                'required': ['action'],
+            },
+        },
+    },
 ]
 
 SYSTEM_PROMPT = """Ты - AI-ассистент для ПОЛНОГО управления CRM Kommo.
@@ -611,24 +721,30 @@ SYSTEM_PROMPT = """Ты - AI-ассистент для ПОЛНОГО управ
 📦 МАССОВЫЕ: kommo_bulk_actions (mass_move/tag/assign/update)
 👥 ПОЛЬЗОВАТЕЛИ: kommo_users (list, workload, activity)
 📊 ОТЧЁТЫ: kommo_reports (sales, pipeline, manager, tasks, stale_deals, top_deals)
+🏷️ ТЕГИ: kommo_tags (list, add, remove, search_by_tag)
+📝 ПОЛЯ: kommo_custom_fields (list, get_values, set_value)
+🎯 ИСТОЧНИКИ: kommo_sources (list, create, analytics)
 
-🏷️ ТЕГИ (kommo_tags):
-- list: все теги (entity_type)
-- add: добавить теги (entity_type, entity_id, tags)
-- remove: удалить теги (entity_type, entity_id, tags)
-- search_by_tag: найти по тегу (entity_type, tag_name)
+🏢 КОМПАНИИ (kommo_companies):
+- list: список компаний (query, limit)
+- get: детали компании (company_id)
+- create: создать компанию (name, fields)
+- update: обновить (company_id, fields)
+- get_contacts: контакты компании (company_id)
+- get_leads: сделки компании (company_id)
+- link_contact: привязать контакт (company_id, contact_id)
 
-� КАСТОМНЫЕ ПОЛЯ (kommo_custom_fields):
-- list: список полей (entity_type)
-- get_values: значения полей сущности (entity_type, entity_id)
-- set_value: установить значение (entity_type, entity_id, field_id, value)
+🔍 ДУБЛИКАТЫ (kommo_duplicates):
+- find_contacts: найти дубликаты контактов
+- find_companies: найти дубликаты компаний
+- merge_contacts: объединить контакты (primary_id, duplicate_id)
 
-🎯 ИСТОЧНИКИ (kommo_sources):
-- list: список источников (pipeline_id)
-- create: создать источник (pipeline_id, source_name)
-- analytics: аналитика по источникам (pipeline_id)
+🔗 СВЯЗИ (kommo_links):
+- get: получить связи (entity_type, entity_id)
+- link: создать связь (entity_type, entity_id, to_entity_type, to_entity_id)
+- unlink: удалить связь
 
-ФОРМАТИРОВАНИЕ: <b>жирный</b>, <code>ID</code>, эмодзи ✅❌📊📈💰👤🏢📋🔧⚡🏷️
+ФОРМАТИРОВАНИЕ: <b>жирный</b>, <code>ID</code>, эмодзи ✅❌📊📈💰👤🏢📋🔧⚡🏷️🔗
 """
 
 
@@ -915,6 +1031,15 @@ class AIChat:
         
         elif name == 'kommo_sources':
             return await self._handle_sources(session, headers, args)
+        
+        elif name == 'kommo_companies':
+            return await self._handle_companies(session, headers, args)
+        
+        elif name == 'kommo_duplicates':
+            return await self._handle_duplicates(session, headers, args)
+        
+        elif name == 'kommo_links':
+            return await self._handle_links(session, headers, args)
         
         # Default - return info about available tools
         return {'message': f'Tool {name} not fully implemented yet', 'args': args}
@@ -2394,3 +2519,330 @@ class AIChat:
                 return {'error': f'API error: {resp.status}'}
         
         return {'error': f'Unknown sources action: {action}'}
+    
+    async def _handle_companies(self, session, headers, args: dict) -> dict:
+        """Handle companies management."""
+        action = args.get('action')
+        company_id = args.get('company_id')
+        name = args.get('name')
+        query = args.get('query')
+        fields = args.get('fields', {})
+        limit = args.get('limit', 20)
+        contact_id = args.get('contact_id')
+        
+        if action == 'list':
+            url = f'{self.kommo_base_url}/api/v4/companies'
+            params = {'limit': limit}
+            if query:
+                params['query'] = query
+            
+            async with session.get(url, headers=headers, params=params) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    companies = data.get('_embedded', {}).get('companies', [])
+                    return {
+                        'companies': [
+                            {'id': c.get('id'), 'name': c.get('name')}
+                            for c in companies
+                        ],
+                        'total': len(companies),
+                    }
+                return {'error': f'API error: {resp.status}'}
+        
+        elif action == 'get':
+            if not company_id:
+                return {'error': 'company_id is required'}
+            
+            url = f'{self.kommo_base_url}/api/v4/companies/{company_id}'
+            params = {'with': 'contacts,leads'}
+            
+            async with session.get(url, headers=headers, params=params) as resp:
+                if resp.status == 200:
+                    company = await resp.json()
+                    return {
+                        'id': company.get('id'),
+                        'name': company.get('name'),
+                        'responsible_user_id': company.get('responsible_user_id'),
+                        'contacts_count': len(company.get('_embedded', {}).get('contacts', [])),
+                        'leads_count': len(company.get('_embedded', {}).get('leads', [])),
+                        'custom_fields': company.get('custom_fields_values', []),
+                    }
+                return {'error': f'Company not found: {resp.status}'}
+        
+        elif action == 'create':
+            if not name:
+                return {'error': 'name is required'}
+            
+            url = f'{self.kommo_base_url}/api/v4/companies'
+            payload = [{'name': name}]
+            if fields:
+                payload[0].update(fields)
+            
+            async with session.post(url, headers=headers, json=payload) as resp:
+                if resp.status in [200, 201]:
+                    data = await resp.json()
+                    companies = data.get('_embedded', {}).get('companies', [])
+                    if companies:
+                        return {'success': True, 'company_id': companies[0].get('id'), 'name': name}
+                error = await resp.text()
+                return {'error': f'Failed to create company: {error[:200]}'}
+        
+        elif action == 'update':
+            if not company_id:
+                return {'error': 'company_id is required'}
+            
+            url = f'{self.kommo_base_url}/api/v4/companies/{company_id}'
+            payload = fields if fields else {}
+            if name:
+                payload['name'] = name
+            
+            async with session.patch(url, headers=headers, json=payload) as resp:
+                if resp.status == 200:
+                    return {'success': True, 'company_id': company_id, 'updated': list(payload.keys())}
+                error = await resp.text()
+                return {'error': f'Failed to update company: {error[:200]}'}
+        
+        elif action == 'get_contacts':
+            if not company_id:
+                return {'error': 'company_id is required'}
+            
+            url = f'{self.kommo_base_url}/api/v4/companies/{company_id}/contacts'
+            async with session.get(url, headers=headers) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    contacts = data.get('_embedded', {}).get('contacts', [])
+                    return {
+                        'company_id': company_id,
+                        'contacts': [{'id': c.get('id'), 'name': c.get('name')} for c in contacts],
+                        'total': len(contacts),
+                    }
+                return {'error': f'API error: {resp.status}'}
+        
+        elif action == 'get_leads':
+            if not company_id:
+                return {'error': 'company_id is required'}
+            
+            url = f'{self.kommo_base_url}/api/v4/companies/{company_id}/leads'
+            async with session.get(url, headers=headers) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    leads = data.get('_embedded', {}).get('leads', [])
+                    return {
+                        'company_id': company_id,
+                        'leads': [{'id': l.get('id'), 'name': l.get('name'), 'price': l.get('price')} for l in leads],
+                        'total': len(leads),
+                    }
+                return {'error': f'API error: {resp.status}'}
+        
+        elif action == 'link_contact':
+            if not company_id or not contact_id:
+                return {'error': 'company_id and contact_id are required'}
+            
+            url = f'{self.kommo_base_url}/api/v4/companies/{company_id}/link'
+            payload = [{'to_entity_id': contact_id, 'to_entity_type': 'contacts'}]
+            
+            async with session.post(url, headers=headers, json=payload) as resp:
+                if resp.status in [200, 201]:
+                    return {'success': True, 'company_id': company_id, 'linked_contact': contact_id}
+                error = await resp.text()
+                return {'error': f'Failed to link contact: {error[:200]}'}
+        
+        return {'error': f'Unknown companies action: {action}'}
+    
+    async def _handle_duplicates(self, session, headers, args: dict) -> dict:
+        """Handle duplicate detection and merging."""
+        action = args.get('action')
+        threshold = args.get('threshold', 0.8)
+        primary_id = args.get('primary_id')
+        duplicate_id = args.get('duplicate_id')
+        
+        def similarity(s1, s2):
+            """Simple similarity check."""
+            if not s1 or not s2:
+                return 0
+            s1, s2 = s1.lower().strip(), s2.lower().strip()
+            if s1 == s2:
+                return 1.0
+            # Check if one contains the other
+            if s1 in s2 or s2 in s1:
+                return 0.9
+            # Simple word overlap
+            words1 = set(s1.split())
+            words2 = set(s2.split())
+            if not words1 or not words2:
+                return 0
+            overlap = len(words1 & words2)
+            return overlap / max(len(words1), len(words2))
+        
+        if action == 'find_contacts':
+            url = f'{self.kommo_base_url}/api/v4/contacts'
+            params = {'limit': 250}
+            
+            async with session.get(url, headers=headers, params=params) as resp:
+                if resp.status != 200:
+                    return {'error': f'API error: {resp.status}'}
+                data = await resp.json()
+                contacts = data.get('_embedded', {}).get('contacts', [])
+            
+            # Find duplicates by name similarity
+            duplicates = []
+            checked = set()
+            for i, c1 in enumerate(contacts):
+                if c1.get('id') in checked:
+                    continue
+                for c2 in contacts[i+1:]:
+                    if c2.get('id') in checked:
+                        continue
+                    sim = similarity(c1.get('name', ''), c2.get('name', ''))
+                    if sim >= threshold:
+                        duplicates.append({
+                            'contact1': {'id': c1.get('id'), 'name': c1.get('name')},
+                            'contact2': {'id': c2.get('id'), 'name': c2.get('name')},
+                            'similarity': round(sim, 2),
+                        })
+                        checked.add(c2.get('id'))
+            
+            return {
+                'duplicates': duplicates[:20],
+                'total_found': len(duplicates),
+                'threshold': threshold,
+            }
+        
+        elif action == 'find_companies':
+            url = f'{self.kommo_base_url}/api/v4/companies'
+            params = {'limit': 250}
+            
+            async with session.get(url, headers=headers, params=params) as resp:
+                if resp.status != 200:
+                    return {'error': f'API error: {resp.status}'}
+                data = await resp.json()
+                companies = data.get('_embedded', {}).get('companies', [])
+            
+            # Find duplicates by name similarity
+            duplicates = []
+            checked = set()
+            for i, c1 in enumerate(companies):
+                if c1.get('id') in checked:
+                    continue
+                for c2 in companies[i+1:]:
+                    if c2.get('id') in checked:
+                        continue
+                    sim = similarity(c1.get('name', ''), c2.get('name', ''))
+                    if sim >= threshold:
+                        duplicates.append({
+                            'company1': {'id': c1.get('id'), 'name': c1.get('name')},
+                            'company2': {'id': c2.get('id'), 'name': c2.get('name')},
+                            'similarity': round(sim, 2),
+                        })
+                        checked.add(c2.get('id'))
+            
+            return {
+                'duplicates': duplicates[:20],
+                'total_found': len(duplicates),
+                'threshold': threshold,
+            }
+        
+        elif action == 'merge_contacts':
+            if not primary_id or not duplicate_id:
+                return {'error': 'primary_id and duplicate_id are required'}
+            
+            # Get duplicate contact data
+            dup_url = f'{self.kommo_base_url}/api/v4/contacts/{duplicate_id}'
+            async with session.get(dup_url, headers=headers, params={'with': 'leads'}) as resp:
+                if resp.status != 200:
+                    return {'error': f'Duplicate contact not found: {resp.status}'}
+                dup_data = await resp.json()
+            
+            # Move leads from duplicate to primary
+            dup_leads = dup_data.get('_embedded', {}).get('leads', [])
+            moved_leads = 0
+            for lead in dup_leads:
+                lead_url = f'{self.kommo_base_url}/api/v4/leads/{lead.get("id")}/link'
+                payload = [{'to_entity_id': primary_id, 'to_entity_type': 'contacts'}]
+                async with session.post(lead_url, headers=headers, json=payload) as resp:
+                    if resp.status in [200, 201]:
+                        moved_leads += 1
+            
+            # Delete duplicate contact
+            del_url = f'{self.kommo_base_url}/api/v4/contacts/{duplicate_id}'
+            async with session.delete(del_url, headers=headers) as resp:
+                deleted = resp.status in [200, 204]
+            
+            return {
+                'success': True,
+                'primary_id': primary_id,
+                'duplicate_id': duplicate_id,
+                'moved_leads': moved_leads,
+                'duplicate_deleted': deleted,
+            }
+        
+        return {'error': f'Unknown duplicates action: {action}'}
+    
+    async def _handle_links(self, session, headers, args: dict) -> dict:
+        """Handle entity links management."""
+        action = args.get('action')
+        entity_type = args.get('entity_type', 'leads')
+        entity_id = args.get('entity_id')
+        to_entity_type = args.get('to_entity_type')
+        to_entity_id = args.get('to_entity_id')
+        
+        if action == 'get':
+            if not entity_id:
+                return {'error': 'entity_id is required'}
+            
+            url = f'{self.kommo_base_url}/api/v4/{entity_type}/{entity_id}/links'
+            async with session.get(url, headers=headers) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    links = data.get('_embedded', {}).get('links', [])
+                    return {
+                        'entity_type': entity_type,
+                        'entity_id': entity_id,
+                        'links': [
+                            {
+                                'to_entity_type': l.get('to_entity_type'),
+                                'to_entity_id': l.get('to_entity_id'),
+                            }
+                            for l in links
+                        ],
+                        'total': len(links),
+                    }
+                return {'error': f'API error: {resp.status}'}
+        
+        elif action == 'link':
+            if not entity_id or not to_entity_type or not to_entity_id:
+                return {'error': 'entity_id, to_entity_type, and to_entity_id are required'}
+            
+            url = f'{self.kommo_base_url}/api/v4/{entity_type}/{entity_id}/link'
+            payload = [{'to_entity_id': to_entity_id, 'to_entity_type': to_entity_type}]
+            
+            async with session.post(url, headers=headers, json=payload) as resp:
+                if resp.status in [200, 201]:
+                    return {
+                        'success': True,
+                        'entity_type': entity_type,
+                        'entity_id': entity_id,
+                        'linked_to': {'type': to_entity_type, 'id': to_entity_id},
+                    }
+                error = await resp.text()
+                return {'error': f'Failed to create link: {error[:200]}'}
+        
+        elif action == 'unlink':
+            if not entity_id or not to_entity_type or not to_entity_id:
+                return {'error': 'entity_id, to_entity_type, and to_entity_id are required'}
+            
+            url = f'{self.kommo_base_url}/api/v4/{entity_type}/{entity_id}/unlink'
+            payload = [{'to_entity_id': to_entity_id, 'to_entity_type': to_entity_type}]
+            
+            async with session.post(url, headers=headers, json=payload) as resp:
+                if resp.status in [200, 201, 204]:
+                    return {
+                        'success': True,
+                        'entity_type': entity_type,
+                        'entity_id': entity_id,
+                        'unlinked_from': {'type': to_entity_type, 'id': to_entity_id},
+                    }
+                error = await resp.text()
+                return {'error': f'Failed to remove link: {error[:200]}'}
+        
+        return {'error': f'Unknown links action: {action}'}
