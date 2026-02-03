@@ -505,47 +505,130 @@ MCP_TOOLS = [
             },
         },
     },
+    {
+        'type': 'function',
+        'function': {
+            'name': 'kommo_tags',
+            'description': 'Manage tags for leads, contacts, companies',
+            'parameters': {
+                'type': 'object',
+                'properties': {
+                    'action': {
+                        'type': 'string',
+                        'enum': ['list', 'add', 'remove', 'search_by_tag'],
+                        'description': 'Tag action',
+                    },
+                    'entity_type': {
+                        'type': 'string',
+                        'enum': ['leads', 'contacts', 'companies'],
+                        'description': 'Entity type',
+                    },
+                    'entity_id': {
+                        'type': 'integer',
+                        'description': 'Entity ID for add/remove',
+                    },
+                    'tags': {
+                        'type': 'array',
+                        'items': {'type': 'string'},
+                        'description': 'Tag names to add/remove',
+                    },
+                    'tag_name': {
+                        'type': 'string',
+                        'description': 'Tag name for search_by_tag',
+                    },
+                },
+                'required': ['action'],
+            },
+        },
+    },
+    {
+        'type': 'function',
+        'function': {
+            'name': 'kommo_custom_fields',
+            'description': 'Manage and view custom fields for entities',
+            'parameters': {
+                'type': 'object',
+                'properties': {
+                    'action': {
+                        'type': 'string',
+                        'enum': ['list', 'get_values', 'set_value'],
+                        'description': 'Action: list fields, get values, set value',
+                    },
+                    'entity_type': {
+                        'type': 'string',
+                        'enum': ['leads', 'contacts', 'companies'],
+                        'description': 'Entity type',
+                    },
+                    'entity_id': {
+                        'type': 'integer',
+                        'description': 'Entity ID for get/set values',
+                    },
+                    'field_id': {
+                        'type': 'integer',
+                        'description': 'Field ID for set_value',
+                    },
+                    'value': {
+                        'type': 'string',
+                        'description': 'Value to set',
+                    },
+                },
+                'required': ['action'],
+            },
+        },
+    },
+    {
+        'type': 'function',
+        'function': {
+            'name': 'kommo_sources',
+            'description': 'Manage lead sources and analyze source performance',
+            'parameters': {
+                'type': 'object',
+                'properties': {
+                    'action': {
+                        'type': 'string',
+                        'enum': ['list', 'create', 'analytics'],
+                        'description': 'Action: list sources, create source, analytics by source',
+                    },
+                    'pipeline_id': {
+                        'type': 'integer',
+                        'description': 'Pipeline ID',
+                    },
+                    'source_name': {
+                        'type': 'string',
+                        'description': 'Source name for create',
+                    },
+                },
+                'required': ['action'],
+            },
+        },
+    },
 ]
 
 SYSTEM_PROMPT = """Ты - AI-ассистент для ПОЛНОГО управления CRM Kommo.
 
-🔧 СТРУКТУРА CRM (kommo_setup):
-- Воронки: create/update/delete_pipeline
-- Этапы: create/update/delete_stage, reorder_stages
-- Поля: create/update/delete_field
+🔧 СТРУКТУРА: kommo_setup (pipelines, stages, fields)
+✏️ СУЩНОСТИ: kommo_entity_actions (notes, tasks, move, link)
+📦 МАССОВЫЕ: kommo_bulk_actions (mass_move/tag/assign/update)
+👥 ПОЛЬЗОВАТЕЛИ: kommo_users (list, workload, activity)
+📊 ОТЧЁТЫ: kommo_reports (sales, pipeline, manager, tasks, stale_deals, top_deals)
 
-✏️ СУЩНОСТИ (kommo_entity_actions):
-- Заметки: add_note, get_notes, get_history
-- Задачи: create_task, get_tasks, complete_task
-- Сделки: update_lead, move_lead, link_contact
+🏷️ ТЕГИ (kommo_tags):
+- list: все теги (entity_type)
+- add: добавить теги (entity_type, entity_id, tags)
+- remove: удалить теги (entity_type, entity_id, tags)
+- search_by_tag: найти по тегу (entity_type, tag_name)
 
-📦 МАССОВЫЕ (kommo_bulk_actions):
-- mass_move, mass_tag, mass_assign, mass_update, mass_delete
+� КАСТОМНЫЕ ПОЛЯ (kommo_custom_fields):
+- list: список полей (entity_type)
+- get_values: значения полей сущности (entity_type, entity_id)
+- set_value: установить значение (entity_type, entity_id, field_id, value)
 
-👥 ПОЛЬЗОВАТЕЛИ (kommo_users):
-- list: список всех пользователей CRM
-- get: детали пользователя (user_id)
-- workload: нагрузка - сделки и задачи (user_id)
-- activity: активность за период (user_id, days)
+🎯 ИСТОЧНИКИ (kommo_sources):
+- list: список источников (pipeline_id)
+- create: создать источник (pipeline_id, source_name)
+- analytics: аналитика по источникам (pipeline_id)
 
-📊 ОТЧЁТЫ (kommo_reports):
-- sales_summary: сводка продаж
-- pipeline_report: отчёт по воронке
-- manager_report: отчёт по менеджеру
-- leads_by_source: лиды по источникам
-- conversion_funnel: воронка конверсии
-- tasks_report: отчёт по задачам
-- overdue_tasks: просроченные задачи
-- stale_deals: зависшие сделки
-- top_deals: топ сделок по сумме
-
-🔗 ВЕБХУКИ (kommo_webhooks):
-- list: список вебхуков
-- create: создать (destination, events)
-- delete: удалить (webhook_id)
-
-ФОРМАТИРОВАНИЕ (Telegram HTML):
-<b>жирный</b>, <code>ID</code>, эмодзи: ✅❌📊📈💰👤🏢📋🔧⚡
+ФОРМАТИРОВАНИЕ: <b>жирный</b>, <code>ID</code>, эмодзи ✅❌📊📈💰👤🏢📋🔧⚡🏷️
 """
 
 
@@ -823,6 +906,15 @@ class AIChat:
         
         elif name == 'kommo_webhooks':
             return await self._handle_webhooks(session, headers, args)
+        
+        elif name == 'kommo_tags':
+            return await self._handle_tags(session, headers, args)
+        
+        elif name == 'kommo_custom_fields':
+            return await self._handle_custom_fields(session, headers, args)
+        
+        elif name == 'kommo_sources':
+            return await self._handle_sources(session, headers, args)
         
         # Default - return info about available tools
         return {'message': f'Tool {name} not fully implemented yet', 'args': args}
@@ -2040,3 +2132,265 @@ class AIChat:
                 return {'error': f'Failed to delete webhook: {error[:200]}'} 
         
         return {'error': f'Unknown webhooks action: {action}'}
+    
+    async def _handle_tags(self, session, headers, args: dict) -> dict:
+        """Handle tags management."""
+        action = args.get('action')
+        entity_type = args.get('entity_type', 'leads')
+        entity_id = args.get('entity_id')
+        tags = args.get('tags', [])
+        tag_name = args.get('tag_name')
+        
+        if action == 'list':
+            url = f'{self.kommo_base_url}/api/v4/{entity_type}/tags'
+            async with session.get(url, headers=headers) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    tags_list = data.get('_embedded', {}).get('tags', [])
+                    return {
+                        'tags': [{'id': t.get('id'), 'name': t.get('name'), 'color': t.get('color')} for t in tags_list],
+                        'total': len(tags_list),
+                    }
+                return {'error': f'API error: {resp.status}'}
+        
+        elif action == 'add':
+            if not entity_id or not tags:
+                return {'error': 'entity_id and tags array are required'}
+            
+            url = f'{self.kommo_base_url}/api/v4/{entity_type}/{entity_id}'
+            
+            # First get current tags
+            async with session.get(url, headers=headers) as resp:
+                if resp.status != 200:
+                    return {'error': f'Entity not found: {resp.status}'}
+                entity_data = await resp.json()
+                current_tags = entity_data.get('_embedded', {}).get('tags', [])
+            
+            # Add new tags
+            all_tags = [{'name': t.get('name')} for t in current_tags]
+            for tag in tags:
+                if tag not in [t['name'] for t in all_tags]:
+                    all_tags.append({'name': tag})
+            
+            payload = {'_embedded': {'tags': all_tags}}
+            async with session.patch(url, headers=headers, json=payload) as resp:
+                if resp.status == 200:
+                    return {'success': True, 'entity_id': entity_id, 'added_tags': tags}
+                error = await resp.text()
+                return {'error': f'Failed to add tags: {error[:200]}'}
+        
+        elif action == 'remove':
+            if not entity_id or not tags:
+                return {'error': 'entity_id and tags array are required'}
+            
+            url = f'{self.kommo_base_url}/api/v4/{entity_type}/{entity_id}'
+            
+            # First get current tags
+            async with session.get(url, headers=headers) as resp:
+                if resp.status != 200:
+                    return {'error': f'Entity not found: {resp.status}'}
+                entity_data = await resp.json()
+                current_tags = entity_data.get('_embedded', {}).get('tags', [])
+            
+            # Remove specified tags
+            remaining_tags = [{'name': t.get('name')} for t in current_tags if t.get('name') not in tags]
+            
+            payload = {'_embedded': {'tags': remaining_tags}}
+            async with session.patch(url, headers=headers, json=payload) as resp:
+                if resp.status == 200:
+                    return {'success': True, 'entity_id': entity_id, 'removed_tags': tags}
+                error = await resp.text()
+                return {'error': f'Failed to remove tags: {error[:200]}'}
+        
+        elif action == 'search_by_tag':
+            if not tag_name:
+                return {'error': 'tag_name is required'}
+            
+            # First get tag ID
+            tags_url = f'{self.kommo_base_url}/api/v4/{entity_type}/tags'
+            async with session.get(tags_url, headers=headers) as resp:
+                if resp.status != 200:
+                    return {'error': f'API error: {resp.status}'}
+                data = await resp.json()
+                tags_list = data.get('_embedded', {}).get('tags', [])
+                tag_id = None
+                for t in tags_list:
+                    if t.get('name', '').lower() == tag_name.lower():
+                        tag_id = t.get('id')
+                        break
+                if not tag_id:
+                    return {'error': f'Tag "{tag_name}" not found', 'available_tags': [t.get('name') for t in tags_list[:10]]}
+            
+            # Search entities with this tag
+            url = f'{self.kommo_base_url}/api/v4/{entity_type}'
+            params = {'filter[tags]': tag_id, 'limit': 50}
+            async with session.get(url, headers=headers, params=params) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    entities = data.get('_embedded', {}).get(entity_type, [])
+                    return {
+                        'tag': tag_name,
+                        'entities': [{'id': e.get('id'), 'name': e.get('name')} for e in entities],
+                        'total': len(entities),
+                    }
+                return {'error': f'API error: {resp.status}'}
+        
+        return {'error': f'Unknown tags action: {action}'}
+    
+    async def _handle_custom_fields(self, session, headers, args: dict) -> dict:
+        """Handle custom fields management."""
+        action = args.get('action')
+        entity_type = args.get('entity_type', 'leads')
+        entity_id = args.get('entity_id')
+        field_id = args.get('field_id')
+        value = args.get('value')
+        
+        if action == 'list':
+            url = f'{self.kommo_base_url}/api/v4/{entity_type}/custom_fields'
+            async with session.get(url, headers=headers) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    fields = data.get('_embedded', {}).get('custom_fields', [])
+                    return {
+                        'fields': [
+                            {
+                                'id': f.get('id'),
+                                'name': f.get('name'),
+                                'type': f.get('type'),
+                                'enums': [e.get('value') for e in f.get('enums', [])] if f.get('enums') else None,
+                            }
+                            for f in fields
+                        ],
+                        'total': len(fields),
+                    }
+                return {'error': f'API error: {resp.status}'}
+        
+        elif action == 'get_values':
+            if not entity_id:
+                return {'error': 'entity_id is required'}
+            
+            url = f'{self.kommo_base_url}/api/v4/{entity_type}/{entity_id}'
+            async with session.get(url, headers=headers) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    custom_fields = data.get('custom_fields_values', [])
+                    
+                    # Get field names
+                    fields_url = f'{self.kommo_base_url}/api/v4/{entity_type}/custom_fields'
+                    async with session.get(fields_url, headers=headers) as fields_resp:
+                        field_names = {}
+                        if fields_resp.status == 200:
+                            fields_data = await fields_resp.json()
+                            for f in fields_data.get('_embedded', {}).get('custom_fields', []):
+                                field_names[f.get('id')] = f.get('name')
+                    
+                    return {
+                        'entity_id': entity_id,
+                        'fields': [
+                            {
+                                'field_id': cf.get('field_id'),
+                                'field_name': field_names.get(cf.get('field_id'), 'Unknown'),
+                                'values': [v.get('value') for v in cf.get('values', [])],
+                            }
+                            for cf in custom_fields
+                        ],
+                    }
+                return {'error': f'Entity not found: {resp.status}'}
+        
+        elif action == 'set_value':
+            if not entity_id or not field_id:
+                return {'error': 'entity_id and field_id are required'}
+            
+            url = f'{self.kommo_base_url}/api/v4/{entity_type}/{entity_id}'
+            payload = {
+                'custom_fields_values': [
+                    {'field_id': field_id, 'values': [{'value': value}]}
+                ]
+            }
+            
+            async with session.patch(url, headers=headers, json=payload) as resp:
+                if resp.status == 200:
+                    return {'success': True, 'entity_id': entity_id, 'field_id': field_id, 'value': value}
+                error = await resp.text()
+                return {'error': f'Failed to set field value: {error[:200]}'}
+        
+        return {'error': f'Unknown custom_fields action: {action}'}
+    
+    async def _handle_sources(self, session, headers, args: dict) -> dict:
+        """Handle lead sources management and analytics."""
+        action = args.get('action')
+        pipeline_id = args.get('pipeline_id')
+        source_name = args.get('source_name')
+        
+        if action == 'list':
+            # Get pipelines first to find sources
+            pipelines_url = f'{self.kommo_base_url}/api/v4/leads/pipelines'
+            async with session.get(pipelines_url, headers=headers) as resp:
+                if resp.status != 200:
+                    return {'error': f'API error: {resp.status}'}
+                data = await resp.json()
+                pipelines = data.get('_embedded', {}).get('pipelines', [])
+            
+            if pipeline_id:
+                pipelines = [p for p in pipelines if p.get('id') == pipeline_id]
+            
+            result = []
+            for p in pipelines:
+                # Get sources for this pipeline
+                sources_url = f'{self.kommo_base_url}/api/v4/leads/pipelines/{p.get("id")}/sources'
+                async with session.get(sources_url, headers=headers) as resp:
+                    if resp.status == 200:
+                        sources_data = await resp.json()
+                        sources = sources_data.get('_embedded', {}).get('sources', [])
+                        result.append({
+                            'pipeline': p.get('name'),
+                            'pipeline_id': p.get('id'),
+                            'sources': [{'id': s.get('id'), 'name': s.get('name')} for s in sources],
+                        })
+            
+            return {'pipelines': result}
+        
+        elif action == 'create':
+            if not pipeline_id or not source_name:
+                return {'error': 'pipeline_id and source_name are required'}
+            
+            url = f'{self.kommo_base_url}/api/v4/leads/pipelines/{pipeline_id}/sources'
+            payload = [{'name': source_name}]
+            
+            async with session.post(url, headers=headers, json=payload) as resp:
+                if resp.status in [200, 201]:
+                    data = await resp.json()
+                    sources = data.get('_embedded', {}).get('sources', [])
+                    if sources:
+                        return {'success': True, 'source_id': sources[0].get('id'), 'source_name': source_name}
+                error = await resp.text()
+                return {'error': f'Failed to create source: {error[:200]}'}
+        
+        elif action == 'analytics':
+            # Get leads and analyze by source
+            url = f'{self.kommo_base_url}/api/v4/leads'
+            params = {'limit': 250, 'with': 'source_id'}
+            if pipeline_id:
+                params['filter[pipeline_id]'] = pipeline_id
+            
+            async with session.get(url, headers=headers, params=params) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    leads = data.get('_embedded', {}).get('leads', [])
+                    
+                    # Group by source
+                    by_source = {}
+                    for lead in leads:
+                        source_id = lead.get('source_id') or 'unknown'
+                        if source_id not in by_source:
+                            by_source[source_id] = {'count': 0, 'sum': 0}
+                        by_source[source_id]['count'] += 1
+                        by_source[source_id]['sum'] += lead.get('price', 0) or 0
+                    
+                    return {
+                        'total_leads': len(leads),
+                        'by_source': by_source,
+                    }
+                return {'error': f'API error: {resp.status}'}
+        
+        return {'error': f'Unknown sources action: {action}'}
