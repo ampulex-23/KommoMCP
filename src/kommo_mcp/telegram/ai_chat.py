@@ -404,49 +404,148 @@ MCP_TOOLS = [
             },
         },
     },
+    {
+        'type': 'function',
+        'function': {
+            'name': 'kommo_users',
+            'description': 'Get CRM users, their roles, and workload statistics',
+            'parameters': {
+                'type': 'object',
+                'properties': {
+                    'action': {
+                        'type': 'string',
+                        'enum': ['list', 'get', 'workload', 'activity'],
+                        'description': 'Action: list all users, get user details, workload stats, activity log',
+                    },
+                    'user_id': {
+                        'type': 'integer',
+                        'description': 'User ID for get/workload/activity',
+                    },
+                    'days': {
+                        'type': 'integer',
+                        'description': 'Period in days for activity (default 7)',
+                        'default': 7,
+                    },
+                },
+                'required': ['action'],
+            },
+        },
+    },
+    {
+        'type': 'function',
+        'function': {
+            'name': 'kommo_reports',
+            'description': 'Generate various CRM reports and export data',
+            'parameters': {
+                'type': 'object',
+                'properties': {
+                    'action': {
+                        'type': 'string',
+                        'enum': [
+                            'sales_summary', 'pipeline_report', 'manager_report',
+                            'leads_by_source', 'conversion_funnel', 'tasks_report',
+                            'overdue_tasks', 'stale_deals', 'top_deals'
+                        ],
+                        'description': 'Report type',
+                    },
+                    'date_from': {
+                        'type': 'string',
+                        'description': 'Start date YYYY-MM-DD (default: 30 days ago)',
+                    },
+                    'date_to': {
+                        'type': 'string',
+                        'description': 'End date YYYY-MM-DD (default: today)',
+                    },
+                    'pipeline_id': {
+                        'type': 'integer',
+                        'description': 'Filter by pipeline ID',
+                    },
+                    'user_id': {
+                        'type': 'integer',
+                        'description': 'Filter by user/manager ID',
+                    },
+                    'limit': {
+                        'type': 'integer',
+                        'description': 'Limit results (default 20)',
+                        'default': 20,
+                    },
+                },
+                'required': ['action'],
+            },
+        },
+    },
+    {
+        'type': 'function',
+        'function': {
+            'name': 'kommo_webhooks',
+            'description': 'Manage webhooks for CRM events',
+            'parameters': {
+                'type': 'object',
+                'properties': {
+                    'action': {
+                        'type': 'string',
+                        'enum': ['list', 'create', 'delete'],
+                        'description': 'Webhook action',
+                    },
+                    'webhook_id': {
+                        'type': 'integer',
+                        'description': 'Webhook ID for delete',
+                    },
+                    'destination': {
+                        'type': 'string',
+                        'description': 'Webhook URL for create',
+                    },
+                    'events': {
+                        'type': 'array',
+                        'items': {'type': 'string'},
+                        'description': 'Events to subscribe: add_lead, update_lead, delete_lead, add_contact, etc',
+                    },
+                },
+                'required': ['action'],
+            },
+        },
+    },
 ]
 
 SYSTEM_PROMPT = """Ты - AI-ассистент для ПОЛНОГО управления CRM Kommo.
 
-🔧 ВОРОНКИ (kommo_setup):
-- create_pipeline, update_pipeline, delete_pipeline
+🔧 СТРУКТУРА CRM (kommo_setup):
+- Воронки: create/update/delete_pipeline
+- Этапы: create/update/delete_stage, reorder_stages
+- Поля: create/update/delete_field
 
-📊 ЭТАПЫ (kommo_setup):
-- create_stage, update_stage, delete_stage, reorder_stages
+✏️ СУЩНОСТИ (kommo_entity_actions):
+- Заметки: add_note, get_notes, get_history
+- Задачи: create_task, get_tasks, complete_task
+- Сделки: update_lead, move_lead, link_contact
 
-📝 ПОЛЯ (kommo_setup):
-- create_field, update_field, delete_field
+📦 МАССОВЫЕ (kommo_bulk_actions):
+- mass_move, mass_tag, mass_assign, mass_update, mass_delete
 
-🎲 MOCK ДАННЫЕ (kommo_mock_data):
-- generate_all, contacts, companies, leads
+👥 ПОЛЬЗОВАТЕЛИ (kommo_users):
+- list: список всех пользователей CRM
+- get: детали пользователя (user_id)
+- workload: нагрузка - сделки и задачи (user_id)
+- activity: активность за период (user_id, days)
 
-📋 ПРОСМОТР:
-- kommo_list_pipelines, kommo_pipeline_analytics, kommo_search
+📊 ОТЧЁТЫ (kommo_reports):
+- sales_summary: сводка продаж
+- pipeline_report: отчёт по воронке
+- manager_report: отчёт по менеджеру
+- leads_by_source: лиды по источникам
+- conversion_funnel: воронка конверсии
+- tasks_report: отчёт по задачам
+- overdue_tasks: просроченные задачи
+- stale_deals: зависшие сделки
+- top_deals: топ сделок по сумме
 
-✏️ РАБОТА С СУЩНОСТЯМИ (kommo_entity_actions):
-- add_note: добавить заметку (entity_type, entity_id, note_text)
-- get_notes: получить заметки (entity_type, entity_id)
-- get_history: история изменений (entity_type, entity_id)
-- create_task: создать задачу (entity_id, task_text, task_type_id=1/2/3, complete_till)
-- get_tasks: получить задачи (entity_id)
-- complete_task: завершить задачу (task_id)
-- update_lead: обновить сделку (entity_id, fields)
-- move_lead: переместить сделку (entity_id, pipeline_id, status_id)
-- link_contact: привязать контакт (entity_id, contact_id)
-
-� МАССОВЫЕ ОПЕРАЦИИ (kommo_bulk_actions):
-- mass_move: переместить сделки (entity_ids, pipeline_id, status_id)
-- mass_tag: добавить теги (entity_ids, tags)
-- mass_assign: назначить ответственного (entity_ids, responsible_user_id)
-- mass_update: обновить поля (entity_ids, fields)
-
-ТИПЫ ЗАДАЧ: 1=звонок, 2=встреча, 3=email
-ДЕДЛАЙН: YYYY-MM-DD или +1d, +3h, +30m
+🔗 ВЕБХУКИ (kommo_webhooks):
+- list: список вебхуков
+- create: создать (destination, events)
+- delete: удалить (webhook_id)
 
 ФОРМАТИРОВАНИЕ (Telegram HTML):
-- <b>жирный</b> для заголовков
-- <code>ID</code> для идентификаторов
-- Эмодзи: ✅❌📊📈💰👤🏢📋🔧⚡🗑️✏️📌
+<b>жирный</b>, <code>ID</code>, эмодзи: ✅❌📊📈💰👤🏢📋🔧⚡
 """
 
 
@@ -715,6 +814,15 @@ class AIChat:
         
         elif name == 'kommo_bulk_actions':
             return await self._handle_bulk_actions(session, headers, args)
+        
+        elif name == 'kommo_users':
+            return await self._handle_users(session, headers, args)
+        
+        elif name == 'kommo_reports':
+            return await self._handle_reports(session, headers, args)
+        
+        elif name == 'kommo_webhooks':
+            return await self._handle_webhooks(session, headers, args)
         
         # Default - return info about available tools
         return {'message': f'Tool {name} not fully implemented yet', 'args': args}
@@ -1495,3 +1603,440 @@ class AIChat:
             return {'success': deleted > 0, 'deleted': deleted, 'failed': errors}
         
         return {'error': f'Unknown bulk action: {action}'}
+    
+    async def _handle_users(self, session, headers, args: dict) -> dict:
+        """Handle users management and statistics."""
+        action = args.get('action')
+        user_id = args.get('user_id')
+        days = args.get('days', 7)
+        
+        if action == 'list':
+            url = f'{self.kommo_base_url}/api/v4/users'
+            async with session.get(url, headers=headers) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    users = data.get('_embedded', {}).get('users', [])
+                    return {
+                        'users': [
+                            {
+                                'id': u.get('id'),
+                                'name': u.get('name'),
+                                'email': u.get('email'),
+                                'role': u.get('rights', {}).get('is_admin') and 'admin' or 'user',
+                            }
+                            for u in users
+                        ],
+                        'total': len(users),
+                    }
+                return {'error': f'API error: {resp.status}'}
+        
+        elif action == 'get':
+            if not user_id:
+                return {'error': 'user_id is required'}
+            
+            url = f'{self.kommo_base_url}/api/v4/users/{user_id}'
+            async with session.get(url, headers=headers) as resp:
+                if resp.status == 200:
+                    user = await resp.json()
+                    return {
+                        'id': user.get('id'),
+                        'name': user.get('name'),
+                        'email': user.get('email'),
+                        'lang': user.get('lang'),
+                        'rights': user.get('rights'),
+                    }
+                return {'error': f'User not found: {resp.status}'}
+        
+        elif action == 'workload':
+            if not user_id:
+                return {'error': 'user_id is required'}
+            
+            # Get leads count
+            leads_url = f'{self.kommo_base_url}/api/v4/leads'
+            params = {'filter[responsible_user_id]': user_id, 'limit': 250}
+            
+            async with session.get(leads_url, headers=headers, params=params) as resp:
+                leads_count = 0
+                leads_sum = 0
+                if resp.status == 200:
+                    data = await resp.json()
+                    leads = data.get('_embedded', {}).get('leads', [])
+                    leads_count = len(leads)
+                    leads_sum = sum(l.get('price', 0) or 0 for l in leads)
+            
+            # Get tasks count
+            tasks_url = f'{self.kommo_base_url}/api/v4/tasks'
+            params = {'filter[responsible_user_id]': user_id, 'filter[is_completed]': 0}
+            
+            async with session.get(tasks_url, headers=headers, params=params) as resp:
+                tasks_count = 0
+                overdue_count = 0
+                if resp.status == 200:
+                    data = await resp.json()
+                    tasks = data.get('_embedded', {}).get('tasks', [])
+                    tasks_count = len(tasks)
+                    import time
+                    now = int(time.time())
+                    overdue_count = sum(1 for t in tasks if t.get('complete_till', 0) < now)
+            
+            return {
+                'user_id': user_id,
+                'leads': leads_count,
+                'leads_sum': leads_sum,
+                'open_tasks': tasks_count,
+                'overdue_tasks': overdue_count,
+            }
+        
+        elif action == 'activity':
+            if not user_id:
+                return {'error': 'user_id is required'}
+            
+            # Get recent events for user
+            import time
+            from datetime import datetime, timedelta
+            
+            date_from = int((datetime.now() - timedelta(days=days)).timestamp())
+            
+            events_url = f'{self.kommo_base_url}/api/v4/events'
+            params = {
+                'filter[created_by]': user_id,
+                'filter[created_at][from]': date_from,
+                'limit': 100,
+            }
+            
+            async with session.get(events_url, headers=headers, params=params) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    events = data.get('_embedded', {}).get('events', [])
+                    
+                    # Count by type
+                    event_counts = {}
+                    for e in events:
+                        etype = e.get('type', 'unknown')
+                        event_counts[etype] = event_counts.get(etype, 0) + 1
+                    
+                    return {
+                        'user_id': user_id,
+                        'period_days': days,
+                        'total_events': len(events),
+                        'by_type': event_counts,
+                    }
+                return {'error': f'API error: {resp.status}'}
+        
+        return {'error': f'Unknown users action: {action}'}
+    
+    async def _handle_reports(self, session, headers, args: dict) -> dict:
+        """Generate various CRM reports."""
+        import time
+        from datetime import datetime, timedelta
+        
+        action = args.get('action')
+        pipeline_id = args.get('pipeline_id')
+        user_id = args.get('user_id')
+        limit = args.get('limit', 20)
+        
+        # Parse dates
+        date_from_str = args.get('date_from')
+        date_to_str = args.get('date_to')
+        
+        if date_from_str:
+            try:
+                date_from = int(datetime.strptime(date_from_str, '%Y-%m-%d').timestamp())
+            except:
+                date_from = int((datetime.now() - timedelta(days=30)).timestamp())
+        else:
+            date_from = int((datetime.now() - timedelta(days=30)).timestamp())
+        
+        if date_to_str:
+            try:
+                date_to = int(datetime.strptime(date_to_str, '%Y-%m-%d').timestamp())
+            except:
+                date_to = int(time.time())
+        else:
+            date_to = int(time.time())
+        
+        if action == 'sales_summary':
+            # Get all leads
+            url = f'{self.kommo_base_url}/api/v4/leads'
+            params = {'limit': 250, 'filter[created_at][from]': date_from, 'filter[created_at][to]': date_to}
+            if pipeline_id:
+                params['filter[pipeline_id]'] = pipeline_id
+            
+            async with session.get(url, headers=headers, params=params) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    leads = data.get('_embedded', {}).get('leads', [])
+                    
+                    total = len(leads)
+                    total_sum = sum(l.get('price', 0) or 0 for l in leads)
+                    won = [l for l in leads if l.get('status_id') == 142]  # Won status
+                    lost = [l for l in leads if l.get('status_id') == 143]  # Lost status
+                    
+                    return {
+                        'period': f'{date_from_str or "30d ago"} - {date_to_str or "today"}',
+                        'total_leads': total,
+                        'total_value': total_sum,
+                        'won': len(won),
+                        'won_value': sum(l.get('price', 0) or 0 for l in won),
+                        'lost': len(lost),
+                        'avg_deal': total_sum // total if total > 0 else 0,
+                    }
+                return {'error': f'API error: {resp.status}'}
+        
+        elif action == 'pipeline_report':
+            # Get pipelines with stats
+            pipelines_url = f'{self.kommo_base_url}/api/v4/leads/pipelines'
+            async with session.get(pipelines_url, headers=headers) as resp:
+                if resp.status != 200:
+                    return {'error': f'API error: {resp.status}'}
+                data = await resp.json()
+                pipelines = data.get('_embedded', {}).get('pipelines', [])
+            
+            if pipeline_id:
+                pipelines = [p for p in pipelines if p.get('id') == pipeline_id]
+            
+            result = []
+            for p in pipelines:
+                p_id = p.get('id')
+                leads_url = f'{self.kommo_base_url}/api/v4/leads'
+                params = {'filter[pipeline_id]': p_id, 'limit': 250}
+                
+                async with session.get(leads_url, headers=headers, params=params) as resp:
+                    if resp.status == 200:
+                        leads_data = await resp.json()
+                        leads = leads_data.get('_embedded', {}).get('leads', [])
+                        
+                        statuses = p.get('_embedded', {}).get('statuses', [])
+                        status_map = {s['id']: s['name'] for s in statuses}
+                        
+                        by_status = {}
+                        for lead in leads:
+                            sid = lead.get('status_id')
+                            sname = status_map.get(sid, str(sid))
+                            if sname not in by_status:
+                                by_status[sname] = {'count': 0, 'sum': 0}
+                            by_status[sname]['count'] += 1
+                            by_status[sname]['sum'] += lead.get('price', 0) or 0
+                        
+                        result.append({
+                            'pipeline': p.get('name'),
+                            'pipeline_id': p_id,
+                            'total_leads': len(leads),
+                            'total_value': sum(l.get('price', 0) or 0 for l in leads),
+                            'by_stage': by_status,
+                        })
+            
+            return {'pipelines': result}
+        
+        elif action == 'manager_report':
+            # Get users first
+            users_url = f'{self.kommo_base_url}/api/v4/users'
+            async with session.get(users_url, headers=headers) as resp:
+                if resp.status != 200:
+                    return {'error': f'API error: {resp.status}'}
+                users_data = await resp.json()
+                users = users_data.get('_embedded', {}).get('users', [])
+            
+            if user_id:
+                users = [u for u in users if u.get('id') == user_id]
+            
+            result = []
+            for user in users[:10]:  # Limit to 10 users
+                uid = user.get('id')
+                
+                # Get leads for user
+                leads_url = f'{self.kommo_base_url}/api/v4/leads'
+                params = {'filter[responsible_user_id]': uid, 'limit': 250}
+                
+                async with session.get(leads_url, headers=headers, params=params) as resp:
+                    if resp.status == 200:
+                        leads_data = await resp.json()
+                        leads = leads_data.get('_embedded', {}).get('leads', [])
+                        
+                        result.append({
+                            'user': user.get('name'),
+                            'user_id': uid,
+                            'leads': len(leads),
+                            'total_value': sum(l.get('price', 0) or 0 for l in leads),
+                            'avg_deal': sum(l.get('price', 0) or 0 for l in leads) // len(leads) if leads else 0,
+                        })
+            
+            return {'managers': sorted(result, key=lambda x: x['total_value'], reverse=True)}
+        
+        elif action == 'overdue_tasks':
+            url = f'{self.kommo_base_url}/api/v4/tasks'
+            now = int(time.time())
+            params = {'filter[is_completed]': 0, 'limit': limit}
+            
+            async with session.get(url, headers=headers, params=params) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    tasks = data.get('_embedded', {}).get('tasks', [])
+                    
+                    overdue = [t for t in tasks if t.get('complete_till', 0) < now]
+                    
+                    return {
+                        'overdue_tasks': [
+                            {
+                                'id': t.get('id'),
+                                'text': t.get('text', '')[:50],
+                                'entity_id': t.get('entity_id'),
+                                'responsible_user_id': t.get('responsible_user_id'),
+                                'overdue_days': (now - t.get('complete_till', now)) // 86400,
+                            }
+                            for t in overdue[:limit]
+                        ],
+                        'total_overdue': len(overdue),
+                    }
+                return {'error': f'API error: {resp.status}'}
+        
+        elif action == 'stale_deals':
+            url = f'{self.kommo_base_url}/api/v4/leads'
+            stale_days = 14
+            stale_threshold = int(time.time()) - (stale_days * 86400)
+            params = {'limit': 250}
+            if pipeline_id:
+                params['filter[pipeline_id]'] = pipeline_id
+            
+            async with session.get(url, headers=headers, params=params) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    leads = data.get('_embedded', {}).get('leads', [])
+                    
+                    # Filter stale (not updated for stale_days)
+                    stale = [l for l in leads if l.get('updated_at', 0) < stale_threshold 
+                             and l.get('status_id') not in [142, 143]]  # Not won/lost
+                    
+                    return {
+                        'stale_deals': [
+                            {
+                                'id': l.get('id'),
+                                'name': l.get('name'),
+                                'price': l.get('price'),
+                                'days_stale': (int(time.time()) - l.get('updated_at', 0)) // 86400,
+                            }
+                            for l in sorted(stale, key=lambda x: x.get('updated_at', 0))[:limit]
+                        ],
+                        'total_stale': len(stale),
+                        'threshold_days': stale_days,
+                    }
+                return {'error': f'API error: {resp.status}'}
+        
+        elif action == 'top_deals':
+            url = f'{self.kommo_base_url}/api/v4/leads'
+            params = {'limit': 250}
+            if pipeline_id:
+                params['filter[pipeline_id]'] = pipeline_id
+            
+            async with session.get(url, headers=headers, params=params) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    leads = data.get('_embedded', {}).get('leads', [])
+                    
+                    # Sort by price
+                    top = sorted(leads, key=lambda x: x.get('price', 0) or 0, reverse=True)[:limit]
+                    
+                    return {
+                        'top_deals': [
+                            {
+                                'id': l.get('id'),
+                                'name': l.get('name'),
+                                'price': l.get('price'),
+                                'status_id': l.get('status_id'),
+                                'responsible_user_id': l.get('responsible_user_id'),
+                            }
+                            for l in top
+                        ],
+                    }
+                return {'error': f'API error: {resp.status}'}
+        
+        elif action == 'tasks_report':
+            url = f'{self.kommo_base_url}/api/v4/tasks'
+            params = {'limit': 250}
+            if user_id:
+                params['filter[responsible_user_id]'] = user_id
+            
+            async with session.get(url, headers=headers, params=params) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    tasks = data.get('_embedded', {}).get('tasks', [])
+                    
+                    now = int(time.time())
+                    completed = [t for t in tasks if t.get('is_completed')]
+                    pending = [t for t in tasks if not t.get('is_completed')]
+                    overdue = [t for t in pending if t.get('complete_till', 0) < now]
+                    
+                    # By type
+                    by_type = {}
+                    for t in tasks:
+                        ttype = t.get('task_type_id', 0)
+                        type_name = {1: 'call', 2: 'meeting', 3: 'email'}.get(ttype, 'other')
+                        by_type[type_name] = by_type.get(type_name, 0) + 1
+                    
+                    return {
+                        'total': len(tasks),
+                        'completed': len(completed),
+                        'pending': len(pending),
+                        'overdue': len(overdue),
+                        'by_type': by_type,
+                    }
+                return {'error': f'API error: {resp.status}'}
+        
+        return {'error': f'Unknown report action: {action}'}
+    
+    async def _handle_webhooks(self, session, headers, args: dict) -> dict:
+        """Manage webhooks."""
+        action = args.get('action')
+        
+        if action == 'list':
+            url = f'{self.kommo_base_url}/api/v4/webhooks'
+            async with session.get(url, headers=headers) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    webhooks = data.get('_embedded', {}).get('webhooks', [])
+                    return {
+                        'webhooks': [
+                            {
+                                'id': w.get('id'),
+                                'destination': w.get('destination'),
+                                'settings': w.get('settings', []),
+                            }
+                            for w in webhooks
+                        ],
+                        'total': len(webhooks),
+                    }
+                return {'error': f'API error: {resp.status}'}
+        
+        elif action == 'create':
+            destination = args.get('destination')
+            events = args.get('events', ['add_lead', 'update_lead'])
+            
+            if not destination:
+                return {'error': 'destination URL is required'}
+            
+            url = f'{self.kommo_base_url}/api/v4/webhooks'
+            payload = {
+                'destination': destination,
+                'settings': events,
+            }
+            
+            async with session.post(url, headers=headers, json=payload) as resp:
+                if resp.status in [200, 201]:
+                    data = await resp.json()
+                    return {'success': True, 'webhook': data}
+                error = await resp.text()
+                return {'error': f'Failed to create webhook: {error[:200]}'}
+        
+        elif action == 'delete':
+            webhook_id = args.get('webhook_id')
+            if not webhook_id:
+                return {'error': 'webhook_id is required'}
+            
+            url = f'{self.kommo_base_url}/api/v4/webhooks/{webhook_id}'
+            async with session.delete(url, headers=headers) as resp:
+                if resp.status in [200, 204]:
+                    return {'success': True, 'deleted_webhook_id': webhook_id}
+                error = await resp.text()
+                return {'error': f'Failed to delete webhook: {error[:200]}'} 
+        
+        return {'error': f'Unknown webhooks action: {action}'}
