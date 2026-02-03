@@ -712,6 +712,138 @@ MCP_TOOLS = [
             },
         },
     },
+    {
+        'type': 'function',
+        'function': {
+            'name': 'kommo_catalogs',
+            'description': 'Manage product catalogs and catalog elements (products, services)',
+            'parameters': {
+                'type': 'object',
+                'properties': {
+                    'action': {
+                        'type': 'string',
+                        'enum': ['list_catalogs', 'get_catalog', 'list_elements', 'get_element', 'create_element', 'link_to_lead'],
+                        'description': 'Action to perform',
+                    },
+                    'catalog_id': {
+                        'type': 'integer',
+                        'description': 'Catalog ID',
+                    },
+                    'element_id': {
+                        'type': 'integer',
+                        'description': 'Catalog element ID',
+                    },
+                    'lead_id': {
+                        'type': 'integer',
+                        'description': 'Lead ID for link_to_lead',
+                    },
+                    'name': {
+                        'type': 'string',
+                        'description': 'Element name for create',
+                    },
+                    'price': {
+                        'type': 'number',
+                        'description': 'Element price',
+                    },
+                    'quantity': {
+                        'type': 'integer',
+                        'description': 'Quantity for link_to_lead',
+                        'default': 1,
+                    },
+                    'query': {
+                        'type': 'string',
+                        'description': 'Search query for list_elements',
+                    },
+                },
+                'required': ['action'],
+            },
+        },
+    },
+    {
+        'type': 'function',
+        'function': {
+            'name': 'kommo_events',
+            'description': 'View and analyze CRM events (entity changes, notes, calls, etc)',
+            'parameters': {
+                'type': 'object',
+                'properties': {
+                    'action': {
+                        'type': 'string',
+                        'enum': ['list', 'by_entity', 'by_type', 'stats'],
+                        'description': 'Action: list all, by entity, by type, or stats',
+                    },
+                    'entity_type': {
+                        'type': 'string',
+                        'enum': ['lead', 'contact', 'company', 'customer', 'task'],
+                        'description': 'Entity type for by_entity',
+                    },
+                    'entity_id': {
+                        'type': 'integer',
+                        'description': 'Entity ID for by_entity',
+                    },
+                    'event_type': {
+                        'type': 'string',
+                        'description': 'Event type filter (lead_added, lead_status_changed, note_added, etc)',
+                    },
+                    'limit': {
+                        'type': 'integer',
+                        'description': 'Limit results (default 50)',
+                        'default': 50,
+                    },
+                },
+                'required': ['action'],
+            },
+        },
+    },
+    {
+        'type': 'function',
+        'function': {
+            'name': 'kommo_calls',
+            'description': 'Manage call records and telephony integration',
+            'parameters': {
+                'type': 'object',
+                'properties': {
+                    'action': {
+                        'type': 'string',
+                        'enum': ['list', 'log_call', 'stats'],
+                        'description': 'Action: list calls, log a call, or get stats',
+                    },
+                    'entity_type': {
+                        'type': 'string',
+                        'enum': ['leads', 'contacts'],
+                        'description': 'Entity type for log_call',
+                    },
+                    'entity_id': {
+                        'type': 'integer',
+                        'description': 'Entity ID for log_call',
+                    },
+                    'phone': {
+                        'type': 'string',
+                        'description': 'Phone number',
+                    },
+                    'duration': {
+                        'type': 'integer',
+                        'description': 'Call duration in seconds',
+                    },
+                    'direction': {
+                        'type': 'string',
+                        'enum': ['inbound', 'outbound'],
+                        'description': 'Call direction',
+                    },
+                    'result': {
+                        'type': 'string',
+                        'description': 'Call result/notes',
+                    },
+                    'days': {
+                        'type': 'integer',
+                        'description': 'Days for stats (default 30)',
+                        'default': 30,
+                    },
+                },
+                'required': ['action'],
+            },
+        },
+    },
 ]
 
 SYSTEM_PROMPT = """Ты - AI-ассистент для ПОЛНОГО управления CRM Kommo.
@@ -724,27 +856,30 @@ SYSTEM_PROMPT = """Ты - AI-ассистент для ПОЛНОГО управ
 🏷️ ТЕГИ: kommo_tags (list, add, remove, search_by_tag)
 📝 ПОЛЯ: kommo_custom_fields (list, get_values, set_value)
 🎯 ИСТОЧНИКИ: kommo_sources (list, create, analytics)
+🏢 КОМПАНИИ: kommo_companies (list, get, create, update, get_contacts, get_leads, link_contact)
+🔍 ДУБЛИКАТЫ: kommo_duplicates (find_contacts, find_companies, merge_contacts)
+🔗 СВЯЗИ: kommo_links (get, link, unlink)
 
-🏢 КОМПАНИИ (kommo_companies):
-- list: список компаний (query, limit)
-- get: детали компании (company_id)
-- create: создать компанию (name, fields)
-- update: обновить (company_id, fields)
-- get_contacts: контакты компании (company_id)
-- get_leads: сделки компании (company_id)
-- link_contact: привязать контакт (company_id, contact_id)
+📦 КАТАЛОГИ (kommo_catalogs):
+- list_catalogs: список каталогов
+- get_catalog: детали каталога (catalog_id)
+- list_elements: элементы каталога (catalog_id, query)
+- get_element: детали элемента (catalog_id, element_id)
+- create_element: создать элемент (catalog_id, name, price)
+- link_to_lead: привязать к сделке (lead_id, catalog_id, element_id, quantity)
 
-🔍 ДУБЛИКАТЫ (kommo_duplicates):
-- find_contacts: найти дубликаты контактов
-- find_companies: найти дубликаты компаний
-- merge_contacts: объединить контакты (primary_id, duplicate_id)
+📅 СОБЫТИЯ (kommo_events):
+- list: последние события (limit)
+- by_entity: события сущности (entity_type, entity_id)
+- by_type: события по типу (event_type)
+- stats: статистика событий
 
-🔗 СВЯЗИ (kommo_links):
-- get: получить связи (entity_type, entity_id)
-- link: создать связь (entity_type, entity_id, to_entity_type, to_entity_id)
-- unlink: удалить связь
+📞 ЗВОНКИ (kommo_calls):
+- list: список звонков
+- log_call: записать звонок (entity_type, entity_id, phone, duration, direction, result)
+- stats: статистика звонков (days)
 
-ФОРМАТИРОВАНИЕ: <b>жирный</b>, <code>ID</code>, эмодзи ✅❌📊📈💰👤🏢📋🔧⚡🏷️🔗
+ФОРМАТИРОВАНИЕ: <b>жирный</b>, <code>ID</code>, эмодзи ✅❌📊📈💰👤🏢📋🔧⚡🏷️🔗📦📞
 """
 
 
@@ -1040,6 +1175,15 @@ class AIChat:
         
         elif name == 'kommo_links':
             return await self._handle_links(session, headers, args)
+        
+        elif name == 'kommo_catalogs':
+            return await self._handle_catalogs(session, headers, args)
+        
+        elif name == 'kommo_events':
+            return await self._handle_events(session, headers, args)
+        
+        elif name == 'kommo_calls':
+            return await self._handle_calls(session, headers, args)
         
         # Default - return info about available tools
         return {'message': f'Tool {name} not fully implemented yet', 'args': args}
@@ -2846,3 +2990,331 @@ class AIChat:
                 return {'error': f'Failed to remove link: {error[:200]}'}
         
         return {'error': f'Unknown links action: {action}'}
+    
+    async def _handle_catalogs(self, session, headers, args: dict) -> dict:
+        """Handle product catalogs management."""
+        action = args.get('action')
+        catalog_id = args.get('catalog_id')
+        element_id = args.get('element_id')
+        lead_id = args.get('lead_id')
+        name = args.get('name')
+        price = args.get('price')
+        quantity = args.get('quantity', 1)
+        query = args.get('query')
+        
+        if action == 'list_catalogs':
+            url = f'{self.kommo_base_url}/api/v4/catalogs'
+            async with session.get(url, headers=headers) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    catalogs = data.get('_embedded', {}).get('catalogs', [])
+                    return {
+                        'catalogs': [
+                            {'id': c.get('id'), 'name': c.get('name'), 'type': c.get('type')}
+                            for c in catalogs
+                        ],
+                        'total': len(catalogs),
+                    }
+                return {'error': f'API error: {resp.status}'}
+        
+        elif action == 'get_catalog':
+            if not catalog_id:
+                return {'error': 'catalog_id is required'}
+            
+            url = f'{self.kommo_base_url}/api/v4/catalogs/{catalog_id}'
+            async with session.get(url, headers=headers) as resp:
+                if resp.status == 200:
+                    catalog = await resp.json()
+                    return {
+                        'id': catalog.get('id'),
+                        'name': catalog.get('name'),
+                        'type': catalog.get('type'),
+                        'can_add_elements': catalog.get('can_add_elements'),
+                    }
+                return {'error': f'Catalog not found: {resp.status}'}
+        
+        elif action == 'list_elements':
+            if not catalog_id:
+                return {'error': 'catalog_id is required'}
+            
+            url = f'{self.kommo_base_url}/api/v4/catalogs/{catalog_id}/elements'
+            params = {'limit': 50}
+            if query:
+                params['query'] = query
+            
+            async with session.get(url, headers=headers, params=params) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    elements = data.get('_embedded', {}).get('elements', [])
+                    return {
+                        'catalog_id': catalog_id,
+                        'elements': [
+                            {
+                                'id': e.get('id'),
+                                'name': e.get('name'),
+                                'custom_fields': e.get('custom_fields_values', []),
+                            }
+                            for e in elements
+                        ],
+                        'total': len(elements),
+                    }
+                return {'error': f'API error: {resp.status}'}
+        
+        elif action == 'get_element':
+            if not catalog_id or not element_id:
+                return {'error': 'catalog_id and element_id are required'}
+            
+            url = f'{self.kommo_base_url}/api/v4/catalogs/{catalog_id}/elements/{element_id}'
+            async with session.get(url, headers=headers) as resp:
+                if resp.status == 200:
+                    element = await resp.json()
+                    return {
+                        'id': element.get('id'),
+                        'name': element.get('name'),
+                        'custom_fields': element.get('custom_fields_values', []),
+                    }
+                return {'error': f'Element not found: {resp.status}'}
+        
+        elif action == 'create_element':
+            if not catalog_id or not name:
+                return {'error': 'catalog_id and name are required'}
+            
+            url = f'{self.kommo_base_url}/api/v4/catalogs/{catalog_id}/elements'
+            payload = [{'name': name}]
+            if price:
+                payload[0]['custom_fields_values'] = [
+                    {'field_code': 'PRICE', 'values': [{'value': price}]}
+                ]
+            
+            async with session.post(url, headers=headers, json=payload) as resp:
+                if resp.status in [200, 201]:
+                    data = await resp.json()
+                    elements = data.get('_embedded', {}).get('elements', [])
+                    if elements:
+                        return {'success': True, 'element_id': elements[0].get('id'), 'name': name}
+                error = await resp.text()
+                return {'error': f'Failed to create element: {error[:200]}'}
+        
+        elif action == 'link_to_lead':
+            if not lead_id or not catalog_id or not element_id:
+                return {'error': 'lead_id, catalog_id, and element_id are required'}
+            
+            url = f'{self.kommo_base_url}/api/v4/leads/{lead_id}/link'
+            payload = [{
+                'to_entity_id': element_id,
+                'to_entity_type': 'catalog_elements',
+                'metadata': {'catalog_id': catalog_id, 'quantity': quantity},
+            }]
+            
+            async with session.post(url, headers=headers, json=payload) as resp:
+                if resp.status in [200, 201]:
+                    return {'success': True, 'lead_id': lead_id, 'element_id': element_id, 'quantity': quantity}
+                error = await resp.text()
+                return {'error': f'Failed to link element: {error[:200]}'}
+        
+        return {'error': f'Unknown catalogs action: {action}'}
+    
+    async def _handle_events(self, session, headers, args: dict) -> dict:
+        """Handle CRM events."""
+        action = args.get('action')
+        entity_type = args.get('entity_type')
+        entity_id = args.get('entity_id')
+        event_type = args.get('event_type')
+        limit = args.get('limit', 50)
+        
+        if action == 'list':
+            url = f'{self.kommo_base_url}/api/v4/events'
+            params = {'limit': limit}
+            
+            async with session.get(url, headers=headers, params=params) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    events = data.get('_embedded', {}).get('events', [])
+                    return {
+                        'events': [
+                            {
+                                'id': e.get('id'),
+                                'type': e.get('type'),
+                                'entity_type': e.get('entity_type'),
+                                'entity_id': e.get('entity_id'),
+                                'created_by': e.get('created_by'),
+                                'created_at': e.get('created_at'),
+                            }
+                            for e in events
+                        ],
+                        'total': len(events),
+                    }
+                return {'error': f'API error: {resp.status}'}
+        
+        elif action == 'by_entity':
+            if not entity_type or not entity_id:
+                return {'error': 'entity_type and entity_id are required'}
+            
+            url = f'{self.kommo_base_url}/api/v4/events'
+            params = {
+                'limit': limit,
+                'filter[entity]': entity_type,
+                'filter[entity_id]': entity_id,
+            }
+            
+            async with session.get(url, headers=headers, params=params) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    events = data.get('_embedded', {}).get('events', [])
+                    return {
+                        'entity_type': entity_type,
+                        'entity_id': entity_id,
+                        'events': [
+                            {'id': e.get('id'), 'type': e.get('type'), 'created_at': e.get('created_at')}
+                            for e in events
+                        ],
+                        'total': len(events),
+                    }
+                return {'error': f'API error: {resp.status}'}
+        
+        elif action == 'by_type':
+            if not event_type:
+                return {'error': 'event_type is required'}
+            
+            url = f'{self.kommo_base_url}/api/v4/events'
+            params = {'limit': limit, 'filter[type]': event_type}
+            
+            async with session.get(url, headers=headers, params=params) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    events = data.get('_embedded', {}).get('events', [])
+                    return {
+                        'event_type': event_type,
+                        'events': [
+                            {
+                                'id': e.get('id'),
+                                'entity_type': e.get('entity_type'),
+                                'entity_id': e.get('entity_id'),
+                                'created_at': e.get('created_at'),
+                            }
+                            for e in events
+                        ],
+                        'total': len(events),
+                    }
+                return {'error': f'API error: {resp.status}'}
+        
+        elif action == 'stats':
+            url = f'{self.kommo_base_url}/api/v4/events'
+            params = {'limit': 250}
+            
+            async with session.get(url, headers=headers, params=params) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    events = data.get('_embedded', {}).get('events', [])
+                    
+                    # Count by type
+                    by_type = {}
+                    for e in events:
+                        t = e.get('type', 'unknown')
+                        by_type[t] = by_type.get(t, 0) + 1
+                    
+                    return {
+                        'total_events': len(events),
+                        'by_type': by_type,
+                    }
+                return {'error': f'API error: {resp.status}'}
+        
+        return {'error': f'Unknown events action: {action}'}
+    
+    async def _handle_calls(self, session, headers, args: dict) -> dict:
+        """Handle call records."""
+        action = args.get('action')
+        entity_type = args.get('entity_type', 'contacts')
+        entity_id = args.get('entity_id')
+        phone = args.get('phone')
+        duration = args.get('duration', 0)
+        direction = args.get('direction', 'outbound')
+        result = args.get('result', '')
+        days = args.get('days', 30)
+        
+        if action == 'list':
+            # Get recent call events
+            url = f'{self.kommo_base_url}/api/v4/events'
+            params = {'limit': 50, 'filter[type]': 'outgoing_call,incoming_call'}
+            
+            async with session.get(url, headers=headers, params=params) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    events = data.get('_embedded', {}).get('events', [])
+                    return {
+                        'calls': [
+                            {
+                                'id': e.get('id'),
+                                'type': e.get('type'),
+                                'entity_type': e.get('entity_type'),
+                                'entity_id': e.get('entity_id'),
+                                'created_at': e.get('created_at'),
+                            }
+                            for e in events
+                        ],
+                        'total': len(events),
+                    }
+                return {'error': f'API error: {resp.status}'}
+        
+        elif action == 'log_call':
+            if not entity_id:
+                return {'error': 'entity_id is required'}
+            
+            # Log call as a note with call type
+            import time
+            url = f'{self.kommo_base_url}/api/v4/{entity_type}/{entity_id}/notes'
+            note_type = 'call_in' if direction == 'inbound' else 'call_out'
+            payload = [{
+                'note_type': note_type,
+                'params': {
+                    'uniq': str(int(time.time())),
+                    'duration': duration,
+                    'source': 'telegram_bot',
+                    'phone': phone or '',
+                },
+                'text': result,
+            }]
+            
+            async with session.post(url, headers=headers, json=payload) as resp:
+                if resp.status in [200, 201]:
+                    data = await resp.json()
+                    notes = data.get('_embedded', {}).get('notes', [])
+                    if notes:
+                        return {
+                            'success': True,
+                            'note_id': notes[0].get('id'),
+                            'entity_id': entity_id,
+                            'direction': direction,
+                            'duration': duration,
+                        }
+                error = await resp.text()
+                return {'error': f'Failed to log call: {error[:200]}'}
+        
+        elif action == 'stats':
+            import time
+            # Get call events for stats
+            url = f'{self.kommo_base_url}/api/v4/events'
+            since = int(time.time()) - (days * 86400)
+            params = {
+                'limit': 250,
+                'filter[type]': 'outgoing_call,incoming_call',
+                'filter[created_at][from]': since,
+            }
+            
+            async with session.get(url, headers=headers, params=params) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    events = data.get('_embedded', {}).get('events', [])
+                    
+                    incoming = sum(1 for e in events if 'incoming' in e.get('type', ''))
+                    outgoing = sum(1 for e in events if 'outgoing' in e.get('type', ''))
+                    
+                    return {
+                        'period_days': days,
+                        'total_calls': len(events),
+                        'incoming': incoming,
+                        'outgoing': outgoing,
+                    }
+                return {'error': f'API error: {resp.status}'}
+        
+        return {'error': f'Unknown calls action: {action}'}
