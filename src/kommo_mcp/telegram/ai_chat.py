@@ -925,6 +925,10 @@ SYSTEM_PROMPT = """Ты - AI-ассистент для ПОЛНОГО управ
 class AIChat:
     """AI Chat with OpenAI and direct Kommo API integration."""
     
+    # Conversation history per user (user_id -> list of messages)
+    _conversation_history: Dict[str, List[Dict]] = {}
+    _max_history_messages = 20  # Keep last N messages per user
+    
     def __init__(
         self,
         openai_api_key: str,
@@ -938,12 +942,32 @@ class AIChat:
         self.model = model
         self.kommo_base_url = f'https://{kommo_domain}'
     
-    async def chat(self, message: str, use_rag: bool = True) -> str:
+    def _get_history(self, user_id: str) -> List[Dict]:
+        """Get conversation history for user."""
+        if user_id not in self._conversation_history:
+            self._conversation_history[user_id] = []
+        return self._conversation_history[user_id]
+    
+    def _add_to_history(self, user_id: str, role: str, content: str):
+        """Add message to user's conversation history."""
+        history = self._get_history(user_id)
+        history.append({'role': role, 'content': content})
+        # Trim old messages
+        if len(history) > self._max_history_messages:
+            self._conversation_history[user_id] = history[-self._max_history_messages:]
+    
+    def clear_history(self, user_id: str):
+        """Clear conversation history for user."""
+        if user_id in self._conversation_history:
+            del self._conversation_history[user_id]
+    
+    async def chat(self, message: str, use_rag: bool = True, user_id: str = 'default') -> str:
         """Process user message with iterative tool calls for complex setup.
         
         Args:
             message: User message
             use_rag: If True, use RAG-based dynamic prompt. If False, use full static prompt.
+            user_id: User identifier for conversation history
         """
         try:
             # Build dynamic prompt based on user query using RAG
@@ -954,10 +978,16 @@ class AIChat:
             else:
                 dynamic_prompt = SYSTEM_PROMPT
             
+            # Get conversation history and build messages
+            history = self._get_history(user_id)
             messages = [
                 {'role': 'system', 'content': dynamic_prompt},
-                {'role': 'user', 'content': message},
             ]
+            # Add recent history (only user/assistant messages, not tool calls)
+            for msg in history[-10:]:  # Last 10 messages for context
+                messages.append(msg)
+            # Add current message
+            messages.append({'role': 'user', 'content': message})
             
             max_iterations = 20  # Limit iterations for safety
             all_results = []
@@ -967,7 +997,11 @@ class AIChat:
                 
                 # If no tool calls, we're done
                 if not response.get('tool_calls'):
-                    return response.get('content', 'Не удалось получить ответ')
+                    assistant_response = response.get('content', 'Не удалось получить ответ')
+                    # Save to history
+                    self._add_to_history(user_id, 'user', message)
+                    self._add_to_history(user_id, 'assistant', assistant_response)
+                    return assistant_response
                 
                 # Execute all tool calls
                 tool_results = await self._execute_tool_calls(response['tool_calls'])
@@ -992,7 +1026,11 @@ class AIChat:
             
             # If we hit max iterations, get final summary
             final_response = await self._openai_request(messages=messages)
-            return final_response.get('content', 'Настройка завершена')
+            assistant_response = final_response.get('content', 'Настройка завершена')
+            # Save to history
+            self._add_to_history(user_id, 'user', message)
+            self._add_to_history(user_id, 'assistant', assistant_response)
+            return assistant_response
         
         except Exception as e:
             logger.error(f'Chat error: {e}')

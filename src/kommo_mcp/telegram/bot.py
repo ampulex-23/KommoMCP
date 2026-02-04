@@ -368,8 +368,8 @@ class KommoBot:
             
             await message.answer('🤔 Думаю...')
             
-            # Process with AI
-            response = await self._process_ai_request(tenant, question)
+            # Process with AI (pass user_id for conversation history)
+            response = await self._process_ai_request(tenant, question, user_id=message.from_user.id)
             
             # Send with HTML parse mode for rich formatting
             try:
@@ -403,7 +403,8 @@ class KommoBot:
             
             await message.answer('🤔 Думаю...')
             
-            response = await self._process_ai_request(tenant, message.text)
+            # Process with AI (pass user_id for conversation history)
+            response = await self._process_ai_request(tenant, message.text, user_id=message.from_user.id)
             
             # Send with HTML parse mode for rich formatting
             try:
@@ -457,7 +458,7 @@ class KommoBot:
             logger.error(f'OpenAI validation error: {e}')
             return False
     
-    async def _process_ai_request(self, tenant, question: str) -> str:
+    async def _process_ai_request(self, tenant, question: str, user_id: int = None) -> str:
         """Process AI request using OpenAI and direct Kommo API."""
         try:
             from kommo_mcp.telegram.ai_chat import AIChat
@@ -468,7 +469,8 @@ class KommoBot:
                 kommo_token=tenant.kommo_access_token,
             )
             
-            response = await ai.chat(question)
+            # Pass user_id for conversation history
+            response = await ai.chat(question, user_id=str(user_id or tenant.telegram_id))
             return response
         except Exception as e:
             logger.error(f'AI request error: {e}')
