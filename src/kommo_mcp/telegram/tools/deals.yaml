@@ -1,0 +1,90 @@
+name: kommo_deals_ext
+category: deals
+keywords:
+  - сделка
+  - сделки
+  - лид
+  - лиды
+  - deal
+  - lead
+  - продажа
+  - заказ
+  - клиент
+  - покупатель
+description: |
+  Расширенная работа со сделками: поиск, фильтрация, детали.
+actions:
+  - action: list - список сделок
+  - action: get - детали сделки по ID
+  - action: search - поиск по имени/телефону
+  - pipeline_id: фильтр по воронке
+  - status_id: фильтр по этапу
+  - responsible_user_id: фильтр по менеджеру
+examples:
+  - query: "Покажи все сделки"
+  - query: "Найди сделку Иванов"
+  - query: "Сделки на этапе переговоры"
+  - query: "Мои открытые сделки"
+response_format: |
+  Возвращает: deals (id, name, price, status, responsible)
+
+---
+name: kommo_entity_actions
+category: deals
+keywords:
+  - заметка
+  - примечание
+  - задача
+  - переместить
+  - перенести
+  - этап
+  - связать
+  - история
+  - комментарий
+  - note
+  - task
+  - move
+description: |
+  Действия с сущностями: заметки, задачи, перемещение, связывание.
+actions:
+  - action: add_note - добавить заметку
+  - action: create_task - создать задачу
+  - action: move_lead - переместить сделку на этап
+  - action: link - связать сущности
+  - action: get_history - история изменений
+  - entity_type: leads/contacts/companies
+  - entity_id: ID сущности
+  - text: текст заметки/задачи
+  - pipeline_id, status_id: для перемещения
+examples:
+  - query: "Добавь заметку к сделке 123"
+  - query: "Создай задачу позвонить клиенту"
+  - query: "Перенеси сделку на этап Переговоры"
+  - query: "Покажи историю сделки"
+response_format: |
+  Возвращает: success, created_id или history
+
+---
+name: kommo_search
+category: deals
+keywords:
+  - найти
+  - поиск
+  - искать
+  - search
+  - где
+  - телефон
+  - email
+  - имя
+  - контакт
+description: |
+  Универсальный поиск по CRM: сделки, контакты, компании.
+actions:
+  - query: поисковый запрос
+  - entity_type: leads/contacts/companies (опционально)
+examples:
+  - query: "Найди клиента по телефону +7999"
+  - query: "Поиск сделки Рога и Копыта"
+  - query: "Где контакт Петров"
+response_format: |
+  Возвращает: results (тип, id, name, details)

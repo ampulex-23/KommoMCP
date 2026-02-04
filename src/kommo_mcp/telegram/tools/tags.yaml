@@ -1,0 +1,82 @@
+name: kommo_tags
+category: tags
+keywords:
+  - тег
+  - tag
+  - метка
+  - пометить
+  - отметить
+  - категория
+  - группировка
+description: |
+  Управление тегами: список, добавление, удаление, поиск по тегу.
+actions:
+  - action: list - список тегов
+  - action: add - добавить тег к сущности
+  - action: remove - удалить тег
+  - action: search_by_tag - найти сущности по тегу
+  - entity_type: leads/contacts/companies
+  - entity_id: ID сущности
+  - tag_name: название тега
+examples:
+  - query: "Покажи все теги"
+  - query: "Добавь тег VIP к сделке 123"
+  - query: "Найди все сделки с тегом Горячий"
+  - query: "Удали тег из контакта"
+response_format: |
+  Возвращает: tags (список) или entities (найденные по тегу)
+
+---
+name: kommo_custom_fields
+category: tags
+keywords:
+  - поле
+  - field
+  - кастомное
+  - дополнительное
+  - значение поля
+  - установить поле
+  - атрибут
+description: |
+  Работа с кастомными полями: список, получение и установка значений.
+actions:
+  - action: list - список полей
+  - action: get_values - значения полей сущности
+  - action: set_value - установить значение
+  - entity_type: leads/contacts/companies
+  - entity_id: ID сущности
+  - field_id: ID поля
+  - value: новое значение
+examples:
+  - query: "Покажи поля сделок"
+  - query: "Какие поля у контакта 123"
+  - query: "Установи поле Бюджет = 100000"
+response_format: |
+  Возвращает: fields (список) или success
+
+---
+name: kommo_sources
+category: tags
+keywords:
+  - источник
+  - source
+  - откуда пришёл
+  - канал
+  - лидген
+  - utm
+  - реклама
+description: |
+  Управление источниками лидов: список, создание, аналитика.
+actions:
+  - action: list - список источников
+  - action: create - создать источник
+  - action: analytics - аналитика по источникам
+  - pipeline_id: ID воронки
+  - source_name: название источника
+examples:
+  - query: "Покажи источники лидов"
+  - query: "Откуда приходят клиенты"
+  - query: "Создай источник Telegram"
+  - query: "Аналитика по источникам"
+response_format: |
+  Возвращает: sources (список) или analytics (статистика)

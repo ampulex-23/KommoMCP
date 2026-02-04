@@ -1,0 +1,60 @@
+name: kommo_users
+category: users
+keywords:
+  - пользователь
+  - менеджер
+  - сотрудник
+  - user
+  - команда
+  - кто работает
+  - нагрузка
+  - загрузка
+  - активность
+description: |
+  Управление пользователями CRM: список, нагрузка, активность.
+actions:
+  - action: list - список пользователей
+  - action: get - детали пользователя
+  - action: workload - нагрузка (открытые сделки, задачи)
+  - action: activity - активность за период
+  - user_id: ID пользователя
+  - days: период для activity
+examples:
+  - query: "Покажи всех менеджеров"
+  - query: "Нагрузка менеджера Иванова"
+  - query: "Кто самый активный"
+  - query: "Сколько сделок у каждого"
+response_format: |
+  Возвращает: users (id, name, email, role) или workload/activity stats
+
+---
+name: kommo_reports
+category: users
+keywords:
+  - отчёт
+  - report
+  - сводка
+  - итоги
+  - результаты
+  - продажи
+  - просроченные
+  - зависшие
+  - топ сделки
+description: |
+  Генерация отчётов: продажи, воронка, менеджеры, задачи.
+actions:
+  - action: sales_summary - сводка продаж
+  - action: pipeline_report - отчёт по воронке
+  - action: manager_report - отчёт по менеджеру
+  - action: overdue_tasks - просроченные задачи
+  - action: stale_deals - зависшие сделки
+  - action: top_deals - топ сделок по сумме
+  - days: период
+  - limit: количество записей
+examples:
+  - query: "Отчёт по продажам за неделю"
+  - query: "Покажи просроченные задачи"
+  - query: "Зависшие сделки"
+  - query: "Топ-10 сделок"
+response_format: |
+  Возвращает: структурированный отчёт по запрошенному типу

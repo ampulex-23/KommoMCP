@@ -1,0 +1,25 @@
+name: kommo_webhooks
+category: webhooks
+keywords:
+  - вебхук
+  - webhook
+  - уведомление
+  - триггер
+  - интеграция
+  - callback
+  - автоматизация
+description: |
+  Управление вебхуками для интеграций.
+actions:
+  - action: list - список вебхуков
+  - action: create - создать вебхук
+  - action: delete - удалить вебхук
+  - destination: URL для отправки
+  - events: типы событий (lead_added, lead_status_changed, etc)
+  - webhook_id: ID вебхука для удаления
+examples:
+  - query: "Покажи вебхуки"
+  - query: "Создай вебхук на создание сделки"
+  - query: "Удали вебхук 123"
+response_format: |
+  Возвращает: webhooks (список) или success

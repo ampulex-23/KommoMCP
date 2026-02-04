@@ -1,5 +1,6 @@
 """
 AI Chat module - integrates OpenAI with MCP tools.
+Uses RAG-based tool retrieval for dynamic prompt generation.
 """
 
 import json
@@ -7,6 +8,8 @@ import logging
 from typing import Optional, List, Dict, Any
 
 import aiohttp
+
+from kommo_mcp.telegram.tool_retriever import get_retriever, build_dynamic_prompt
 
 logger = logging.getLogger(__name__)
 
@@ -899,11 +902,24 @@ class AIChat:
         self.model = model
         self.kommo_base_url = f'https://{kommo_domain}'
     
-    async def chat(self, message: str) -> str:
-        """Process user message with iterative tool calls for complex setup."""
+    async def chat(self, message: str, use_rag: bool = True) -> str:
+        """Process user message with iterative tool calls for complex setup.
+        
+        Args:
+            message: User message
+            use_rag: If True, use RAG-based dynamic prompt. If False, use full static prompt.
+        """
         try:
+            # Build dynamic prompt based on user query using RAG
+            if use_rag:
+                retriever = get_retriever()
+                dynamic_prompt = build_dynamic_prompt(message, retriever, top_k=5)
+                logger.info(f'RAG: retrieved tools for query, prompt size: {len(dynamic_prompt)} chars')
+            else:
+                dynamic_prompt = SYSTEM_PROMPT
+            
             messages = [
-                {'role': 'system', 'content': SYSTEM_PROMPT},
+                {'role': 'system', 'content': dynamic_prompt},
                 {'role': 'user', 'content': message},
             ]
             

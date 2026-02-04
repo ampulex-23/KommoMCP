@@ -1,0 +1,95 @@
+name: kommo_pipeline_analytics
+category: analytics
+keywords:
+  - воронка
+  - конверсия
+  - аналитика
+  - статистика
+  - этапы
+  - pipeline
+  - funnel
+  - стадии
+  - сколько сделок
+  - эффективность
+description: |
+  Аналитика воронки продаж: конверсия по этапам, количество сделок, суммы.
+actions:
+  - pipeline_id: ID воронки (опционально, по умолчанию - основная)
+  - days: период в днях (по умолчанию 30)
+examples:
+  - query: "Покажи аналитику воронки"
+  - query: "Конверсия по этапам"
+  - query: "Сколько сделок на каждом этапе"
+  - query: "Статистика продаж за месяц"
+response_format: |
+  Возвращает: stages (этапы с количеством и суммами), conversion (конверсия), total_deals
+
+---
+name: kommo_manager_stats
+category: analytics
+keywords:
+  - менеджер
+  - сотрудник
+  - эффективность
+  - KPI
+  - производительность
+  - кто лучше
+  - рейтинг
+  - сравнение менеджеров
+description: |
+  Статистика по менеджерам: количество сделок, суммы, конверсия каждого.
+actions:
+  - days: период в днях
+  - user_id: ID конкретного менеджера (опционально)
+examples:
+  - query: "Статистика менеджеров"
+  - query: "Кто лучший продавец"
+  - query: "Эффективность сотрудников"
+  - query: "KPI менеджера Иванова"
+response_format: |
+  Возвращает: managers (список с deals_count, won_sum, conversion)
+
+---
+name: kommo_sales_forecast
+category: analytics
+keywords:
+  - прогноз
+  - forecast
+  - план
+  - ожидания
+  - будет продаж
+  - предсказание
+  - сколько закроем
+description: |
+  Прогноз продаж на основе текущих сделок и исторических данных.
+actions:
+  - days: период прогноза
+examples:
+  - query: "Прогноз продаж на месяц"
+  - query: "Сколько закроем в этом месяце"
+  - query: "Ожидаемая выручка"
+response_format: |
+  Возвращает: forecast_sum, probability, based_on_deals
+
+---
+name: kommo_funnel_analysis
+category: analytics
+keywords:
+  - воронка
+  - funnel
+  - потери
+  - где теряем
+  - узкое место
+  - bottleneck
+  - проблемный этап
+description: |
+  Глубокий анализ воронки: где теряются сделки, узкие места.
+actions:
+  - pipeline_id: ID воронки
+  - days: период анализа
+examples:
+  - query: "Где теряем клиентов"
+  - query: "Узкие места воронки"
+  - query: "Анализ потерь"
+response_format: |
+  Возвращает: bottlenecks, drop_rates, recommendations

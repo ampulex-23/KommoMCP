@@ -1,0 +1,60 @@
+name: kommo_setup
+category: setup
+keywords:
+  - воронка
+  - создать воронку
+  - этап
+  - создать этап
+  - поле
+  - кастомное поле
+  - настройка
+  - шаблон
+  - template
+  - pipeline
+  - stage
+  - field
+description: |
+  Настройка структуры CRM: создание воронок, этапов, полей, источников.
+actions:
+  - action: templates - список шаблонов воронок
+  - action: apply_template - применить шаблон
+  - action: create_pipeline - создать воронку
+  - action: create_stage - создать этап
+  - action: create_field - создать кастомное поле
+  - action: create_source - создать источник
+  - dry_run: true/false - режим предпросмотра
+examples:
+  - query: "Создай воронку для недвижимости"
+  - query: "Добавь этап Переговоры в воронку"
+  - query: "Создай поле Бюджет для сделок"
+  - query: "Покажи шаблоны воронок"
+response_format: |
+  Возвращает: success, created_id, dry_run preview
+
+---
+name: kommo_bulk_actions
+category: setup
+keywords:
+  - массово
+  - все сделки
+  - bulk
+  - групповое
+  - перенести все
+  - назначить всем
+  - обновить все
+  - тег всем
+description: |
+  Массовые операции: перемещение, назначение, теги для множества сущностей.
+actions:
+  - action: mass_move - переместить сделки
+  - action: mass_tag - добавить тег
+  - action: mass_assign - назначить ответственного
+  - action: mass_update - обновить поля
+  - filter: условия фильтрации
+  - entity_ids: список ID (опционально)
+examples:
+  - query: "Перенеси все сделки с этапа А на этап Б"
+  - query: "Добавь тег VIP всем клиентам с суммой > 100000"
+  - query: "Назначь менеджера Иванова на все новые сделки"
+response_format: |
+  Возвращает: affected_count, success

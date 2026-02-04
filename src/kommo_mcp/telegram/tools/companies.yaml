@@ -1,0 +1,86 @@
+name: kommo_companies
+category: companies
+keywords:
+  - компания
+  - организация
+  - company
+  - юрлицо
+  - фирма
+  - контрагент
+  - b2b
+description: |
+  Управление компаниями: список, создание, обновление, связи.
+actions:
+  - action: list - список компаний
+  - action: get - детали компании
+  - action: create - создать компанию
+  - action: update - обновить компанию
+  - action: get_contacts - контакты компании
+  - action: get_leads - сделки компании
+  - action: link_contact - привязать контакт
+  - company_id: ID компании
+  - name: название
+  - contact_id: ID контакта для привязки
+examples:
+  - query: "Покажи все компании"
+  - query: "Создай компанию ООО Рога и Копыта"
+  - query: "Контакты компании 123"
+  - query: "Сделки компании"
+response_format: |
+  Возвращает: companies (список) или company details
+
+---
+name: kommo_duplicates
+category: companies
+keywords:
+  - дубликат
+  - duplicate
+  - повтор
+  - одинаковые
+  - объединить
+  - merge
+  - слить
+  - дедупликация
+description: |
+  Поиск и объединение дубликатов контактов и компаний.
+actions:
+  - action: find_contacts - найти дубликаты контактов
+  - action: find_companies - найти дубликаты компаний
+  - action: merge_contacts - объединить контакты
+  - threshold: порог схожести (0.0-1.0)
+  - primary_id: основной контакт
+  - duplicate_id: дубликат для слияния
+examples:
+  - query: "Найди дубликаты контактов"
+  - query: "Есть ли повторяющиеся компании"
+  - query: "Объедини контакты 123 и 456"
+response_format: |
+  Возвращает: duplicates (пары с similarity) или merge result
+
+---
+name: kommo_links
+category: companies
+keywords:
+  - связь
+  - link
+  - привязать
+  - отвязать
+  - связать
+  - relationship
+  - соединить
+description: |
+  Управление связями между сущностями CRM.
+actions:
+  - action: get - получить связи сущности
+  - action: link - создать связь
+  - action: unlink - удалить связь
+  - entity_type: leads/contacts/companies
+  - entity_id: ID сущности
+  - to_entity_type: тип целевой сущности
+  - to_entity_id: ID целевой сущности
+examples:
+  - query: "Покажи связи сделки 123"
+  - query: "Свяжи сделку с контактом"
+  - query: "Отвяжи компанию от сделки"
+response_format: |
+  Возвращает: links (список связей) или success

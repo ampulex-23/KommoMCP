@@ -1,0 +1,97 @@
+name: kommo_catalogs
+category: catalogs
+keywords:
+  - каталог
+  - товар
+  - продукт
+  - услуга
+  - прайс
+  - catalog
+  - product
+  - элемент
+  - позиция
+description: |
+  Управление каталогами товаров и услуг.
+actions:
+  - action: list_catalogs - список каталогов
+  - action: get_catalog - детали каталога
+  - action: list_elements - элементы каталога
+  - action: get_element - детали элемента
+  - action: create_element - создать элемент
+  - action: link_to_lead - привязать к сделке
+  - catalog_id: ID каталога
+  - element_id: ID элемента
+  - lead_id: ID сделки
+  - name: название элемента
+  - price: цена
+  - quantity: количество
+examples:
+  - query: "Покажи каталоги товаров"
+  - query: "Товары из каталога Услуги"
+  - query: "Добавь товар Консультация за 5000"
+  - query: "Привяжи товар к сделке"
+response_format: |
+  Возвращает: catalogs/elements (список) или success
+
+---
+name: kommo_events
+category: catalogs
+keywords:
+  - событие
+  - event
+  - история
+  - изменение
+  - лог
+  - что произошло
+  - активность
+  - действия
+description: |
+  Просмотр и анализ событий CRM.
+actions:
+  - action: list - последние события
+  - action: by_entity - события сущности
+  - action: by_type - события по типу
+  - action: stats - статистика событий
+  - entity_type: lead/contact/company
+  - entity_id: ID сущности
+  - event_type: тип события
+  - limit: количество
+examples:
+  - query: "Покажи последние события"
+  - query: "Что происходило со сделкой 123"
+  - query: "События создания сделок"
+  - query: "Статистика событий"
+response_format: |
+  Возвращает: events (список) или stats
+
+---
+name: kommo_calls
+category: catalogs
+keywords:
+  - звонок
+  - call
+  - телефон
+  - позвонить
+  - входящий
+  - исходящий
+  - телефония
+description: |
+  Управление звонками и телефонией.
+actions:
+  - action: list - список звонков
+  - action: log_call - записать звонок
+  - action: stats - статистика звонков
+  - entity_type: leads/contacts
+  - entity_id: ID сущности
+  - phone: номер телефона
+  - duration: длительность в секундах
+  - direction: inbound/outbound
+  - result: результат звонка
+  - days: период для статистики
+examples:
+  - query: "Покажи звонки"
+  - query: "Запиши звонок клиенту"
+  - query: "Статистика звонков за месяц"
+  - query: "Сколько входящих звонков"
+response_format: |
+  Возвращает: calls (список) или stats
