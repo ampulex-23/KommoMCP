@@ -847,6 +847,33 @@ MCP_TOOLS = [
             },
         },
     },
+    {
+        'type': 'function',
+        'function': {
+            'name': 'kommo_cleanup',
+            'description': 'Clean up CRM data: delete leads, contacts, companies, or reset to default state',
+            'parameters': {
+                'type': 'object',
+                'properties': {
+                    'action': {
+                        'type': 'string',
+                        'enum': ['delete_leads', 'delete_contacts', 'delete_companies', 'delete_all', 'reset_pipelines', 'full_reset', 'preview'],
+                        'description': 'Action: delete specific entities, delete all data, reset pipelines, or full reset',
+                    },
+                    'confirm': {
+                        'type': 'boolean',
+                        'description': 'Must be true to execute destructive actions',
+                        'default': False,
+                    },
+                    'pipeline_id': {
+                        'type': 'integer',
+                        'description': 'Pipeline ID for reset_pipelines (optional, resets all if not specified)',
+                    },
+                },
+                'required': ['action', 'confirm'],
+            },
+        },
+    },
 ]
 
 SYSTEM_PROMPT = """Ты - AI-ассистент для ПОЛНОГО управления CRM Kommo.
@@ -882,7 +909,16 @@ SYSTEM_PROMPT = """Ты - AI-ассистент для ПОЛНОГО управ
 - log_call: записать звонок (entity_type, entity_id, phone, duration, direction, result)
 - stats: статистика звонков (days)
 
-ФОРМАТИРОВАНИЕ: <b>жирный</b>, <code>ID</code>, эмодзи ✅❌📊📈💰👤🏢📋🔧⚡🏷️🔗📦📞
+🗑️ ЗАЧИСТКА (kommo_cleanup):
+- preview: показать что будет удалено (без confirm)
+- delete_leads: удалить все сделки (confirm=true)
+- delete_contacts: удалить все контакты (confirm=true)
+- delete_companies: удалить все компании (confirm=true)
+- delete_all: удалить сделки+контакты+компании (confirm=true)
+- reset_pipelines: сбросить воронки к дефолту (confirm=true)
+- full_reset: полная зачистка + сброс воронок (confirm=true)
+
+ФОРМАТИРОВАНИЕ: <b>жирный</b>, <code>ID</code>, эмодзи ✅❌📊📈💰👤🏢📋🔧⚡🏷️🔗📦📞🗑️
 """
 
 
@@ -1200,6 +1236,9 @@ class AIChat:
         
         elif name == 'kommo_calls':
             return await self._handle_calls(session, headers, args)
+        
+        elif name == 'kommo_cleanup':
+            return await self._handle_cleanup(session, headers, args)
         
         # Default - return info about available tools
         return {'message': f'Tool {name} not fully implemented yet', 'args': args}
@@ -3334,3 +3373,180 @@ class AIChat:
                 return {'error': f'API error: {resp.status}'}
         
         return {'error': f'Unknown calls action: {action}'}
+    
+    async def _handle_cleanup(self, session, headers, args: dict) -> dict:
+        """Handle kommo_cleanup tool calls - delete data and reset CRM."""
+        action = args.get('action')
+        confirm = args.get('confirm', False)
+        
+        async def get_all_ids(entity_type: str) -> list:
+            """Get all entity IDs for deletion."""
+            ids = []
+            page = 1
+            while True:
+                url = f'{self.kommo_base_url}/api/v4/{entity_type}'
+                params = {'limit': 250, 'page': page}
+                async with session.get(url, headers=headers, params=params) as resp:
+                    if resp.status != 200:
+                        break
+                    data = await resp.json()
+                    entities = data.get('_embedded', {}).get(entity_type, [])
+                    if not entities:
+                        break
+                    ids.extend([e['id'] for e in entities])
+                    page += 1
+                    if len(entities) < 250:
+                        break
+            return ids
+        
+        async def delete_entities(entity_type: str, ids: list) -> dict:
+            """Delete entities by IDs."""
+            deleted = 0
+            errors = 0
+            for entity_id in ids:
+                url = f'{self.kommo_base_url}/api/v4/{entity_type}/{entity_id}'
+                async with session.delete(url, headers=headers) as resp:
+                    if resp.status in [200, 204]:
+                        deleted += 1
+                    else:
+                        errors += 1
+            return {'deleted': deleted, 'errors': errors}
+        
+        async def get_pipelines() -> list:
+            """Get all pipelines."""
+            url = f'{self.kommo_base_url}/api/v4/leads/pipelines'
+            async with session.get(url, headers=headers) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    return data.get('_embedded', {}).get('pipelines', [])
+            return []
+        
+        if action == 'preview':
+            # Show what will be deleted without actually deleting
+            leads = await get_all_ids('leads')
+            contacts = await get_all_ids('contacts')
+            companies = await get_all_ids('companies')
+            pipelines = await get_pipelines()
+            
+            return {
+                'preview': True,
+                'leads_count': len(leads),
+                'contacts_count': len(contacts),
+                'companies_count': len(companies),
+                'pipelines_count': len(pipelines),
+                'pipelines': [{'id': p['id'], 'name': p['name']} for p in pipelines],
+                'warning': 'Use confirm=true to execute deletion',
+            }
+        
+        if not confirm:
+            return {
+                'error': 'Destructive action requires confirm=true',
+                'action': action,
+                'hint': 'Set confirm=true to proceed with deletion',
+            }
+        
+        if action == 'delete_leads':
+            ids = await get_all_ids('leads')
+            result = await delete_entities('leads', ids)
+            return {
+                'action': 'delete_leads',
+                'total_found': len(ids),
+                **result,
+            }
+        
+        elif action == 'delete_contacts':
+            ids = await get_all_ids('contacts')
+            result = await delete_entities('contacts', ids)
+            return {
+                'action': 'delete_contacts',
+                'total_found': len(ids),
+                **result,
+            }
+        
+        elif action == 'delete_companies':
+            ids = await get_all_ids('companies')
+            result = await delete_entities('companies', ids)
+            return {
+                'action': 'delete_companies',
+                'total_found': len(ids),
+                **result,
+            }
+        
+        elif action == 'delete_all':
+            # Delete in order: leads first (they reference contacts/companies)
+            leads = await get_all_ids('leads')
+            leads_result = await delete_entities('leads', leads)
+            
+            contacts = await get_all_ids('contacts')
+            contacts_result = await delete_entities('contacts', contacts)
+            
+            companies = await get_all_ids('companies')
+            companies_result = await delete_entities('companies', companies)
+            
+            return {
+                'action': 'delete_all',
+                'leads': {'found': len(leads), **leads_result},
+                'contacts': {'found': len(contacts), **contacts_result},
+                'companies': {'found': len(companies), **companies_result},
+            }
+        
+        elif action == 'reset_pipelines':
+            # Delete all custom pipelines, keep only default
+            pipelines = await get_pipelines()
+            deleted_pipelines = 0
+            
+            for pipeline in pipelines:
+                if not pipeline.get('is_main', False):
+                    url = f'{self.kommo_base_url}/api/v4/leads/pipelines/{pipeline["id"]}'
+                    async with session.delete(url, headers=headers) as resp:
+                        if resp.status in [200, 204]:
+                            deleted_pipelines += 1
+            
+            return {
+                'action': 'reset_pipelines',
+                'pipelines_found': len(pipelines),
+                'pipelines_deleted': deleted_pipelines,
+                'note': 'Main pipeline preserved, custom pipelines deleted',
+            }
+        
+        elif action == 'full_reset':
+            # Full reset: delete all data + reset pipelines
+            results = {}
+            
+            # 1. Delete leads
+            leads = await get_all_ids('leads')
+            results['leads'] = await delete_entities('leads', leads)
+            results['leads']['found'] = len(leads)
+            
+            # 2. Delete contacts
+            contacts = await get_all_ids('contacts')
+            results['contacts'] = await delete_entities('contacts', contacts)
+            results['contacts']['found'] = len(contacts)
+            
+            # 3. Delete companies
+            companies = await get_all_ids('companies')
+            results['companies'] = await delete_entities('companies', companies)
+            results['companies']['found'] = len(companies)
+            
+            # 4. Reset pipelines
+            pipelines = await get_pipelines()
+            deleted_pipelines = 0
+            for pipeline in pipelines:
+                if not pipeline.get('is_main', False):
+                    url = f'{self.kommo_base_url}/api/v4/leads/pipelines/{pipeline["id"]}'
+                    async with session.delete(url, headers=headers) as resp:
+                        if resp.status in [200, 204]:
+                            deleted_pipelines += 1
+            
+            results['pipelines'] = {
+                'found': len(pipelines),
+                'deleted': deleted_pipelines,
+            }
+            
+            return {
+                'action': 'full_reset',
+                'success': True,
+                **results,
+            }
+        
+        return {'error': f'Unknown cleanup action: {action}'}

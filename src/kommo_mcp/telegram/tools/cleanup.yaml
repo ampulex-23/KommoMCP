@@ -1,0 +1,39 @@
+name: kommo_cleanup
+category: cleanup
+keywords:
+  - удалить
+  - удаление
+  - зачистка
+  - очистить
+  - сбросить
+  - reset
+  - delete
+  - clean
+  - wipe
+  - первозданный
+  - по умолчанию
+  - default
+  - все сделки
+  - все контакты
+  - все компании
+description: |
+  Зачистка CRM: удаление данных и сброс к первозданному состоянию.
+  ВНИМАНИЕ: Деструктивные операции требуют confirm=true.
+actions:
+  - action: preview - показать что будет удалено (без confirm)
+  - action: delete_leads - удалить все сделки (confirm=true)
+  - action: delete_contacts - удалить все контакты (confirm=true)
+  - action: delete_companies - удалить все компании (confirm=true)
+  - action: delete_all - удалить сделки+контакты+компании (confirm=true)
+  - action: reset_pipelines - сбросить воронки к дефолту (confirm=true)
+  - action: full_reset - полная зачистка + сброс воронок (confirm=true)
+  - confirm: true/false - подтверждение деструктивной операции
+examples:
+  - query: "Покажи что можно удалить"
+  - query: "Удали все сделки"
+  - query: "Зачисти CRM"
+  - query: "Верни CRM к первозданному виду"
+  - query: "Сбрось все воронки"
+  - query: "Полная зачистка CRM"
+response_format: |
+  Возвращает: preview (количество сущностей) или результат удаления (deleted, errors)
