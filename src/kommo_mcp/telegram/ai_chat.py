@@ -3375,42 +3375,110 @@ class AIChat:
         return {'error': f'Unknown calls action: {action}'}
     
     async def _handle_cleanup(self, session, headers, args: dict) -> dict:
-        """Handle kommo_cleanup tool calls - delete data and reset CRM."""
+        """Handle kommo_cleanup tool calls - delete data and reset CRM.
+        
+        Smart deletion: first unlinks all relationships, then deletes entities.
+        """
         action = args.get('action')
         confirm = args.get('confirm', False)
         
-        async def get_all_ids(entity_type: str) -> list:
-            """Get all entity IDs for deletion."""
-            ids = []
+        async def get_all_entities(entity_type: str) -> list:
+            """Get all entities with their data for deletion."""
+            entities = []
             page = 1
             while True:
                 url = f'{self.kommo_base_url}/api/v4/{entity_type}'
-                params = {'limit': 250, 'page': page}
+                params = {'limit': 250, 'page': page, 'with': 'contacts,companies,leads'}
                 async with session.get(url, headers=headers, params=params) as resp:
                     if resp.status != 200:
                         break
                     data = await resp.json()
-                    entities = data.get('_embedded', {}).get(entity_type, [])
-                    if not entities:
+                    items = data.get('_embedded', {}).get(entity_type, [])
+                    if not items:
                         break
-                    ids.extend([e['id'] for e in entities])
+                    entities.extend(items)
                     page += 1
-                    if len(entities) < 250:
+                    if len(items) < 250:
                         break
-            return ids
+            return entities
         
-        async def delete_entities(entity_type: str, ids: list) -> dict:
-            """Delete entities by IDs."""
-            deleted = 0
-            errors = 0
-            for entity_id in ids:
-                url = f'{self.kommo_base_url}/api/v4/{entity_type}/{entity_id}'
-                async with session.delete(url, headers=headers) as resp:
+        async def get_entity_links(entity_type: str, entity_id: int) -> list:
+            """Get all links for an entity."""
+            url = f'{self.kommo_base_url}/api/v4/{entity_type}/{entity_id}/links'
+            async with session.get(url, headers=headers) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    return data.get('_embedded', {}).get('links', [])
+            return []
+        
+        async def unlink_entity(entity_type: str, entity_id: int, links: list) -> int:
+            """Remove all links from an entity."""
+            if not links:
+                return 0
+            url = f'{self.kommo_base_url}/api/v4/{entity_type}/{entity_id}/unlink'
+            unlinked = 0
+            for link in links:
+                payload = [{
+                    'to_entity_type': link.get('to_entity_type'),
+                    'to_entity_id': link.get('to_entity_id'),
+                }]
+                async with session.post(url, headers=headers, json=payload) as resp:
                     if resp.status in [200, 204]:
-                        deleted += 1
+                        unlinked += 1
+            return unlinked
+        
+        async def delete_entity(entity_type: str, entity_id: int) -> bool:
+            """Delete a single entity."""
+            url = f'{self.kommo_base_url}/api/v4/{entity_type}/{entity_id}'
+            async with session.delete(url, headers=headers) as resp:
+                return resp.status in [200, 204]
+        
+        async def smart_delete_all(entity_type: str, entities: list) -> dict:
+            """Smart delete: unlink first, then delete, retry failed ones."""
+            total = len(entities)
+            unlinked_total = 0
+            deleted = 0
+            failed_ids = []
+            
+            # Phase 1: Unlink all entities
+            for entity in entities:
+                entity_id = entity['id']
+                links = await get_entity_links(entity_type, entity_id)
+                if links:
+                    unlinked_total += await unlink_entity(entity_type, entity_id, links)
+            
+            # Phase 2: Delete all entities
+            for entity in entities:
+                entity_id = entity['id']
+                if await delete_entity(entity_type, entity_id):
+                    deleted += 1
+                else:
+                    failed_ids.append(entity_id)
+            
+            # Phase 3: Retry failed deletions (links might be cleared now)
+            if failed_ids:
+                retry_deleted = 0
+                still_failed = []
+                for entity_id in failed_ids:
+                    # Try to unlink again
+                    links = await get_entity_links(entity_type, entity_id)
+                    if links:
+                        await unlink_entity(entity_type, entity_id, links)
+                    # Try delete again
+                    if await delete_entity(entity_type, entity_id):
+                        retry_deleted += 1
                     else:
-                        errors += 1
-            return {'deleted': deleted, 'errors': errors}
+                        still_failed.append(entity_id)
+                deleted += retry_deleted
+                failed_ids = still_failed
+            
+            return {
+                'found': total,
+                'unlinked': unlinked_total,
+                'deleted': deleted,
+                'errors': len(failed_ids),
+                'failed_ids': failed_ids[:10] if failed_ids else [],  # Show first 10
+            }
         
         async def get_pipelines() -> list:
             """Get all pipelines."""
@@ -3422,10 +3490,9 @@ class AIChat:
             return []
         
         if action == 'preview':
-            # Show what will be deleted without actually deleting
-            leads = await get_all_ids('leads')
-            contacts = await get_all_ids('contacts')
-            companies = await get_all_ids('companies')
+            leads = await get_all_entities('leads')
+            contacts = await get_all_entities('contacts')
+            companies = await get_all_entities('companies')
             pipelines = await get_pipelines()
             
             return {
@@ -3446,52 +3513,41 @@ class AIChat:
             }
         
         if action == 'delete_leads':
-            ids = await get_all_ids('leads')
-            result = await delete_entities('leads', ids)
-            return {
-                'action': 'delete_leads',
-                'total_found': len(ids),
-                **result,
-            }
+            entities = await get_all_entities('leads')
+            result = await smart_delete_all('leads', entities)
+            return {'action': 'delete_leads', **result}
         
         elif action == 'delete_contacts':
-            ids = await get_all_ids('contacts')
-            result = await delete_entities('contacts', ids)
-            return {
-                'action': 'delete_contacts',
-                'total_found': len(ids),
-                **result,
-            }
+            entities = await get_all_entities('contacts')
+            result = await smart_delete_all('contacts', entities)
+            return {'action': 'delete_contacts', **result}
         
         elif action == 'delete_companies':
-            ids = await get_all_ids('companies')
-            result = await delete_entities('companies', ids)
-            return {
-                'action': 'delete_companies',
-                'total_found': len(ids),
-                **result,
-            }
+            entities = await get_all_entities('companies')
+            result = await smart_delete_all('companies', entities)
+            return {'action': 'delete_companies', **result}
         
         elif action == 'delete_all':
-            # Delete in order: leads first (they reference contacts/companies)
-            leads = await get_all_ids('leads')
-            leads_result = await delete_entities('leads', leads)
+            results = {}
             
-            contacts = await get_all_ids('contacts')
-            contacts_result = await delete_entities('contacts', contacts)
+            # Order matters: leads -> contacts -> companies
+            # Each step unlinks and deletes
             
-            companies = await get_all_ids('companies')
-            companies_result = await delete_entities('companies', companies)
+            # 1. Delete leads (they link to contacts/companies)
+            leads = await get_all_entities('leads')
+            results['leads'] = await smart_delete_all('leads', leads)
             
-            return {
-                'action': 'delete_all',
-                'leads': {'found': len(leads), **leads_result},
-                'contacts': {'found': len(contacts), **contacts_result},
-                'companies': {'found': len(companies), **companies_result},
-            }
+            # 2. Delete contacts (may link to companies)
+            contacts = await get_all_entities('contacts')
+            results['contacts'] = await smart_delete_all('contacts', contacts)
+            
+            # 3. Delete companies
+            companies = await get_all_entities('companies')
+            results['companies'] = await smart_delete_all('companies', companies)
+            
+            return {'action': 'delete_all', **results}
         
         elif action == 'reset_pipelines':
-            # Delete all custom pipelines, keep only default
             pipelines = await get_pipelines()
             deleted_pipelines = 0
             
@@ -3510,23 +3566,19 @@ class AIChat:
             }
         
         elif action == 'full_reset':
-            # Full reset: delete all data + reset pipelines
             results = {}
             
-            # 1. Delete leads
-            leads = await get_all_ids('leads')
-            results['leads'] = await delete_entities('leads', leads)
-            results['leads']['found'] = len(leads)
+            # 1. Smart delete leads
+            leads = await get_all_entities('leads')
+            results['leads'] = await smart_delete_all('leads', leads)
             
-            # 2. Delete contacts
-            contacts = await get_all_ids('contacts')
-            results['contacts'] = await delete_entities('contacts', contacts)
-            results['contacts']['found'] = len(contacts)
+            # 2. Smart delete contacts
+            contacts = await get_all_entities('contacts')
+            results['contacts'] = await smart_delete_all('contacts', contacts)
             
-            # 3. Delete companies
-            companies = await get_all_ids('companies')
-            results['companies'] = await delete_entities('companies', companies)
-            results['companies']['found'] = len(companies)
+            # 3. Smart delete companies
+            companies = await get_all_entities('companies')
+            results['companies'] = await smart_delete_all('companies', companies)
             
             # 4. Reset pipelines
             pipelines = await get_pipelines()
@@ -3543,10 +3595,6 @@ class AIChat:
                 'deleted': deleted_pipelines,
             }
             
-            return {
-                'action': 'full_reset',
-                'success': True,
-                **results,
-            }
+            return {'action': 'full_reset', 'success': True, **results}
         
         return {'error': f'Unknown cleanup action: {action}'}
