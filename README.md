@@ -28,6 +28,7 @@ MCP Server for Kommo/amoCRM with analytics focus. Enables AI assistants to inter
 - ⚡ **Async** - Built with asyncio for high performance
 - 🗄️ **PostgreSQL** - Local database for big data analytics
 - 🌐 **HTTP Transport** - REST API for n8n and other integrations
+- 🧠 **RAG Architecture** - Dynamic tool retrieval for scalable prompts
 
 ## Architecture Overview
 
@@ -36,12 +37,46 @@ MCP Server for Kommo/amoCRM with analytics focus. Enables AI assistants to inter
 │   AI Assistant  │────▶│   MCP Server     │────▶│   Kommo API     │
 │ (Claude/Cursor) │     │                  │     │                 │
 └─────────────────┘     └────────┬─────────┘     └─────────────────┘
-                                 │
-                                 ▼
-                        ┌──────────────────┐
-                        │   PostgreSQL     │
-                        │   (Big Data)     │
-                        └──────────────────┘
+                                │
+                                ▼
+                       ┌──────────────────┐
+                       │   PostgreSQL     │
+                       │   (Big Data)     │
+                       └──────────────────┘
+```
+
+### RAG-Based Tool Retrieval
+
+The Telegram bot uses **RAG (Retrieval-Augmented Generation)** architecture for scalable tool management:
+
+```
+┌─────────────────┐     ┌──────────────────┐     ┌─────────────────┐
+│  User Request   │────▶│  Tool Retriever  │────▶│  Dynamic Prompt │
+│                 │     │  (keyword match) │     │  (base + tools) │
+└─────────────────┘     └──────────────────┘     └────────┬────────┘
+                                                          │
+                        ┌──────────────────┐              ▼
+                        │   Tool Registry  │     ┌─────────────────┐
+                        │   (YAML files)   │────▶│   LLM + Tools   │
+                        └──────────────────┘     │   (execution)   │
+                                                 └─────────────────┘
+```
+
+**Benefits:**
+- **Compact prompts**: ~500 tokens instead of 3000+ (only relevant tools loaded)
+- **Scalability**: Add hundreds of tools without prompt size growth
+- **Maintainability**: Tool definitions in separate YAML files
+- **Accuracy**: Better tool selection through keyword matching
+
+**Tool Registry** (`src/kommo_mcp/telegram/tools/*.yaml`):
+```yaml
+name: kommo_pipeline_analytics
+category: analytics
+keywords: [воронка, конверсия, аналитика, статистика]
+description: Аналитика воронки продаж
+examples:
+  - query: "Покажи аналитику воронки"
+  - query: "Конверсия по этапам"
 ```
 
 ### AI-Powered Analytics Engine
