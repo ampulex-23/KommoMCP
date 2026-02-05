@@ -1293,7 +1293,7 @@ class AIChat:
     async def _handle_setup(self, session, headers, args: dict) -> dict:
         """Handle kommo_setup tool calls."""
         action = args.get('action')
-        dry_run = args.get('dry_run', True)
+        dry_run = args.get('dry_run', False)
         
         if action == 'create_pipeline':
             pipeline_name = args.get('pipeline_name')
