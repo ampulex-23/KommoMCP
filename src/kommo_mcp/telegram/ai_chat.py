@@ -885,6 +885,11 @@ SYSTEM_PROMPT = """Ты - AI-ассистент для ПОЛНОГО управ
 - Удаление компании → сначала отвяжи контакты и сделки
 НЕ ПРОСИ пользователя делать это вручную! Выполни сам последовательно.
 
+⚠️ ВАЖНО ПРИ СОЗДАНИИ ВОРОНКИ:
+1. Сначала вызови create_pipeline и ДОЖДИСЬ ответа с pipeline_id
+2. Только ПОТОМ создавай стадии с полученным pipeline_id
+3. НЕ вызывай create_stage параллельно с create_pipeline!
+
 🔧 СТРУКТУРА: kommo_setup (pipelines, stages, fields)
 ✏️ СУЩНОСТИ: kommo_entity_actions (notes, tasks, move, link)
 📦 МАССОВЫЕ: kommo_bulk_actions (mass_move/tag/assign/update)
@@ -1331,10 +1336,14 @@ class AIChat:
                         data = json.loads(response_text)
                         pipelines = data.get('_embedded', {}).get('pipelines', [])
                         if pipelines:
+                            pipeline_id = pipelines[0].get('id')
+                            stages = pipelines[0].get('_embedded', {}).get('statuses', [])
                             return {
                                 'success': True,
-                                'pipeline_id': pipelines[0].get('id'),
+                                'pipeline_id': pipeline_id,
                                 'pipeline_name': pipelines[0].get('name'),
+                                'stages': [{'id': s.get('id'), 'name': s.get('name')} for s in stages],
+                                'hint': f'Use pipeline_id={pipeline_id} for create_stage calls',
                             }
                     except:
                         pass
