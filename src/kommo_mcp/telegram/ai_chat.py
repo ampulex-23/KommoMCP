@@ -998,7 +998,7 @@ class AIChat:
             # Add current message
             messages.append({'role': 'user', 'content': message})
             
-            max_iterations = 20  # Limit iterations for safety
+            max_iterations = 10  # Limit iterations for safety
             all_results = []
             
             for iteration in range(max_iterations):
@@ -1501,13 +1501,14 @@ class AIChat:
                         links = await get_lead_links(lead_id)
                         if links:
                             await unlink_lead(lead_id, links)
-                        # Then delete
+                        # Then move to lost status (143) since DELETE is not supported for leads
                         del_url = f'{self.kommo_base_url}/api/v4/leads/{lead_id}'
-                        async with session.delete(del_url, headers=headers) as del_resp:
+                        payload = {'status_id': 143}  # 143 = Closed and not realized (lost)
+                        async with session.patch(del_url, headers=headers, json=payload) as del_resp:
                             if del_resp.status in [200, 204]:
                                 leads_deleted += 1
                             else:
-                                logger.warning(f'Failed to delete lead {lead_id}: {del_resp.status}')
+                                logger.warning(f'Failed to close lead {lead_id}: {del_resp.status}')
                     
                     page += 1
                     if len(leads) < 250:
@@ -3555,10 +3556,17 @@ class AIChat:
             return unlinked
         
         async def delete_entity(entity_type: str, entity_id: int) -> bool:
-            """Delete a single entity."""
-            url = f'{self.kommo_base_url}/api/v4/{entity_type}/{entity_id}'
-            async with session.delete(url, headers=headers) as resp:
-                return resp.status in [200, 204]
+            """Delete a single entity. For leads, move to 'lost' status since DELETE is not supported."""
+            if entity_type == 'leads':
+                # Kommo doesn't support DELETE for leads, use PATCH to move to lost status (143)
+                url = f'{self.kommo_base_url}/api/v4/{entity_type}/{entity_id}'
+                payload = {'status_id': 143}  # 143 = Closed and not realized (lost)
+                async with session.patch(url, headers=headers, json=payload) as resp:
+                    return resp.status in [200, 204]
+            else:
+                url = f'{self.kommo_base_url}/api/v4/{entity_type}/{entity_id}'
+                async with session.delete(url, headers=headers) as resp:
+                    return resp.status in [200, 204]
         
         async def smart_delete_all(entity_type: str, entities: list) -> dict:
             """Smart delete: unlink first, then delete, retry failed ones."""
