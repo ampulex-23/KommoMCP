@@ -1450,31 +1450,70 @@ class AIChat:
             
             url = f'{self.kommo_base_url}/api/v4/leads/pipelines/{pipeline_id}'
             
-            # First, check if pipeline has leads and delete them
+            # First, get all leads in this pipeline and delete them with unlinking
             leads_deleted = 0
+            leads_found = 0
             page = 1
+            
+            async def get_lead_links(lead_id: int) -> list:
+                """Get all links for a lead."""
+                link_url = f'{self.kommo_base_url}/api/v4/leads/{lead_id}/links'
+                async with session.get(link_url, headers=headers) as resp:
+                    if resp.status == 200:
+                        data = await resp.json()
+                        return data.get('_embedded', {}).get('links', [])
+                return []
+            
+            async def unlink_lead(lead_id: int, links: list) -> int:
+                """Remove all links from a lead."""
+                if not links:
+                    return 0
+                unlink_url = f'{self.kommo_base_url}/api/v4/leads/{lead_id}/unlink'
+                unlinked = 0
+                for link in links:
+                    payload = [{
+                        'to_entity_type': link.get('to_entity_type'),
+                        'to_entity_id': link.get('to_entity_id'),
+                    }]
+                    async with session.post(unlink_url, headers=headers, json=payload) as resp:
+                        if resp.status in [200, 204]:
+                            unlinked += 1
+                return unlinked
+            
             while True:
                 leads_url = f'{self.kommo_base_url}/api/v4/leads'
-                params = {'filter[pipeline_id]': pipeline_id, 'limit': 250, 'page': page}
+                params = {'filter[pipeline_id][]': pipeline_id, 'limit': 250, 'page': page}
+                logger.info(f'Fetching leads from pipeline {pipeline_id}, page {page}')
                 async with session.get(leads_url, headers=headers, params=params) as leads_resp:
                     if leads_resp.status != 200:
                         break
                     data = await leads_resp.json()
                     leads = data.get('_embedded', {}).get('leads', [])
+                    leads_found += len(leads)
+                    logger.info(f'Found {len(leads)} leads on page {page}')
                     if not leads:
                         break
                     
-                    # Delete each lead
+                    # Unlink and delete each lead
                     for lead in leads:
                         lead_id = lead['id']
+                        # First unlink
+                        links = await get_lead_links(lead_id)
+                        if links:
+                            await unlink_lead(lead_id, links)
+                        # Then delete
                         del_url = f'{self.kommo_base_url}/api/v4/leads/{lead_id}'
                         async with session.delete(del_url, headers=headers) as del_resp:
                             if del_resp.status in [200, 204]:
                                 leads_deleted += 1
+                            else:
+                                logger.warning(f'Failed to delete lead {lead_id}: {del_resp.status}')
                     
                     page += 1
                     if len(leads) < 250:
                         break
+            
+            logger.info(f'Total leads found: {leads_found}, deleted: {leads_deleted}')
             
             # Now delete the pipeline
             async with session.delete(url, headers=headers) as resp:
