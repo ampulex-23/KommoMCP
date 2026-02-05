@@ -1450,52 +1450,43 @@ class AIChat:
             
             url = f'{self.kommo_base_url}/api/v4/leads/pipelines/{pipeline_id}'
             
-            # Try to delete pipeline
+            # First, check if pipeline has leads and delete them
+            leads_deleted = 0
+            page = 1
+            while True:
+                leads_url = f'{self.kommo_base_url}/api/v4/leads'
+                params = {'filter[pipeline_id]': pipeline_id, 'limit': 250, 'page': page}
+                async with session.get(leads_url, headers=headers, params=params) as leads_resp:
+                    if leads_resp.status != 200:
+                        break
+                    data = await leads_resp.json()
+                    leads = data.get('_embedded', {}).get('leads', [])
+                    if not leads:
+                        break
+                    
+                    # Delete each lead
+                    for lead in leads:
+                        lead_id = lead['id']
+                        del_url = f'{self.kommo_base_url}/api/v4/leads/{lead_id}'
+                        async with session.delete(del_url, headers=headers) as del_resp:
+                            if del_resp.status in [200, 204]:
+                                leads_deleted += 1
+                    
+                    page += 1
+                    if len(leads) < 250:
+                        break
+            
+            # Now delete the pipeline
             async with session.delete(url, headers=headers) as resp:
                 if resp.status in [200, 204]:
-                    return {'success': True, 'deleted_pipeline_id': pipeline_id}
+                    result = {'success': True, 'deleted_pipeline_id': pipeline_id}
+                    if leads_deleted > 0:
+                        result['leads_deleted'] = leads_deleted
+                        result['message'] = f'Auto-deleted {leads_deleted} leads before removing pipeline'
+                    return result
                 error_text = await resp.text()
-                
-                # If pipeline has leads, auto-delete them first
-                if 'leads' in error_text.lower() or resp.status == 400:
-                    # Get all leads in this pipeline
-                    leads_deleted = 0
-                    page = 1
-                    while True:
-                        leads_url = f'{self.kommo_base_url}/api/v4/leads'
-                        params = {'filter[pipeline_id]': pipeline_id, 'limit': 250, 'page': page}
-                        async with session.get(leads_url, headers=headers, params=params) as leads_resp:
-                            if leads_resp.status != 200:
-                                break
-                            data = await leads_resp.json()
-                            leads = data.get('_embedded', {}).get('leads', [])
-                            if not leads:
-                                break
-                            
-                            # Delete each lead
-                            for lead in leads:
-                                lead_id = lead['id']
-                                del_url = f'{self.kommo_base_url}/api/v4/leads/{lead_id}'
-                                async with session.delete(del_url, headers=headers) as del_resp:
-                                    if del_resp.status in [200, 204]:
-                                        leads_deleted += 1
-                            
-                            page += 1
-                            if len(leads) < 250:
-                                break
-                    
-                    # Retry pipeline deletion
-                    async with session.delete(url, headers=headers) as retry_resp:
-                        if retry_resp.status in [200, 204]:
-                            return {
-                                'success': True, 
-                                'deleted_pipeline_id': pipeline_id,
-                                'leads_deleted': leads_deleted,
-                                'message': f'Auto-deleted {leads_deleted} leads before removing pipeline'
-                            }
-                        retry_error = await retry_resp.text()
-                        return {'error': f'Failed after deleting {leads_deleted} leads: {retry_error[:200]}'}
-                
+                if leads_deleted > 0:
+                    return {'error': f'Failed after deleting {leads_deleted} leads: {error_text[:200]}'}
                 return {'error': f'Failed to delete pipeline: {error_text[:200]}'}
         
         elif action == 'update_stage':
