@@ -867,7 +867,7 @@ MCP_TOOLS = [
                     },
                     'pipeline_id': {
                         'type': 'integer',
-                        'description': 'Pipeline ID for reset_pipelines (optional, resets all if not specified)',
+                        'description': 'Pipeline ID - for delete_leads deletes only leads in this pipeline, for reset_pipelines resets specific pipeline',
                     },
                 },
                 'required': ['action', 'confirm'],
@@ -877,6 +877,13 @@ MCP_TOOLS = [
 ]
 
 SYSTEM_PROMPT = """Ты - AI-ассистент для ПОЛНОГО управления CRM Kommo.
+
+⚡ ПЛАНИРОВАНИЕ СЛОЖНЫХ ЗАДАЧ:
+Если действие требует предварительных шагов - ВЫПОЛНИ ИХ АВТОМАТИЧЕСКИ:
+- Удаление воронки → сначала удали все сделки в ней (kommo_cleanup delete_leads pipeline_id=X)
+- Удаление контакта → сначала отвяжи от сделок (kommo_links unlink)
+- Удаление компании → сначала отвяжи контакты и сделки
+НЕ ПРОСИ пользователя делать это вручную! Выполни сам последовательно.
 
 🔧 СТРУКТУРА: kommo_setup (pipelines, stages, fields)
 ✏️ СУЩНОСТИ: kommo_entity_actions (notes, tasks, move, link)
@@ -911,12 +918,14 @@ SYSTEM_PROMPT = """Ты - AI-ассистент для ПОЛНОГО управ
 
 🗑️ ЗАЧИСТКА (kommo_cleanup):
 - preview: показать что будет удалено (без confirm)
-- delete_leads: удалить все сделки (confirm=true)
+- delete_leads: удалить сделки (confirm=true, pipeline_id=X для конкретной воронки)
 - delete_contacts: удалить все контакты (confirm=true)
 - delete_companies: удалить все компании (confirm=true)
 - delete_all: удалить сделки+контакты+компании (confirm=true)
 - reset_pipelines: сбросить воронки к дефолту (confirm=true)
 - full_reset: полная зачистка + сброс воронок (confirm=true)
+
+⚠️ УДАЛЕНИЕ ВОРОНКИ: сначала вызови kommo_cleanup delete_leads pipeline_id=X confirm=true, затем kommo_setup delete_pipeline
 
 ФОРМАТИРОВАНИЕ: <b>жирный</b>, <code>ID</code>, эмодзи ✅❌📊📈💰👤🏢📋🔧⚡🏷️🔗📦📞🗑️
 """
@@ -3419,14 +3428,22 @@ class AIChat:
         """
         action = args.get('action')
         confirm = args.get('confirm', False)
+        pipeline_id = args.get('pipeline_id')
         
-        async def get_all_entities(entity_type: str) -> list:
-            """Get all entities with their data for deletion."""
+        async def get_all_entities(entity_type: str, filter_pipeline_id: int = None) -> list:
+            """Get all entities with their data for deletion.
+            
+            Args:
+                entity_type: 'leads', 'contacts', or 'companies'
+                filter_pipeline_id: If set, only return leads from this pipeline
+            """
             entities = []
             page = 1
             while True:
                 url = f'{self.kommo_base_url}/api/v4/{entity_type}'
                 params = {'limit': 250, 'page': page, 'with': 'contacts,companies,leads'}
+                if filter_pipeline_id and entity_type == 'leads':
+                    params['filter[pipeline_id]'] = filter_pipeline_id
                 async with session.get(url, headers=headers, params=params) as resp:
                     if resp.status != 200:
                         break
@@ -3551,8 +3568,10 @@ class AIChat:
             }
         
         if action == 'delete_leads':
-            entities = await get_all_entities('leads')
+            entities = await get_all_entities('leads', filter_pipeline_id=pipeline_id)
             result = await smart_delete_all('leads', entities)
+            if pipeline_id:
+                return {'action': 'delete_leads', 'pipeline_id': pipeline_id, **result}
             return {'action': 'delete_leads', **result}
         
         elif action == 'delete_contacts':
