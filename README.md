@@ -4,21 +4,20 @@ MCP Server for Kommo/amoCRM with analytics focus. Enables AI assistants to inter
 
 ## Coverage
 
-**203 / 1000 user stories implemented** (20.3%)
+**128 / 1000 user stories implemented** (12.8%)
 
-| Category | Implemented | Total |
-|----------|-------------|-------|
-| Analytics & Reports | 29 | 100 |
-| Automation | 38 | 100 |
-| Communications | 14 | 100 |
-| Contacts & Companies | 11 | 100 |
-| Search & Navigation | 17 | 100 |
-| Deal Management | 15 | 100 |
-| Users & Reports | 19 | - |
-| Bulk Operations | 13 | - |
-| Tags/Fields/Sources | 14 | - |
-| Companies/Duplicates/Links | 16 | - |
-| Catalogs/Events/Calls | 17 | - |
+| Category | Range | Implemented | Total |
+|----------|-------|-------------|-------|
+| Analytics & Reports | 1-100 | 34 | 100 |
+| Automation | 101-200 | 31 | 100 |
+| Communications | 201-300 | 4 | 100 |
+| Search & Navigation | 301-400 | 12 | 100 |
+| Deal Management | 401-500 | 10 | 100 |
+| Contacts & Companies | 501-600 | 22 | 100 |
+| Tasks & Activities | 601-700 | 14 | 100 |
+| Integrations | 701-800 | 0 | 100 |
+| AI Assistant | 801-900 | 0 | 100 |
+| Advanced Scenarios | 901-1000 | 1 | 100 |
 
 ## Features
 
@@ -67,6 +66,14 @@ The Telegram bot uses **RAG (Retrieval-Augmented Generation)** architecture for 
 - **Scalability**: Add hundreds of tools without prompt size growth
 - **Maintainability**: Tool definitions in separate YAML files
 - **Accuracy**: Better tool selection through keyword matching
+
+### Conversation Memory
+
+The bot maintains **conversation history** per user for context retention:
+
+- **Per-user isolation**: Each Telegram user has separate history
+- **Context window**: Last 10 messages included in each request
+- **Smart confirmations**: Bot remembers pending actions (e.g., "Delete pipeline?" → "Yes")
 
 **Tool Registry** (`src/kommo_mcp/telegram/tools/*.yaml`):
 ```yaml
