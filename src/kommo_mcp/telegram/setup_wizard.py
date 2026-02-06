@@ -646,13 +646,13 @@ class SetupWizard:
         if not state:
             return '❌ Ошибка: состояние не найдено'
         
-        # Build setup prompt from specification
+        # Build setup prompt from specification and store it
         setup_prompt = self._build_setup_prompt(state.answers)
+        state.setup_prompt = setup_prompt
         
-        # Clear wizard state
-        del self._states[user_id]
+        # Don't delete state yet - bot.py will call get_setup_prompt and then we clear
         
-        # Return prompt that will be executed by AI
+        # Return message that will be shown to user
         return f'''🚀 <b>Начинаю настройку CRM...</b>
 
 {setup_prompt}
@@ -709,7 +709,10 @@ class SetupWizard:
         """Get the setup prompt for execution after wizard completion."""
         state = self._states.get(user_id)
         if state and state.confirmed:
-            return self._build_setup_prompt(state.answers)
+            prompt = getattr(state, 'setup_prompt', None) or self._build_setup_prompt(state.answers)
+            # Clear wizard state after getting prompt
+            del self._states[user_id]
+            return prompt
         return None
     
     def cancel(self, user_id: int) -> str:

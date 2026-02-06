@@ -20,7 +20,6 @@ from aiogram.client.default import DefaultBotProperties
 from kommo_mcp.saas.manager import TenantManager
 from kommo_mcp.saas.orchestrator import Orchestrator
 from kommo_mcp.saas.tenant import TenantStatus
-from kommo_mcp.telegram.interaction_logger import get_interaction_logger
 from kommo_mcp.telegram.setup_wizard import get_wizard
 
 logger = logging.getLogger(__name__)
@@ -86,7 +85,6 @@ class KommoBot:
                 '/status - статус подключения\n'
                 '/wizard - 🧙‍♂️ мастер настройки CRM\n'
                 '/ask <вопрос> - задать вопрос по CRM\n'
-                '/logs - просмотр логов\n'
                 '/cancel - отменить текущую операцию\n\n'
                 '<b>Примеры вопросов:</b>\n'
                 '• Покажи аналитику воронки\n'
@@ -95,78 +93,6 @@ class KommoBot:
                 '• Какие сделки просрочены?'
             )
             await message.answer(help_text)
-        
-        @self.router.message(Command('logs'))
-        async def cmd_logs(message: Message):
-            """Show recent interaction logs (admin only)."""
-            user_id = message.from_user.id
-            
-            # Check admin access or allow own logs
-            ilog = get_interaction_logger()
-            
-            # Parse arguments: /logs [session_id] or /logs list [count]
-            args = message.text.split()[1:] if len(message.text.split()) > 1 else []
-            
-            if args and args[0] != 'list':
-                # Get specific session
-                session_id = args[0]
-                session = ilog.get_session(session_id)
-                
-                if not session:
-                    await message.answer(f'❌ Сессия {session_id} не найдена')
-                    return
-                
-                # Format session details
-                text = f'<b>📋 Сессия:</b> <code>{session_id}</code>\n\n'
-                text += f'<b>User:</b> {session.get("user_id")}\n'
-                text += f'<b>Время:</b> {session.get("started_at", "")[:19]}\n'
-                text += f'<b>Длительность:</b> {session.get("duration_ms", 0):.0f}ms\n\n'
-                text += f'<b>Запрос:</b>\n<code>{session.get("user_message", "")[:200]}</code>\n\n'
-                
-                # Iterations
-                iterations = session.get('iterations', [])
-                if iterations:
-                    text += f'<b>Итерации ({len(iterations)}):</b>\n'
-                    for it in iterations[:5]:
-                        for tc in it.get('tool_calls', []):
-                            status = '✅' if tc.get('success') else '❌'
-                            text += f'  {status} {tc.get("tool_name")}\n'
-                
-                # Errors
-                errors = session.get('errors', [])
-                if errors:
-                    text += f'\n<b>❌ Ошибки ({len(errors)}):</b>\n'
-                    for err in errors[:3]:
-                        text += f'  • {err.get("type")}: {err.get("message", "")[:100]}\n'
-                
-                # Response
-                response = session.get('final_response', '')
-                if response:
-                    text += f'\n<b>Ответ:</b>\n<code>{response[:300]}</code>'
-                
-                await message.answer(text[:4000])
-            else:
-                # List recent sessions
-                limit = int(args[1]) if len(args) > 1 else 10
-                sessions = ilog.get_recent_sessions(limit=limit)
-                
-                if not sessions:
-                    await message.answer('📋 Логов пока нет')
-                    return
-                
-                text = f'<b>📋 Последние {len(sessions)} сессий:</b>\n\n'
-                for s in sessions:
-                    errors_str = f' ❌{s["errors"]}' if s.get('errors') else ''
-                    text += (
-                        f'<code>{s["session_id"][:20]}</code>\n'
-                        f'  ⏱ {s.get("duration_ms", 0):.0f}ms | '
-                        f'🔧 {s.get("iterations", 0)} iter | '
-                        f'📡 {s.get("api_calls", 0)} API{errors_str}\n'
-                        f'  💬 {s.get("user_message", "")[:50]}\n\n'
-                    )
-                
-                text += '\n<i>Используйте /logs [session_id] для деталей</i>'
-                await message.answer(text[:4000])
         
         @self.router.message(Command('wizard'))
         async def cmd_wizard(message: Message):
@@ -635,6 +561,12 @@ async def run_bot(token: str, data_dir: str = '/var/lib/kommo-saas'):
         postgres_user=os.getenv('POSTGRES_USER', 'postgres'),
         postgres_password=os.getenv('POSTGRES_PASSWORD', ''),
     )
+    
+    # Start logs server in background
+    from kommo_mcp.telegram.logs_server import run_logs_server
+    logs_port = int(os.getenv('LOGS_PORT', '8765'))
+    await run_logs_server(port=logs_port)
+    logger.info(f'Logs server started on port {logs_port}')
     
     bot = create_bot(token, tenant_manager, orchestrator)
     await bot.start()
