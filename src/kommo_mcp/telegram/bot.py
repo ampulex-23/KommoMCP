@@ -21,6 +21,7 @@ from kommo_mcp.saas.manager import TenantManager
 from kommo_mcp.saas.orchestrator import Orchestrator
 from kommo_mcp.saas.tenant import TenantStatus
 from kommo_mcp.telegram.interaction_logger import get_interaction_logger
+from kommo_mcp.telegram.setup_wizard import get_wizard
 
 logger = logging.getLogger(__name__)
 
@@ -83,13 +84,14 @@ class KommoBot:
                 '/connect - подключить Kommo CRM\n'
                 '/openai - добавить OpenAI API ключ\n'
                 '/status - статус подключения\n'
+                '/wizard - 🧙‍♂️ мастер настройки CRM\n'
                 '/ask <вопрос> - задать вопрос по CRM\n'
-                '/sync - синхронизировать данные\n'
-                '/disconnect - отключить CRM\n\n'
+                '/logs - просмотр логов\n'
+                '/cancel - отменить текущую операцию\n\n'
                 '<b>Примеры вопросов:</b>\n'
                 '• Покажи аналитику воронки\n'
                 '• Сколько сделок в работе?\n'
-                '• Кто лучший менеджер?\n'
+                '• Создай воронку для продаж\n'
                 '• Какие сделки просрочены?'
             )
             await message.answer(help_text)
@@ -165,6 +167,41 @@ class KommoBot:
                 
                 text += '\n<i>Используйте /logs [session_id] для деталей</i>'
                 await message.answer(text[:4000])
+        
+        @self.router.message(Command('wizard'))
+        async def cmd_wizard(message: Message):
+            """Start CRM setup wizard."""
+            tenant = await self.tenant_manager.get_by_telegram_id(message.from_user.id)
+            
+            if not tenant:
+                await message.answer('❌ Сначала зарегистрируйтесь: /start')
+                return
+            
+            if not tenant.has_kommo_credentials():
+                await message.answer('❌ Сначала подключите Kommo CRM: /connect')
+                return
+            
+            if not tenant.has_openai_credentials():
+                await message.answer('❌ Сначала добавьте OpenAI ключ: /openai')
+                return
+            
+            wizard = get_wizard()
+            response = wizard.start(message.from_user.id)
+            await message.answer(response)
+        
+        @self.router.message(Command('cancel'))
+        async def cmd_cancel(message: Message, state: FSMContext):
+            """Cancel current operation."""
+            # Cancel wizard if active
+            wizard = get_wizard()
+            if wizard.is_active(message.from_user.id):
+                response = wizard.cancel(message.from_user.id)
+                await message.answer(response)
+                return
+            
+            # Cancel FSM state
+            await state.clear()
+            await message.answer('Операция отменена.')
         
         @self.router.message(Command('status'))
         async def cmd_status(message: Message):
@@ -456,7 +493,7 @@ class KommoBot:
         
         @self.router.message(F.text & ~F.text.startswith('/'))
         async def handle_text(message: Message, state: FSMContext):
-            """Handle plain text as AI question."""
+            """Handle plain text as AI question or wizard answer."""
             current_state = await state.get_state()
             if current_state:
                 # In FSM flow, ignore
@@ -466,6 +503,26 @@ class KommoBot:
             
             if not tenant:
                 await message.answer('👋 Используйте /start для начала работы')
+                return
+            
+            # Check if wizard is active
+            wizard = get_wizard()
+            if wizard.is_active(message.from_user.id):
+                response = await wizard.process_answer(message.from_user.id, message.text)
+                await message.answer(response)
+                
+                # Check if wizard completed and needs to execute setup
+                wizard_state = wizard.get_state(message.from_user.id)
+                if wizard_state and wizard_state.confirmed:
+                    # Get setup prompt and execute
+                    setup_prompt = wizard.get_setup_prompt(message.from_user.id)
+                    if setup_prompt and tenant.is_ready():
+                        await message.answer('🤔 Выполняю настройку...')
+                        ai_response = await self._process_ai_request(tenant, setup_prompt, user_id=message.from_user.id)
+                        try:
+                            await message.answer(ai_response, parse_mode='HTML')
+                        except Exception:
+                            await message.answer(ai_response)
                 return
             
             if not tenant.is_ready():
