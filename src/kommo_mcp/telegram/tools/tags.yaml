@@ -37,22 +37,32 @@ keywords:
   - значение поля
   - установить поле
   - атрибут
+  - удалить поле
+  - создать поле
+  - переименовать поле
 description: |
-  Работа с кастомными полями: список, получение и установка значений.
+  Полное управление кастомными полями: CRUD, массовые операции, значения.
+  Типы полей: text, numeric, checkbox, select, multiselect, date, url, textarea, radiobutton, streetaddress, smart_address, birthday, legal_entity, date_time, tracking_data.
+  Алиасы: price/money/budget -> numeric, list -> select, switch -> radiobutton.
 actions:
-  - action: list - список полей
-  - action: get_values - значения полей сущности
-  - action: set_value - установить значение
+  - action: list - список полей (all_types=true для всех сущностей)
+  - action: create - создать поле (field_name, field_type, enums, entity_type)
+  - action: update - обновить поле (field_id, field_name, enums)
+  - action: delete - удалить поле (field_id, entity_type)
+  - action: delete_all - удалить ВСЕ поля (confirm=true, all_types=true)
+  - action: get_values - значения полей сущности (entity_id)
+  - action: set_value - установить значение (entity_id, field_id, value)
+  - action: set_values_bulk - установить несколько значений (entity_id, fields_values)
   - entity_type: leads/contacts/companies
-  - entity_id: ID сущности
-  - field_id: ID поля
-  - value: новое значение
 examples:
-  - query: "Покажи поля сделок"
-  - query: "Какие поля у контакта 123"
-  - query: "Установи поле Бюджет = 100000"
+  - query: "Покажи все кастомные поля"
+  - query: "Создай поле Бюджет типа numeric для сделок"
+  - query: "Удали поле 12345"
+  - query: "Удали все кастомные поля"
+  - query: "Установи поле Бюджет = 100000 для сделки 123"
+  - query: "Какие поля есть у контактов"
 response_format: |
-  Возвращает: fields (список) или success
+  Возвращает: fields (список), success, или preview (для delete_all без confirm)
 
 ---
 name: kommo_sources

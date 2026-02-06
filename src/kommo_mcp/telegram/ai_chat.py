@@ -2763,32 +2763,226 @@ class AIChat:
         return {'error': f'Unknown tags action: {action}'}
     
     async def _handle_custom_fields(self, session, headers, args: dict) -> dict:
-        """Handle custom fields management."""
+        """Handle custom fields management — full CRUD + mass operations."""
         action = args.get('action')
         entity_type = args.get('entity_type', 'leads')
         entity_id = args.get('entity_id')
         field_id = args.get('field_id')
         value = args.get('value')
         
+        # Valid entity types for custom fields
+        valid_entities = ['leads', 'contacts', 'companies', 'customers', 'segments']
+        if entity_type not in valid_entities:
+            return {'error': f'Invalid entity_type: {entity_type}. Valid: {valid_entities}'}
+        
         if action == 'list':
+            # List all custom fields for entity type, optionally for all entity types
+            all_types = args.get('all_types', False)
+            
+            if all_types:
+                # Get fields for leads, contacts, companies
+                all_fields = {}
+                for et in ['leads', 'contacts', 'companies']:
+                    url = f'{self.kommo_base_url}/api/v4/{et}/custom_fields'
+                    async with session.get(url, headers=headers) as resp:
+                        if resp.status == 200:
+                            data = await resp.json()
+                            fields = data.get('_embedded', {}).get('custom_fields', [])
+                            all_fields[et] = [
+                                {
+                                    'id': f.get('id'),
+                                    'name': f.get('name'),
+                                    'type': f.get('type'),
+                                    'is_api_only': f.get('is_api_only', False),
+                                    'group_id': f.get('group_id'),
+                                    'required_statuses': f.get('required_statuses', []),
+                                    'enums': [{'id': e.get('id'), 'value': e.get('value')} for e in f.get('enums', [])] if f.get('enums') else None,
+                                }
+                                for f in fields
+                            ]
+                        else:
+                            all_fields[et] = []
+                total = sum(len(v) for v in all_fields.values())
+                return {'fields_by_entity': all_fields, 'total': total}
+            
             url = f'{self.kommo_base_url}/api/v4/{entity_type}/custom_fields'
             async with session.get(url, headers=headers) as resp:
                 if resp.status == 200:
                     data = await resp.json()
                     fields = data.get('_embedded', {}).get('custom_fields', [])
                     return {
+                        'entity_type': entity_type,
                         'fields': [
                             {
                                 'id': f.get('id'),
                                 'name': f.get('name'),
                                 'type': f.get('type'),
-                                'enums': [e.get('value') for e in f.get('enums', [])] if f.get('enums') else None,
+                                'is_api_only': f.get('is_api_only', False),
+                                'group_id': f.get('group_id'),
+                                'required_statuses': f.get('required_statuses', []),
+                                'enums': [{'id': e.get('id'), 'value': e.get('value')} for e in f.get('enums', [])] if f.get('enums') else None,
                             }
                             for f in fields
                         ],
                         'total': len(fields),
                     }
                 return {'error': f'API error: {resp.status}'}
+        
+        elif action == 'create':
+            field_name = args.get('field_name')
+            field_type = args.get('field_type', 'text')
+            enums = args.get('enums', [])
+            group_id = args.get('group_id')
+            is_api_only = args.get('is_api_only', False)
+            required_statuses = args.get('required_statuses', [])
+            
+            if not field_name:
+                return {'error': 'field_name is required'}
+            
+            # Map common aliases to valid Kommo field types
+            type_map = {
+                'text': 'text', 'numeric': 'numeric', 'checkbox': 'checkbox',
+                'select': 'select', 'multiselect': 'multiselect', 'date': 'date',
+                'url': 'url', 'textarea': 'textarea', 'radiobutton': 'radiobutton',
+                'streetaddress': 'streetaddress', 'smart_address': 'smart_address',
+                'birthday': 'birthday', 'legal_entity': 'legal_entity',
+                'date_time': 'date_time', 'tracking_data': 'tracking_data',
+                'linked_entity': 'linked_entity', 'items': 'items',
+                'org_legal_name': 'org_legal_name',
+                # Aliases
+                'price': 'numeric', 'money': 'numeric', 'budget': 'numeric',
+                'number': 'numeric', 'switch': 'radiobutton', 'list': 'select',
+                'multilist': 'multiselect', 'address': 'streetaddress',
+            }
+            
+            mapped_type = type_map.get(field_type, 'text')
+            
+            payload = [{'name': field_name, 'type': mapped_type}]
+            
+            if enums and mapped_type in ['select', 'multiselect', 'radiobutton']:
+                payload[0]['enums'] = [{'value': e, 'sort': i * 10} for i, e in enumerate(enums)]
+            
+            if group_id:
+                payload[0]['group_id'] = group_id
+            
+            if is_api_only:
+                payload[0]['is_api_only'] = True
+            
+            if required_statuses:
+                payload[0]['required_statuses'] = [{'pipeline_id': rs.get('pipeline_id'), 'status_id': rs.get('status_id')} for rs in required_statuses]
+            
+            url = f'{self.kommo_base_url}/api/v4/{entity_type}/custom_fields'
+            async with session.post(url, headers=headers, json=payload) as resp:
+                if resp.status in [200, 201]:
+                    data = await resp.json()
+                    fields = data.get('_embedded', {}).get('custom_fields', [])
+                    if fields:
+                        f = fields[0]
+                        return {
+                            'success': True,
+                            'field_id': f.get('id'),
+                            'field_name': f.get('name'),
+                            'field_type': f.get('type'),
+                            'entity_type': entity_type,
+                        }
+                error = await resp.text()
+                return {'error': f'Failed to create field: {error[:300]}'}
+        
+        elif action == 'update':
+            if not field_id:
+                return {'error': 'field_id is required'}
+            
+            field_name = args.get('field_name')
+            enums = args.get('enums', [])
+            required_statuses = args.get('required_statuses')
+            
+            payload = {}
+            if field_name:
+                payload['name'] = field_name
+            if enums:
+                payload['enums'] = [{'value': e, 'sort': i * 10} for i, e in enumerate(enums)]
+            if required_statuses is not None:
+                payload['required_statuses'] = required_statuses
+            
+            if not payload:
+                return {'error': 'Nothing to update. Provide field_name, enums, or required_statuses.'}
+            
+            url = f'{self.kommo_base_url}/api/v4/{entity_type}/custom_fields/{field_id}'
+            async with session.patch(url, headers=headers, json=payload) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    return {
+                        'success': True,
+                        'field_id': field_id,
+                        'name': data.get('name'),
+                        'type': data.get('type'),
+                    }
+                error = await resp.text()
+                return {'error': f'Failed to update field: {error[:300]}'}
+        
+        elif action == 'delete':
+            if not field_id:
+                return {'error': 'field_id is required'}
+            
+            field_id = int(field_id)
+            url = f'{self.kommo_base_url}/api/v4/{entity_type}/custom_fields/{field_id}'
+            async with session.delete(url, headers=headers) as resp:
+                if resp.status in [200, 204]:
+                    return {'success': True, 'deleted_field_id': field_id, 'entity_type': entity_type}
+                error = await resp.text()
+                return {'error': f'Failed to delete field {field_id}: {error[:300]}'}
+        
+        elif action == 'delete_all':
+            # Delete ALL custom fields for given entity type(s)
+            confirm = args.get('confirm', False)
+            all_types = args.get('all_types', False)
+            
+            target_types = ['leads', 'contacts', 'companies'] if all_types else [entity_type]
+            
+            if not confirm:
+                # Preview mode - show what would be deleted
+                preview = {}
+                for et in target_types:
+                    url = f'{self.kommo_base_url}/api/v4/{et}/custom_fields'
+                    async with session.get(url, headers=headers) as resp:
+                        if resp.status == 200:
+                            data = await resp.json()
+                            fields = data.get('_embedded', {}).get('custom_fields', [])
+                            preview[et] = [{'id': f.get('id'), 'name': f.get('name'), 'type': f.get('type')} for f in fields]
+                        else:
+                            preview[et] = []
+                total = sum(len(v) for v in preview.values())
+                return {
+                    'preview': True,
+                    'fields_to_delete': preview,
+                    'total': total,
+                    'warning': 'Set confirm=true to delete all these fields. Data stored in these fields will be LOST!',
+                }
+            
+            results = {}
+            for et in target_types:
+                url = f'{self.kommo_base_url}/api/v4/{et}/custom_fields'
+                async with session.get(url, headers=headers) as resp:
+                    if resp.status != 200:
+                        results[et] = {'error': f'Failed to list fields: {resp.status}'}
+                        continue
+                    data = await resp.json()
+                    fields = data.get('_embedded', {}).get('custom_fields', [])
+                
+                deleted = 0
+                failed = []
+                for f in fields:
+                    fid = f.get('id')
+                    del_url = f'{self.kommo_base_url}/api/v4/{et}/custom_fields/{fid}'
+                    async with session.delete(del_url, headers=headers) as del_resp:
+                        if del_resp.status in [200, 204]:
+                            deleted += 1
+                        else:
+                            failed.append({'id': fid, 'name': f.get('name'), 'status': del_resp.status})
+                
+                results[et] = {'found': len(fields), 'deleted': deleted, 'failed': failed}
+            
+            return {'action': 'delete_all', 'results': results}
         
         elif action == 'get_values':
             if not entity_id:
@@ -2829,7 +3023,7 @@ class AIChat:
             url = f'{self.kommo_base_url}/api/v4/{entity_type}/{entity_id}'
             payload = {
                 'custom_fields_values': [
-                    {'field_id': field_id, 'values': [{'value': value}]}
+                    {'field_id': int(field_id), 'values': [{'value': value}]}
                 ]
             }
             
@@ -2839,7 +3033,30 @@ class AIChat:
                 error = await resp.text()
                 return {'error': f'Failed to set field value: {error[:200]}'}
         
-        return {'error': f'Unknown custom_fields action: {action}'}
+        elif action == 'set_values_bulk':
+            # Set multiple field values on one entity at once
+            if not entity_id:
+                return {'error': 'entity_id is required'}
+            
+            fields_values = args.get('fields_values', [])
+            if not fields_values:
+                return {'error': 'fields_values is required (array of {field_id, value})'}
+            
+            url = f'{self.kommo_base_url}/api/v4/{entity_type}/{entity_id}'
+            payload = {
+                'custom_fields_values': [
+                    {'field_id': int(fv.get('field_id')), 'values': [{'value': fv.get('value')}]}
+                    for fv in fields_values
+                ]
+            }
+            
+            async with session.patch(url, headers=headers, json=payload) as resp:
+                if resp.status == 200:
+                    return {'success': True, 'entity_id': entity_id, 'fields_updated': len(fields_values)}
+                error = await resp.text()
+                return {'error': f'Failed to set field values: {error[:200]}'}
+        
+        return {'error': f'Unknown custom_fields action: {action}. Available: list, create, update, delete, delete_all, get_values, set_value, set_values_bulk'}
     
     async def _handle_sources(self, session, headers, args: dict) -> dict:
         """Handle lead sources management and analytics."""
@@ -3740,11 +3957,45 @@ class AIChat:
                 error = await resp.text()
                 return {'error': f'Failed to delete pipeline {pipeline_id}: {error[:200]}', 'leads_moved': moved}
         
+        async def get_all_custom_fields() -> dict:
+            """Get all custom fields grouped by entity type."""
+            all_fields = {}
+            for et in ['leads', 'contacts', 'companies']:
+                url = f'{self.kommo_base_url}/api/v4/{et}/custom_fields'
+                async with session.get(url, headers=headers) as resp:
+                    if resp.status == 200:
+                        data = await resp.json()
+                        all_fields[et] = data.get('_embedded', {}).get('custom_fields', [])
+                    else:
+                        all_fields[et] = []
+            return all_fields
+        
+        async def delete_all_custom_fields() -> dict:
+            """Delete all custom fields for leads, contacts, companies."""
+            all_fields = await get_all_custom_fields()
+            results = {}
+            for et, fields in all_fields.items():
+                deleted = 0
+                failed = []
+                for f in fields:
+                    fid = f.get('id')
+                    del_url = f'{self.kommo_base_url}/api/v4/{et}/custom_fields/{fid}'
+                    async with session.delete(del_url, headers=headers) as resp:
+                        if resp.status in [200, 204]:
+                            deleted += 1
+                        else:
+                            failed.append({'id': fid, 'name': f.get('name')})
+                results[et] = {'found': len(fields), 'deleted': deleted, 'failed': failed}
+            return results
+        
         if action == 'preview':
             leads = await get_all_entities('leads')
             contacts = await get_all_entities('contacts')
             companies = await get_all_entities('companies')
             pipelines = await get_pipelines()
+            custom_fields = await get_all_custom_fields()
+            fields_count = {et: len(fs) for et, fs in custom_fields.items()}
+            fields_list = {et: [{'id': f.get('id'), 'name': f.get('name'), 'type': f.get('type')} for f in fs] for et, fs in custom_fields.items()}
             
             return {
                 'preview': True,
@@ -3753,6 +4004,8 @@ class AIChat:
                 'companies_count': len(companies),
                 'pipelines_count': len(pipelines),
                 'pipelines': [{'id': p['id'], 'name': p['name']} for p in pipelines],
+                'custom_fields_count': fields_count,
+                'custom_fields': fields_list,
                 'warning': 'Use confirm=true to execute deletion',
             }
         
@@ -3799,6 +4052,18 @@ class AIChat:
             results['companies'] = await smart_delete_all('companies', companies)
             
             return {'action': 'delete_all', **results}
+        
+        elif action == 'delete_fields':
+            # Delete all custom fields across leads, contacts, companies
+            results = await delete_all_custom_fields()
+            total_deleted = sum(r.get('deleted', 0) for r in results.values())
+            total_found = sum(r.get('found', 0) for r in results.values())
+            return {
+                'action': 'delete_fields',
+                'total_found': total_found,
+                'total_deleted': total_deleted,
+                'details': results,
+            }
         
         elif action == 'reset_pipelines':
             pipelines = await get_pipelines()
@@ -3873,6 +4138,9 @@ class AIChat:
             # 5. Smart delete companies
             companies = await get_all_entities('companies')
             results['companies'] = await smart_delete_all('companies', companies)
+            
+            # 6. Delete all custom fields
+            results['custom_fields'] = await delete_all_custom_fields()
             
             return {'action': 'full_reset', 'success': True, **results}
         

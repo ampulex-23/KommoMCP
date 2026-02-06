@@ -19,8 +19,15 @@ actions:
   - action: templates - список шаблонов воронок
   - action: apply_template - применить шаблон
   - action: create_pipeline - создать воронку
-  - action: create_stage - создать этап
-  - action: create_field - создать кастомное поле
+  - action: create_stage - создать этап в воронке
+  - action: create_field - создать кастомное поле (entity_type, field_name, field_type, enums)
+  - action: update_pipeline - переименовать воронку
+  - action: update_stage - обновить этап (имя, цвет, порядок)
+  - action: update_field - обновить поле (имя, enums)
+  - action: delete_pipeline - удалить воронку (сделки перемещаются в главную)
+  - action: delete_stage - удалить этап
+  - action: delete_field - удалить кастомное поле
+  - action: reorder_stages - изменить порядок этапов
   - action: create_source - создать источник
   - dry_run: true/false - режим предпросмотра
 examples:
