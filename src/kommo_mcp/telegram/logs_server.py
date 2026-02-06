@@ -134,11 +134,11 @@ body{font-family:Inter,system-ui,sans-serif}
   <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
     <div class="bg-surface-2 rounded-xl border border-surface-3 p-5">
       <h3 class="text-sm font-semibold text-slate-400 uppercase mb-3">Sessions Over Time</h3>
-      <canvas id="timelineChart" height="200"></canvas>
+      <div style="position:relative;height:220px"><canvas id="timelineChart"></canvas></div>
     </div>
     <div class="bg-surface-2 rounded-xl border border-surface-3 p-5">
       <h3 class="text-sm font-semibold text-slate-400 uppercase mb-3">Tool Usage</h3>
-      <canvas id="toolsChart" height="200"></canvas>
+      <div style="position:relative;height:220px"><canvas id="toolsChart"></canvas></div>
     </div>
   </div>
 
