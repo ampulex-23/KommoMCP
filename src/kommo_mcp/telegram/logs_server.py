@@ -255,7 +255,7 @@ function renderSessions(sessions) {
       : '<span class="px-2 py-0.5 text-xs rounded-full bg-green-500/20 text-green-400">OK</span>';
     return `
     <div class="bg-surface-2 rounded-xl border border-surface-3 overflow-hidden hover:border-brand/50 transition-colors fade-in" data-sid="${s.session_id}">
-      <div class="p-4 flex flex-wrap items-center gap-4 cursor-pointer" onclick="toggleSession(this.parentElement.parentElement, '${s.session_id}')">
+      <div class="p-4 flex flex-wrap items-center gap-4 cursor-pointer" onclick="toggleSession('${s.session_id}')">
         <div class="flex-1 min-w-0">
           <div class="flex items-center gap-2 mb-1">
             <span class="text-xs font-mono text-brand">${s.session_id.substring(0,20)}</span>
@@ -276,8 +276,10 @@ function renderSessions(sessions) {
   }).join('');
 }
 
-async function toggleSession(el, sid) {
+async function toggleSession(sid) {
   if (event) event.stopPropagation();
+  const el = document.querySelector('[data-sid="'+sid+'"]');
+  if (!el) return;
   const details = el.querySelector('.session-details');
   if (!details.classList.contains('hidden')) {
     details.classList.add('hidden');
