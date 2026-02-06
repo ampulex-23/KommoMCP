@@ -233,7 +233,11 @@ MCP_TOOLS = [
                     'stage_id': {'type': 'integer', 'description': 'Stage/status ID (for update/delete stage)'},
                     'stage_name': {'type': 'string', 'description': 'Stage name (for create/update)'},
                     'stage_sort': {'type': 'integer', 'description': 'Stage sort order (10, 20, 30...)'},
-                    'stage_color': {'type': 'string', 'description': 'Stage color hex (#fffeb2, #fffd7f, etc)'},
+                    'stage_color': {
+                        'type': 'string',
+                        'enum': ['#fffeb2', '#fffd7f', '#fff000', '#ffeab2', '#ffdc7f', '#ffce5a', '#ffdbdb', '#ffc8c8', '#ff8f92', '#d6eaff', '#c1e0ff', '#98cbff', '#ebffb1', '#deff81', '#87f2c0', '#f9deff', '#f3beff', '#ccc8f9', '#eb93ff', '#f2f3f4', '#e6e8ea'],
+                        'description': 'Stage color (use only these exact values)',
+                    },
                     'stages_order': {
                         'type': 'array',
                         'items': {'type': 'integer'},
@@ -243,8 +247,8 @@ MCP_TOOLS = [
                     'field_name': {'type': 'string', 'description': 'Field name'},
                     'field_type': {
                         'type': 'string',
-                        'enum': ['text', 'numeric', 'checkbox', 'select', 'multiselect', 'date', 'url', 'textarea', 'price'],
-                        'description': 'Field type',
+                        'enum': ['text', 'numeric', 'checkbox', 'select', 'multiselect', 'date', 'url', 'textarea', 'birthday', 'legal_entity', 'date_time', 'streetaddress', 'smart_address', 'tracking_data'],
+                        'description': 'Field type. Use "numeric" for budget/price fields.',
                     },
                     'entity_type': {
                         'type': 'string',
@@ -1375,6 +1379,13 @@ class AIChat:
             stage_sort = args.get('stage_sort', 100)
             stage_color = args.get('stage_color', '#fffeb2')
             
+            # Validate color - Kommo only accepts specific colors
+            valid_colors = ['#fffeb2', '#fffd7f', '#fff000', '#ffeab2', '#ffdc7f', '#ffce5a', '#ffdbdb', '#ffc8c8', '#ff8f92', '#d6eaff', '#c1e0ff', '#98cbff', '#ebffb1', '#deff81', '#87f2c0', '#f9deff', '#f3beff', '#ccc8f9', '#eb93ff', '#f2f3f4', '#e6e8ea']
+            if stage_color not in valid_colors:
+                # Pick a color based on sort order for variety
+                color_idx = (stage_sort // 10) % len(valid_colors)
+                stage_color = valid_colors[color_idx]
+            
             if not pipeline_id or not stage_name:
                 return {'error': 'pipeline_id and stage_name are required'}
             
@@ -1410,7 +1421,8 @@ class AIChat:
             if dry_run:
                 return {'dry_run': True, 'message': f'Would create field: {field_name}'}
             
-            # Map field types
+            # Map field types - Kommo API valid types
+            # Note: 'price' is NOT valid, use 'numeric' for budget/price fields
             type_map = {
                 'text': 'text',
                 'numeric': 'numeric',
@@ -1420,7 +1432,17 @@ class AIChat:
                 'date': 'date',
                 'url': 'url',
                 'textarea': 'textarea',
-                'price': 'price',
+                'birthday': 'birthday',
+                'legal_entity': 'legal_entity',
+                'date_time': 'date_time',
+                'streetaddress': 'streetaddress',
+                'smart_address': 'smart_address',
+                'tracking_data': 'tracking_data',
+                # Aliases for common mistakes
+                'price': 'numeric',
+                'money': 'numeric',
+                'budget': 'numeric',
+                'number': 'numeric',
             }
             
             # Create field
