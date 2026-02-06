@@ -1537,40 +1537,31 @@ class AIChat:
             if not pipeline_id:
                 return {'error': 'pipeline_id is required'}
             
+            pipeline_id = int(pipeline_id)
+            
             if dry_run:
                 return {'dry_run': True, 'message': f'Would DELETE pipeline {pipeline_id}. This is irreversible!'}
             
-            url = f'{self.kommo_base_url}/api/v4/leads/pipelines/{pipeline_id}'
+            # Step 1: Find the main pipeline to move leads there
+            main_pipeline_id = None
+            pipelines_url = f'{self.kommo_base_url}/api/v4/leads/pipelines'
+            async with session.get(pipelines_url, headers=headers) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    for p in data.get('_embedded', {}).get('pipelines', []):
+                        if p.get('is_main'):
+                            main_pipeline_id = p['id']
+                            break
+                        if p['id'] != pipeline_id and main_pipeline_id is None:
+                            main_pipeline_id = p['id']
             
-            # First, get all leads in this pipeline and delete them with unlinking
-            leads_deleted = 0
+            if not main_pipeline_id:
+                return {'error': 'Cannot find another pipeline to move leads to before deletion'}
+            
+            # Step 2: Move all leads from target pipeline to main pipeline (status 143 = lost)
+            leads_moved = 0
             leads_found = 0
             page = 1
-            
-            async def get_lead_links(lead_id: int) -> list:
-                """Get all links for a lead."""
-                link_url = f'{self.kommo_base_url}/api/v4/leads/{lead_id}/links'
-                async with session.get(link_url, headers=headers) as resp:
-                    if resp.status == 200:
-                        data = await resp.json()
-                        return data.get('_embedded', {}).get('links', [])
-                return []
-            
-            async def unlink_lead(lead_id: int, links: list) -> int:
-                """Remove all links from a lead."""
-                if not links:
-                    return 0
-                unlink_url = f'{self.kommo_base_url}/api/v4/leads/{lead_id}/unlink'
-                unlinked = 0
-                for link in links:
-                    payload = [{
-                        'to_entity_type': link.get('to_entity_type'),
-                        'to_entity_id': link.get('to_entity_id'),
-                    }]
-                    async with session.post(unlink_url, headers=headers, json=payload) as resp:
-                        if resp.status in [200, 204]:
-                            unlinked += 1
-                return unlinked
             
             while True:
                 leads_url = f'{self.kommo_base_url}/api/v4/leads'
@@ -1582,44 +1573,42 @@ class AIChat:
                     data = await leads_resp.json()
                     leads = data.get('_embedded', {}).get('leads', [])
                     leads_found += len(leads)
-                    logger.info(f'Found {len(leads)} leads on page {page}')
                     if not leads:
                         break
                     
-                    # Unlink and delete each lead
+                    # Move each lead to main pipeline's lost status
                     for lead in leads:
                         lead_id = lead['id']
-                        # First unlink
-                        links = await get_lead_links(lead_id)
-                        if links:
-                            await unlink_lead(lead_id, links)
-                        # Then move to lost status (143) since DELETE is not supported for leads
-                        del_url = f'{self.kommo_base_url}/api/v4/leads/{lead_id}'
-                        payload = {'status_id': 143}  # 143 = Closed and not realized (lost)
-                        async with session.patch(del_url, headers=headers, json=payload) as del_resp:
-                            if del_resp.status in [200, 204]:
-                                leads_deleted += 1
+                        move_url = f'{self.kommo_base_url}/api/v4/leads/{lead_id}'
+                        move_payload = {
+                            'pipeline_id': main_pipeline_id,
+                            'status_id': 143,
+                        }
+                        async with session.patch(move_url, headers=headers, json=move_payload) as move_resp:
+                            if move_resp.status in [200, 204]:
+                                leads_moved += 1
                             else:
-                                logger.warning(f'Failed to close lead {lead_id}: {del_resp.status}')
+                                resp_text = await move_resp.text()
+                                logger.warning(f'Failed to move lead {lead_id}: {move_resp.status} {resp_text[:100]}')
                     
                     page += 1
                     if len(leads) < 250:
                         break
             
-            logger.info(f'Total leads found: {leads_found}, deleted: {leads_deleted}')
+            logger.info(f'Pipeline {pipeline_id}: found {leads_found} leads, moved {leads_moved} to pipeline {main_pipeline_id}')
             
-            # Now delete the pipeline
-            async with session.delete(url, headers=headers) as resp:
+            # Step 3: Delete the now-empty pipeline
+            del_url = f'{self.kommo_base_url}/api/v4/leads/pipelines/{pipeline_id}'
+            async with session.delete(del_url, headers=headers) as resp:
                 if resp.status in [200, 204]:
                     result = {'success': True, 'deleted_pipeline_id': pipeline_id}
-                    if leads_deleted > 0:
-                        result['leads_deleted'] = leads_deleted
-                        result['message'] = f'Auto-deleted {leads_deleted} leads before removing pipeline'
+                    if leads_moved > 0:
+                        result['leads_moved'] = leads_moved
+                        result['moved_to_pipeline'] = main_pipeline_id
+                        result['message'] = f'Moved {leads_moved} leads to main pipeline before deletion'
                     return result
                 error_text = await resp.text()
-                if leads_deleted > 0:
-                    return {'error': f'Failed after deleting {leads_deleted} leads: {error_text[:200]}'}
-                return {'error': f'Failed to delete pipeline: {error_text[:200]}'}
+                return {'error': f'Failed to delete pipeline (moved {leads_moved} leads): {error_text[:300]}'}
         
         elif action == 'update_stage':
             pipeline_id = args.get('pipeline_id')
@@ -3716,6 +3705,41 @@ class AIChat:
                     return data.get('_embedded', {}).get('pipelines', [])
             return []
         
+        async def move_leads_out(pipeline_id: int, target_pipeline_id: int) -> int:
+            """Move all leads from pipeline to target pipeline (status 143=lost). Returns count moved."""
+            moved = 0
+            page = 1
+            while True:
+                url = f'{self.kommo_base_url}/api/v4/leads'
+                params = {'filter[pipeline_id][]': pipeline_id, 'limit': 250, 'page': page}
+                async with session.get(url, headers=headers, params=params) as resp:
+                    if resp.status != 200:
+                        break
+                    data = await resp.json()
+                    leads = data.get('_embedded', {}).get('leads', [])
+                    if not leads:
+                        break
+                    for lead in leads:
+                        move_url = f'{self.kommo_base_url}/api/v4/leads/{lead["id"]}'
+                        payload = {'pipeline_id': target_pipeline_id, 'status_id': 143}
+                        async with session.patch(move_url, headers=headers, json=payload) as mr:
+                            if mr.status in [200, 204]:
+                                moved += 1
+                    page += 1
+                    if len(leads) < 250:
+                        break
+            return moved
+        
+        async def delete_pipeline_safe(pipeline_id: int, main_pipeline_id: int) -> dict:
+            """Safely delete a pipeline by moving leads out first."""
+            moved = await move_leads_out(pipeline_id, main_pipeline_id)
+            url = f'{self.kommo_base_url}/api/v4/leads/pipelines/{pipeline_id}'
+            async with session.delete(url, headers=headers) as resp:
+                if resp.status in [200, 204]:
+                    return {'success': True, 'pipeline_id': pipeline_id, 'leads_moved': moved}
+                error = await resp.text()
+                return {'error': f'Failed to delete pipeline {pipeline_id}: {error[:200]}', 'leads_moved': moved}
+        
         if action == 'preview':
             leads = await get_all_entities('leads')
             contacts = await get_all_entities('contacts')
@@ -3778,51 +3802,77 @@ class AIChat:
         
         elif action == 'reset_pipelines':
             pipelines = await get_pipelines()
+            main_pipeline_id = None
+            for p in pipelines:
+                if p.get('is_main'):
+                    main_pipeline_id = p['id']
+                    break
+            if not main_pipeline_id and pipelines:
+                main_pipeline_id = pipelines[0]['id']
+            
             deleted_pipelines = 0
+            total_leads_moved = 0
+            pipeline_results = []
             
             for pipeline in pipelines:
-                if not pipeline.get('is_main', False):
-                    url = f'{self.kommo_base_url}/api/v4/leads/pipelines/{pipeline["id"]}'
-                    async with session.delete(url, headers=headers) as resp:
-                        if resp.status in [200, 204]:
-                            deleted_pipelines += 1
+                if pipeline['id'] == main_pipeline_id:
+                    continue
+                result = await delete_pipeline_safe(pipeline['id'], main_pipeline_id)
+                pipeline_results.append(result)
+                if result.get('success'):
+                    deleted_pipelines += 1
+                total_leads_moved += result.get('leads_moved', 0)
             
             return {
                 'action': 'reset_pipelines',
                 'pipelines_found': len(pipelines),
                 'pipelines_deleted': deleted_pipelines,
-                'note': 'Main pipeline preserved, custom pipelines deleted',
+                'leads_moved': total_leads_moved,
+                'details': pipeline_results,
+                'note': 'Main pipeline preserved, leads moved to main pipeline before deletion',
             }
         
         elif action == 'full_reset':
             results = {}
             
-            # 1. Smart delete leads
-            leads = await get_all_entities('leads')
-            results['leads'] = await smart_delete_all('leads', leads)
-            
-            # 2. Smart delete contacts
-            contacts = await get_all_entities('contacts')
-            results['contacts'] = await smart_delete_all('contacts', contacts)
-            
-            # 3. Smart delete companies
-            companies = await get_all_entities('companies')
-            results['companies'] = await smart_delete_all('companies', companies)
-            
-            # 4. Reset pipelines
+            # 1. Get main pipeline for moving leads
             pipelines = await get_pipelines()
+            main_pipeline_id = None
+            for p in pipelines:
+                if p.get('is_main'):
+                    main_pipeline_id = p['id']
+                    break
+            if not main_pipeline_id and pipelines:
+                main_pipeline_id = pipelines[0]['id']
+            
+            # 2. Move all leads from non-main pipelines to main, then delete pipelines
             deleted_pipelines = 0
+            total_leads_moved = 0
             for pipeline in pipelines:
-                if not pipeline.get('is_main', False):
-                    url = f'{self.kommo_base_url}/api/v4/leads/pipelines/{pipeline["id"]}'
-                    async with session.delete(url, headers=headers) as resp:
-                        if resp.status in [200, 204]:
-                            deleted_pipelines += 1
+                if pipeline['id'] == main_pipeline_id:
+                    continue
+                result = await delete_pipeline_safe(pipeline['id'], main_pipeline_id)
+                if result.get('success'):
+                    deleted_pipelines += 1
+                total_leads_moved += result.get('leads_moved', 0)
             
             results['pipelines'] = {
                 'found': len(pipelines),
                 'deleted': deleted_pipelines,
+                'leads_moved': total_leads_moved,
             }
+            
+            # 3. Smart delete all remaining leads (in main pipeline)
+            leads = await get_all_entities('leads')
+            results['leads'] = await smart_delete_all('leads', leads)
+            
+            # 4. Smart delete contacts
+            contacts = await get_all_entities('contacts')
+            results['contacts'] = await smart_delete_all('contacts', contacts)
+            
+            # 5. Smart delete companies
+            companies = await get_all_entities('companies')
+            results['companies'] = await smart_delete_all('companies', companies)
             
             return {'action': 'full_reset', 'success': True, **results}
         
