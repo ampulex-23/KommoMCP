@@ -5,6 +5,7 @@ Uses RAG-based tool retrieval for dynamic prompt generation.
 
 import json
 import logging
+import re
 from typing import Optional, List, Dict, Any
 
 import aiohttp
@@ -13,6 +14,24 @@ from kommo_mcp.telegram.tool_retriever import get_retriever, build_dynamic_promp
 from kommo_mcp.telegram.interaction_logger import get_interaction_logger
 
 logger = logging.getLogger(__name__)
+
+
+def _md_to_html(text: str) -> str:
+    """Convert Markdown formatting to Telegram HTML."""
+    if not text:
+        return text
+    # Bold: **text** or __text__ -> <b>text</b>
+    text = re.sub(r'\*\*(.+?)\*\*', r'<b>\1</b>', text)
+    text = re.sub(r'__(.+?)__', r'<b>\1</b>', text)
+    # Italic: *text* or _text_ (but not inside words)
+    text = re.sub(r'(?<!\w)\*(?!\*)(.+?)(?<!\*)\*(?!\w)', r'<i>\1</i>', text)
+    # Code: `text` -> <code>text</code>
+    text = re.sub(r'`([^`]+)`', r'<code>\1</code>', text)
+    # Headers: ### text -> <b>text</b>
+    text = re.sub(r'^#{1,6}\s+(.+)$', r'<b>\1</b>', text, flags=re.MULTILINE)
+    # Markdown list dashes at start of line -> •
+    text = re.sub(r'^- ', '• ', text, flags=re.MULTILINE)
+    return text
 
 # Available MCP tools for AI
 MCP_TOOLS = [
@@ -937,7 +956,19 @@ SYSTEM_PROMPT = """Ты - AI-ассистент для ПОЛНОГО управ
 
 ⚠️ УДАЛЕНИЕ ВОРОНКИ: сначала вызови kommo_cleanup delete_leads pipeline_id=X confirm=true, затем kommo_setup delete_pipeline
 
-ФОРМАТИРОВАНИЕ: <b>жирный</b>, <code>ID</code>, эмодзи ✅❌📊📈💰👤🏢📋🔧⚡🏷️🔗📦📞🗑️
+ФОРМАТИРОВАНИЕ ОТВЕТОВ (СТРОГО):
+- Используй ТОЛЬКО HTML-теги для Telegram: <b>жирный</b>, <i>курсив</i>, <code>код/ID</code>
+- НИКОГДА не используй Markdown: НЕ используй **, ##, ###, *, ```, - для списков
+- Для списков используй эмодзи или цифры с точкой: "1. текст" или "• текст"
+- Для заголовков используй <b>ЗАГОЛОВОК</b> с эмодзи
+- Эмодзи: ✅❌📊📈💰👤🏢📋🔧⚡🏷️🔗📦📞🗑️🔄⏱️
+- Пример правильного ответа:
+  ✅ CRM настроена для воронки "<b>Продажи</b>":
+
+  <b>📋 Воронка продаж:</b>
+  1. Получение заявки
+  2. Квалификация
+  3. Коммерческое предложение
 """
 
 
@@ -1023,7 +1054,7 @@ class AIChat:
                 
                 # If no tool calls, we're done
                 if not response.get('tool_calls'):
-                    assistant_response = response.get('content', 'Не удалось получить ответ')
+                    assistant_response = _md_to_html(response.get('content', 'Не удалось получить ответ'))
                     # Save to history
                     self._add_to_history(user_id, 'user', message)
                     self._add_to_history(user_id, 'assistant', assistant_response)
@@ -1057,7 +1088,7 @@ class AIChat:
             
             # If we hit max iterations, get final summary
             final_response = await self._openai_request(messages=messages)
-            assistant_response = final_response.get('content', 'Настройка завершена')
+            assistant_response = _md_to_html(final_response.get('content', 'Настройка завершена'))
             # Save to history
             self._add_to_history(user_id, 'user', message)
             self._add_to_history(user_id, 'assistant', assistant_response)
@@ -1362,12 +1393,22 @@ class AIChat:
                         if pipelines:
                             pipeline_id = pipelines[0].get('id')
                             stages = pipelines[0].get('_embedded', {}).get('statuses', [])
+                            
+                            # Delete default stages (keep only system ones: 142/143 win/lose)
+                            for stage in stages:
+                                stage_id = stage.get('id')
+                                # System stages (win/lose) cannot be deleted, skip them
+                                if stage_id and stage_id not in [142, 143]:
+                                    del_url = f'{self.kommo_base_url}/api/v4/leads/pipelines/{pipeline_id}/statuses/{stage_id}'
+                                    async with session.delete(del_url, headers=headers) as del_resp:
+                                        logger.info(f'Deleted default stage {stage.get("name")} ({stage_id}): {del_resp.status}')
+                            
                             return {
                                 'success': True,
                                 'pipeline_id': pipeline_id,
                                 'pipeline_name': pipelines[0].get('name'),
-                                'stages': [{'id': s.get('id'), 'name': s.get('name')} for s in stages],
-                                'hint': f'Use pipeline_id={pipeline_id} for create_stage calls',
+                                'stages': [],
+                                'hint': f'Pipeline created empty. Use pipeline_id={pipeline_id} for create_stage calls. Stages start from sort=10.',
                             }
                     except:
                         pass
