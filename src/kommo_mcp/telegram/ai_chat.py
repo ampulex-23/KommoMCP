@@ -984,7 +984,7 @@ class AIChat:
         openai_api_key: str,
         kommo_domain: str,
         kommo_token: str,
-        model: str = 'gpt-4o',
+        model: str = 'gpt-5-mini',
     ):
         self.openai_api_key = openai_api_key
         self.kommo_domain = kommo_domain
@@ -2934,13 +2934,17 @@ class AIChat:
         
         elif action == 'delete_all':
             # Delete ALL custom fields for given entity type(s)
+            # System fields (tracking_data, multitext like Phone/Email) cannot be deleted via API
+            SYSTEM_FIELD_TYPES = {'tracking_data'}
+            SYSTEM_FIELD_CODES = {'PHONE', 'EMAIL', 'IM', 'POSITION', 'WEB', 'ADDRESS'}
+            
             confirm = args.get('confirm', False)
             all_types = args.get('all_types', False)
             
             target_types = ['leads', 'contacts', 'companies'] if all_types else [entity_type]
             
             if not confirm:
-                # Preview mode - show what would be deleted
+                # Preview mode - show what would be deleted vs system fields
                 preview = {}
                 for et in target_types:
                     url = f'{self.kommo_base_url}/api/v4/{et}/custom_fields'
@@ -2948,15 +2952,26 @@ class AIChat:
                         if resp.status == 200:
                             data = await resp.json()
                             fields = data.get('_embedded', {}).get('custom_fields', [])
-                            preview[et] = [{'id': f.get('id'), 'name': f.get('name'), 'type': f.get('type')} for f in fields]
+                            deletable = []
+                            system = []
+                            for f in fields:
+                                info = {'id': f.get('id'), 'name': f.get('name'), 'type': f.get('type')}
+                                code = f.get('code', '')
+                                if f.get('type') in SYSTEM_FIELD_TYPES or code in SYSTEM_FIELD_CODES:
+                                    system.append(info)
+                                else:
+                                    deletable.append(info)
+                            preview[et] = {'deletable': deletable, 'system_undeletable': system}
                         else:
-                            preview[et] = []
-                total = sum(len(v) for v in preview.values())
+                            preview[et] = {'deletable': [], 'system_undeletable': []}
+                total_deletable = sum(len(v['deletable']) for v in preview.values())
+                total_system = sum(len(v['system_undeletable']) for v in preview.values())
                 return {
                     'preview': True,
                     'fields_to_delete': preview,
-                    'total': total,
-                    'warning': 'Set confirm=true to delete all these fields. Data stored in these fields will be LOST!',
+                    'total_deletable': total_deletable,
+                    'total_system_undeletable': total_system,
+                    'warning': f'{total_deletable} fields can be deleted, {total_system} are system fields that CANNOT be deleted. Set confirm=true to proceed.',
                 }
             
             results = {}
@@ -2970,17 +2985,33 @@ class AIChat:
                     fields = data.get('_embedded', {}).get('custom_fields', [])
                 
                 deleted = 0
+                deleted_names = []
+                skipped_system = []
                 failed = []
                 for f in fields:
                     fid = f.get('id')
+                    fname = f.get('name')
+                    ftype = f.get('type')
+                    code = f.get('code', '')
+                    # Skip system fields — they cannot be deleted
+                    if ftype in SYSTEM_FIELD_TYPES or code in SYSTEM_FIELD_CODES:
+                        skipped_system.append({'id': fid, 'name': fname, 'type': ftype, 'reason': 'system field'})
+                        continue
                     del_url = f'{self.kommo_base_url}/api/v4/{et}/custom_fields/{fid}'
                     async with session.delete(del_url, headers=headers) as del_resp:
                         if del_resp.status in [200, 204]:
                             deleted += 1
+                            deleted_names.append(fname)
                         else:
-                            failed.append({'id': fid, 'name': f.get('name'), 'status': del_resp.status})
+                            failed.append({'id': fid, 'name': fname, 'status': del_resp.status})
                 
-                results[et] = {'found': len(fields), 'deleted': deleted, 'failed': failed}
+                results[et] = {
+                    'total_fields': len(fields),
+                    'deleted': deleted,
+                    'deleted_names': deleted_names,
+                    'skipped_system': skipped_system,
+                    'failed': failed,
+                }
             
             return {'action': 'delete_all', 'results': results}
         
@@ -3971,21 +4002,39 @@ class AIChat:
             return all_fields
         
         async def delete_all_custom_fields() -> dict:
-            """Delete all custom fields for leads, contacts, companies."""
+            """Delete all custom fields for leads, contacts, companies.
+            Skips system fields (tracking_data, Phone, Email, etc.) that cannot be deleted."""
+            SYSTEM_FIELD_TYPES = {'tracking_data'}
+            SYSTEM_FIELD_CODES = {'PHONE', 'EMAIL', 'IM', 'POSITION', 'WEB', 'ADDRESS'}
             all_fields = await get_all_custom_fields()
             results = {}
             for et, fields in all_fields.items():
                 deleted = 0
+                deleted_names = []
+                skipped_system = []
                 failed = []
                 for f in fields:
                     fid = f.get('id')
+                    fname = f.get('name')
+                    ftype = f.get('type')
+                    code = f.get('code', '')
+                    if ftype in SYSTEM_FIELD_TYPES or code in SYSTEM_FIELD_CODES:
+                        skipped_system.append({'id': fid, 'name': fname, 'type': ftype})
+                        continue
                     del_url = f'{self.kommo_base_url}/api/v4/{et}/custom_fields/{fid}'
                     async with session.delete(del_url, headers=headers) as resp:
                         if resp.status in [200, 204]:
                             deleted += 1
+                            deleted_names.append(fname)
                         else:
-                            failed.append({'id': fid, 'name': f.get('name')})
-                results[et] = {'found': len(fields), 'deleted': deleted, 'failed': failed}
+                            failed.append({'id': fid, 'name': fname})
+                results[et] = {
+                    'total': len(fields),
+                    'deleted': deleted,
+                    'deleted_names': deleted_names,
+                    'skipped_system': len(skipped_system),
+                    'failed': failed,
+                }
             return results
         
         if action == 'preview':
