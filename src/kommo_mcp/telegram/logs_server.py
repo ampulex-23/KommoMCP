@@ -174,19 +174,26 @@ let allSessions = [];
 let timelineChart = null;
 let toolsChart = null;
 
-async function loadData() {
+let isAutoRefresh = false;
+
+async function loadData(auto) {
   try {
     const resp = await fetch('%%PREFIX%%/api/sessions?limit=100');
     const data = await resp.json();
     allSessions = data.sessions || [];
     renderStats(data.stats);
     populateTenantFilter();
-    applyFilters();
+    // Only re-render session list if no sessions are expanded or manual refresh
+    if (!auto || !document.querySelector('.session-details:not(.hidden)')) {
+      applyFilters();
+    }
     renderCharts();
     document.getElementById('lastUpdate').textContent = 'Updated: ' + new Date().toLocaleTimeString();
   } catch (e) {
-    document.getElementById('sessionsList').innerHTML =
-      '<div class="text-center text-slate-500 py-12">Failed to load data</div>';
+    if (!auto) {
+      document.getElementById('sessionsList').innerHTML =
+        '<div class="text-center text-slate-500 py-12">Failed to load data</div>';
+    }
   }
 }
 
@@ -247,8 +254,8 @@ function renderSessions(sessions) {
       ? `<span class="px-2 py-0.5 text-xs rounded-full bg-red-500/20 text-red-400">${s.errors} errors</span>`
       : '<span class="px-2 py-0.5 text-xs rounded-full bg-green-500/20 text-green-400">OK</span>';
     return `
-    <div class="bg-surface-2 rounded-xl border border-surface-3 overflow-hidden hover:border-brand/50 transition-colors cursor-pointer fade-in" onclick="toggleSession(this,'${s.session_id}')">
-      <div class="p-4 flex flex-wrap items-center gap-4">
+    <div class="bg-surface-2 rounded-xl border border-surface-3 overflow-hidden hover:border-brand/50 transition-colors fade-in" data-sid="${s.session_id}">
+      <div class="p-4 flex flex-wrap items-center gap-4 cursor-pointer" onclick="toggleSession(this.parentElement.parentElement, '${s.session_id}')">
         <div class="flex-1 min-w-0">
           <div class="flex items-center gap-2 mb-1">
             <span class="text-xs font-mono text-brand">${s.session_id.substring(0,20)}</span>
@@ -270,6 +277,7 @@ function renderSessions(sessions) {
 }
 
 async function toggleSession(el, sid) {
+  if (event) event.stopPropagation();
   const details = el.querySelector('.session-details');
   if (!details.classList.contains('hidden')) {
     details.classList.add('hidden');
@@ -313,7 +321,7 @@ function renderDetails(s) {
         h += `<div class="mt-2 border-l-2 ${isErr?'border-red-500':'border-green-500'} pl-3">
           <div class="text-sm font-semibold ${isErr?'text-red-400':'text-amber-300'}">${tc.tool_name||'?'}</div>
           <div class="text-xs text-slate-500 font-mono mt-1 break-all">${esc(JSON.stringify(tc.arguments||{}))}</div>
-          <details class="mt-1"><summary class="text-xs text-slate-500 cursor-pointer hover:text-slate-300">Result</summary>
+          <details class="mt-1" onclick="event.stopPropagation()"><summary class="text-xs text-slate-500 cursor-pointer hover:text-slate-300">Result</summary>
             <pre class="text-xs ${isErr?'text-red-400':'text-green-400'} font-mono mt-1 max-h-32 overflow-auto whitespace-pre-wrap break-all">${esc(res.substring(0,1000))}</pre>
           </details>
         </div>`;
@@ -347,7 +355,7 @@ function renderDetails(s) {
   // Dynamic prompt
   if (s.dynamic_prompt) {
     h += `<div class="p-4">
-      <details><summary class="text-xs font-semibold text-slate-500 uppercase cursor-pointer hover:text-slate-300">📋 Dynamic Prompt (${s.dynamic_prompt.length} chars)</summary>
+      <details onclick="event.stopPropagation()"><summary class="text-xs font-semibold text-slate-500 uppercase cursor-pointer hover:text-slate-300">📋 Dynamic Prompt (${s.dynamic_prompt.length} chars)</summary>
         <div class="bg-surface rounded-lg p-3 mt-2 text-xs font-mono text-slate-400 max-h-48 overflow-auto whitespace-pre-wrap">${esc(s.dynamic_prompt.substring(0,3000))}</div>
       </details>
     </div>`;
@@ -443,8 +451,8 @@ function esc(t) {
 }
 
 // Auto-refresh every 30s
-loadData();
-setInterval(loadData, 30000);
+loadData(false);
+setInterval(() => loadData(true), 30000);
 </script>
 </body>
 </html>'''
