@@ -949,7 +949,7 @@ class AIChat:
         openai_api_key: str,
         kommo_domain: str,
         kommo_token: str,
-        model: str = 'gpt-4o-mini',
+        model: str = 'gpt-4o',
     ):
         self.openai_api_key = openai_api_key
         self.kommo_domain = kommo_domain
