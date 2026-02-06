@@ -20,8 +20,12 @@ from aiogram.client.default import DefaultBotProperties
 from kommo_mcp.saas.manager import TenantManager
 from kommo_mcp.saas.orchestrator import Orchestrator
 from kommo_mcp.saas.tenant import TenantStatus
+from kommo_mcp.telegram.interaction_logger import get_interaction_logger
 
 logger = logging.getLogger(__name__)
+
+# Admin user IDs who can view logs
+ADMIN_USER_IDS = {123456789}  # TODO: Configure via env
 
 # FSM States
 class SetupStates(StatesGroup):
@@ -89,6 +93,78 @@ class KommoBot:
                 '• Какие сделки просрочены?'
             )
             await message.answer(help_text)
+        
+        @self.router.message(Command('logs'))
+        async def cmd_logs(message: Message):
+            """Show recent interaction logs (admin only)."""
+            user_id = message.from_user.id
+            
+            # Check admin access or allow own logs
+            ilog = get_interaction_logger()
+            
+            # Parse arguments: /logs [session_id] or /logs list [count]
+            args = message.text.split()[1:] if len(message.text.split()) > 1 else []
+            
+            if args and args[0] != 'list':
+                # Get specific session
+                session_id = args[0]
+                session = ilog.get_session(session_id)
+                
+                if not session:
+                    await message.answer(f'❌ Сессия {session_id} не найдена')
+                    return
+                
+                # Format session details
+                text = f'<b>📋 Сессия:</b> <code>{session_id}</code>\n\n'
+                text += f'<b>User:</b> {session.get("user_id")}\n'
+                text += f'<b>Время:</b> {session.get("started_at", "")[:19]}\n'
+                text += f'<b>Длительность:</b> {session.get("duration_ms", 0):.0f}ms\n\n'
+                text += f'<b>Запрос:</b>\n<code>{session.get("user_message", "")[:200]}</code>\n\n'
+                
+                # Iterations
+                iterations = session.get('iterations', [])
+                if iterations:
+                    text += f'<b>Итерации ({len(iterations)}):</b>\n'
+                    for it in iterations[:5]:
+                        for tc in it.get('tool_calls', []):
+                            status = '✅' if tc.get('success') else '❌'
+                            text += f'  {status} {tc.get("tool_name")}\n'
+                
+                # Errors
+                errors = session.get('errors', [])
+                if errors:
+                    text += f'\n<b>❌ Ошибки ({len(errors)}):</b>\n'
+                    for err in errors[:3]:
+                        text += f'  • {err.get("type")}: {err.get("message", "")[:100]}\n'
+                
+                # Response
+                response = session.get('final_response', '')
+                if response:
+                    text += f'\n<b>Ответ:</b>\n<code>{response[:300]}</code>'
+                
+                await message.answer(text[:4000])
+            else:
+                # List recent sessions
+                limit = int(args[1]) if len(args) > 1 else 10
+                sessions = ilog.get_recent_sessions(limit=limit)
+                
+                if not sessions:
+                    await message.answer('📋 Логов пока нет')
+                    return
+                
+                text = f'<b>📋 Последние {len(sessions)} сессий:</b>\n\n'
+                for s in sessions:
+                    errors_str = f' ❌{s["errors"]}' if s.get('errors') else ''
+                    text += (
+                        f'<code>{s["session_id"][:20]}</code>\n'
+                        f'  ⏱ {s.get("duration_ms", 0):.0f}ms | '
+                        f'🔧 {s.get("iterations", 0)} iter | '
+                        f'📡 {s.get("api_calls", 0)} API{errors_str}\n'
+                        f'  💬 {s.get("user_message", "")[:50]}\n\n'
+                    )
+                
+                text += '\n<i>Используйте /logs [session_id] для деталей</i>'
+                await message.answer(text[:4000])
         
         @self.router.message(Command('status'))
         async def cmd_status(message: Message):

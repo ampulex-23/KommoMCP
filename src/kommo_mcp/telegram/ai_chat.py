@@ -10,6 +10,7 @@ from typing import Optional, List, Dict, Any
 import aiohttp
 
 from kommo_mcp.telegram.tool_retriever import get_retriever, build_dynamic_prompt
+from kommo_mcp.telegram.interaction_logger import get_interaction_logger
 
 logger = logging.getLogger(__name__)
 
@@ -983,6 +984,10 @@ class AIChat:
             use_rag: If True, use RAG-based dynamic prompt. If False, use full static prompt.
             user_id: User identifier for conversation history
         """
+        # Initialize interaction logger
+        ilog = get_interaction_logger()
+        session_id = ilog.start_session(user_id, message)
+        
         try:
             # Build dynamic prompt based on user query using RAG
             if use_rag:
@@ -991,6 +996,9 @@ class AIChat:
                 logger.info(f'RAG: retrieved tools for query, prompt size: {len(dynamic_prompt)} chars')
             else:
                 dynamic_prompt = SYSTEM_PROMPT
+            
+            # Log prompts
+            ilog.log_prompt(SYSTEM_PROMPT, dynamic_prompt)
             
             # Get conversation history and build messages
             history = self._get_history(user_id)
@@ -1015,11 +1023,16 @@ class AIChat:
                     # Save to history
                     self._add_to_history(user_id, 'user', message)
                     self._add_to_history(user_id, 'assistant', assistant_response)
+                    # End session logging
+                    ilog.end_session(assistant_response)
                     return assistant_response
                 
                 # Execute all tool calls
                 tool_results = await self._execute_tool_calls(response['tool_calls'])
                 all_results.extend(tool_results)
+                
+                # Log iteration
+                ilog.log_iteration(iteration + 1, response['tool_calls'], tool_results)
                 
                 # Add assistant message with tool calls
                 messages.append({
@@ -1044,10 +1057,15 @@ class AIChat:
             # Save to history
             self._add_to_history(user_id, 'user', message)
             self._add_to_history(user_id, 'assistant', assistant_response)
+            # End session logging
+            ilog.end_session(assistant_response)
             return assistant_response
         
         except Exception as e:
             logger.error(f'Chat error: {e}')
+            # Log error
+            ilog.log_error('chat_error', str(e))
+            ilog.end_session(f'❌ Ошибка: {e}')
             return f'❌ Ошибка: {e}'
     
     async def _openai_request(
@@ -1091,6 +1109,7 @@ class AIChat:
     async def _execute_tool_calls(self, tool_calls: List[Dict]) -> List[Dict]:
         """Execute Kommo API calls directly."""
         results = []
+        ilog = get_interaction_logger()
         
         async with aiohttp.ClientSession() as session:
             headers = {
@@ -1108,6 +1127,7 @@ class AIChat:
                     results.append(result)
                 except Exception as e:
                     logger.error(f'Tool call error: {e}')
+                    ilog.log_error('tool_call_error', str(e), {'tool': name, 'args': args})
                     results.append({'error': str(e)})
         
         return results
