@@ -26,6 +26,9 @@ class Tenant(BaseModel):
     telegram_user_id: int
     telegram_username: Optional[str] = None
     
+    # Human-readable label for multi-CRM switching (e.g. 'Компания А')
+    label: Optional[str] = None
+    
     # Kommo API credentials
     kommo_domain: Optional[str] = None  # e.g., 'mycompany.kommo.com'
     kommo_access_token: Optional[str] = None

@@ -29,9 +29,12 @@ ADMIN_USER_IDS = {123456789}  # TODO: Configure via env
 
 # FSM States
 class SetupStates(StatesGroup):
+    waiting_crm_label = State()
     waiting_kommo_domain = State()
     waiting_kommo_token = State()
     waiting_openai_key = State()
+    waiting_switch_choice = State()
+    waiting_remove_choice = State()
 
 
 class KommoBot:
@@ -56,48 +59,63 @@ class KommoBot:
         
         @self.router.message(CommandStart())
         async def cmd_start(message: Message):
-            """Handle /start command - register new user."""
+            """Handle /start command - greet user."""
             user_id = message.from_user.id
-            username = message.from_user.username
+            tenants = await self.tenant_manager.get_tenants_for_user(user_id)
             
-            tenant = await self.tenant_manager.register(user_id, username)
-            
-            welcome = (
-                f'👋 <b>Добро пожаловать в KommoMCP!</b>\n\n'
-                f'Я помогу вам работать с вашей CRM через AI.\n\n'
-                f'<b>Статус:</b> {self._format_status(tenant.status)}\n\n'
-                f'<b>Для начала работы:</b>\n'
-                f'1️⃣ /connect - подключить Kommo CRM\n'
-                f'2️⃣ /openai - добавить OpenAI ключ\n'
-                f'3️⃣ /ask - задать вопрос по CRM\n\n'
-                f'/help - все команды'
-            )
+            if tenants:
+                active = await self.tenant_manager.get_active_tenant(user_id)
+                active_label = active.label or active.kommo_domain or 'без имени' if active else '—'
+                welcome = (
+                    f'\U0001f44b <b>С возвращением в KommoMCP!</b>\n\n'
+                    f'У вас подключено CRM: <b>{len(tenants)}</b>\n'
+                    f'Активная: <b>{active_label}</b>\n\n'
+                    f'/crm_list - список CRM\n'
+                    f'/connect - подключить ещё одну CRM\n'
+                    f'/switch - переключить активную CRM\n'
+                    f'/ask - задать вопрос по CRM\n\n'
+                    f'/help - все команды'
+                )
+            else:
+                welcome = (
+                    f'\U0001f44b <b>Добро пожаловать в KommoMCP!</b>\n\n'
+                    f'Я помогу вам работать с вашей CRM через AI.\n\n'
+                    f'<b>Для начала работы:</b>\n'
+                    f'1\ufe0f\u20e3 /connect - подключить Kommo CRM\n'
+                    f'2\ufe0f\u20e3 /openai - добавить OpenAI ключ\n'
+                    f'3\ufe0f\u20e3 /ask - задать вопрос по CRM\n\n'
+                    f'/help - все команды'
+                )
             await message.answer(welcome)
         
         @self.router.message(Command('help'))
         async def cmd_help(message: Message):
             """Show help message."""
             help_text = (
-                '<b>📚 Команды:</b>\n\n'
-                '/start - начать работу\n'
-                '/connect - подключить Kommo CRM\n'
+                '<b>\U0001f4da Команды:</b>\n\n'
+                '<b>CRM-подключения:</b>\n'
+                '/connect - подключить новую CRM\n'
+                '/crm_list - список всех CRM\n'
+                '/switch - переключить активную CRM\n'
+                '/remove_crm - отключить CRM\n'
                 '/openai - добавить OpenAI API ключ\n'
-                '/status - статус подключения\n'
-                '/wizard - 🧙‍♂️ мастер настройки CRM\n'
+                '/status - статус текущей CRM\n\n'
+                '<b>Работа:</b>\n'
+                '/wizard - \U0001f9d9\u200d\u2642\ufe0f мастер настройки CRM\n'
                 '/ask <вопрос> - задать вопрос по CRM\n'
                 '/cancel - отменить текущую операцию\n\n'
                 '<b>Примеры вопросов:</b>\n'
-                '• Покажи аналитику воронки\n'
-                '• Сколько сделок в работе?\n'
-                '• Создай воронку для продаж\n'
-                '• Какие сделки просрочены?'
+                '\u2022 Покажи аналитику воронки\n'
+                '\u2022 Сколько сделок в работе?\n'
+                '\u2022 Создай воронку для продаж\n'
+                '\u2022 Какие сделки просрочены?'
             )
             await message.answer(help_text)
         
         @self.router.message(Command('wizard'))
         async def cmd_wizard(message: Message):
             """Start CRM setup wizard."""
-            tenant = await self.tenant_manager.get_by_telegram_id(message.from_user.id)
+            tenant = await self.tenant_manager.get_active_tenant(message.from_user.id)
             
             if not tenant:
                 await message.answer('❌ Сначала зарегистрируйтесь: /start')
@@ -131,21 +149,32 @@ class KommoBot:
         
         @self.router.message(Command('status'))
         async def cmd_status(message: Message):
-            """Show connection status."""
-            tenant = await self.tenant_manager.get_by_telegram_id(message.from_user.id)
+            """Show connection status for active CRM."""
+            user_id = message.from_user.id
+            tenant = await self.tenant_manager.get_active_tenant(user_id)
+            all_tenants = await self.tenant_manager.get_tenants_for_user(user_id)
             
             if not tenant:
-                await message.answer('❌ Вы не зарегистрированы. Используйте /start')
+                await message.answer('❌ Нет подключённых CRM. Используйте /connect')
                 return
             
             container_status = None
             if tenant.container_id:
                 container_status = await self.orchestrator.get_container_status(tenant.id)
             
+            label = tenant.label or tenant.kommo_domain or 'без имени'
             status_text = (
-                f'<b>📊 Статус подключения</b>\n\n'
-                f'<b>Kommo:</b> {"✅ Подключено" if tenant.has_kommo_credentials() else "❌ Не подключено"}\n'
-                f'<b>OpenAI:</b> {"✅ Настроено" if tenant.has_openai_credentials() else "❌ Не настроено"}\n'
+                f'<b>\U0001f4ca Статус: {label}</b>'
+            )
+            if len(all_tenants) > 1:
+                status_text += f' (1 из {len(all_tenants)} CRM)'
+            status_text += '\n\n'
+            
+            kommo_status = '\u2705 Подключено' if tenant.has_kommo_credentials() else '\u274c Не подключено'
+            openai_status = '\u2705 Настроено' if tenant.has_openai_credentials() else '\u274c Не настроено'
+            status_text += (
+                f'<b>Kommo:</b> {kommo_status}\n'
+                f'<b>OpenAI:</b> {openai_status}\n'
                 f'<b>Статус:</b> {self._format_status(tenant.status)}\n'
             )
             
@@ -160,13 +189,139 @@ class KommoBot:
             
             status_text += f'\n<b>Запросов сегодня:</b> {tenant.requests_today}/{tenant.requests_limit}'
             
+            if len(all_tenants) > 1:
+                status_text += '\n\n/crm_list - все CRM | /switch - переключить'
+            
             await message.answer(status_text)
+        
+        @self.router.message(Command('crm_list'))
+        async def cmd_crm_list(message: Message):
+            """Show all connected CRMs."""
+            user_id = message.from_user.id
+            tenants = await self.tenant_manager.get_tenants_for_user(user_id)
+            active = await self.tenant_manager.get_active_tenant(user_id)
+            
+            if not tenants:
+                await message.answer('❌ Нет подключённых CRM. Используйте /connect')
+                return
+            
+            lines = ['<b>\U0001f4cb Ваши CRM-подключения:</b>\n']
+            for i, t in enumerate(tenants, 1):
+                label = t.label or t.kommo_domain or 'без имени'
+                status_icon = '\u2705' if t.is_ready() else '\u23f3'
+                active_mark = ' \u25c0 активная' if active and t.id == active.id else ''
+                domain = t.kommo_domain or '—'
+                lines.append(f'{i}. {status_icon} <b>{label}</b> ({domain}){active_mark}')
+            
+            lines.append('')
+            lines.append('/connect - добавить CRM')
+            if len(tenants) > 1:
+                lines.append('/switch - переключить активную')
+            lines.append('/remove_crm - отключить CRM')
+            
+            await message.answer('\n'.join(lines))
+        
+        @self.router.message(Command('switch'))
+        async def cmd_switch(message: Message, state: FSMContext):
+            """Switch active CRM."""
+            user_id = message.from_user.id
+            tenants = await self.tenant_manager.get_tenants_for_user(user_id)
+            
+            if len(tenants) <= 1:
+                await message.answer('У вас только одна CRM. Добавьте ещё: /connect')
+                return
+            
+            active = await self.tenant_manager.get_active_tenant(user_id)
+            lines = ['<b>\U0001f504 Выберите CRM (введите номер):</b>\n']
+            for i, t in enumerate(tenants, 1):
+                label = t.label or t.kommo_domain or 'без имени'
+                active_mark = ' \u25c0' if active and t.id == active.id else ''
+                lines.append(f'{i}. <b>{label}</b> ({t.kommo_domain or "—"}){active_mark}')
+            
+            await state.update_data(switch_tenants=[t.id for t in tenants])
+            await message.answer('\n'.join(lines))
+            await state.set_state(SetupStates.waiting_switch_choice)
+        
+        @self.router.message(SetupStates.waiting_switch_choice)
+        async def process_switch_choice(message: Message, state: FSMContext):
+            """Process CRM switch selection."""
+            data = await state.get_data()
+            tenant_ids = data.get('switch_tenants', [])
+            
+            try:
+                idx = int(message.text.strip()) - 1
+                if 0 <= idx < len(tenant_ids):
+                    tid = tenant_ids[idx]
+                    await self.tenant_manager.set_active_tenant(message.from_user.id, tid)
+                    tenant = await self.tenant_manager.get_by_id(tid)
+                    label = tenant.label or tenant.kommo_domain or 'без имени'
+                    await state.clear()
+                    await message.answer(f'\u2705 Активная CRM: <b>{label}</b>')
+                else:
+                    await message.answer('❌ Неверный номер. Попробуйте ещё раз или /cancel')
+            except ValueError:
+                await message.answer('❌ Введите номер CRM или /cancel')
+        
+        @self.router.message(Command('remove_crm'))
+        async def cmd_remove_crm(message: Message, state: FSMContext):
+            """Remove a CRM connection."""
+            user_id = message.from_user.id
+            tenants = await self.tenant_manager.get_tenants_for_user(user_id)
+            
+            if not tenants:
+                await message.answer('❌ Нет подключённых CRM.')
+                return
+            
+            lines = ['<b>\U0001f5d1 Выберите CRM для отключения (введите номер):</b>\n']
+            for i, t in enumerate(tenants, 1):
+                label = t.label or t.kommo_domain or 'без имени'
+                lines.append(f'{i}. <b>{label}</b> ({t.kommo_domain or "—"})')
+            
+            await state.update_data(remove_tenants=[t.id for t in tenants])
+            await message.answer('\n'.join(lines))
+            await state.set_state(SetupStates.waiting_remove_choice)
+        
+        @self.router.message(SetupStates.waiting_remove_choice)
+        async def process_remove_choice(message: Message, state: FSMContext):
+            """Process CRM removal selection."""
+            data = await state.get_data()
+            tenant_ids = data.get('remove_tenants', [])
+            
+            try:
+                idx = int(message.text.strip()) - 1
+                if 0 <= idx < len(tenant_ids):
+                    tid = tenant_ids[idx]
+                    tenant = await self.tenant_manager.get_by_id(tid)
+                    label = tenant.label or tenant.kommo_domain or 'без имени' if tenant else '?'
+                    
+                    # Deprovision infrastructure
+                    if tenant and tenant.container_id:
+                        await self.orchestrator.deprovision(tid)
+                    
+                    await self.tenant_manager.remove_tenant(message.from_user.id, tid)
+                    await state.clear()
+                    await message.answer(f'\u2705 CRM <b>{label}</b> отключена.')
+                else:
+                    await message.answer('❌ Неверный номер. Попробуйте ещё раз или /cancel')
+            except ValueError:
+                await message.answer('❌ Введите номер CRM или /cancel')
         
         @self.router.message(Command('connect'))
         async def cmd_connect(message: Message, state: FSMContext):
-            """Start Kommo connection flow."""
+            """Start Kommo connection flow — adds a new CRM."""
             await message.answer(
-                '<b>🔗 Подключение Kommo CRM</b>\n\n'
+                '<b>\U0001f517 Подключение новой CRM</b>\n\n'
+                'Введите название для этой CRM (например: <code>Автосалон</code> или <code>Фитнес-клуб</code>):'
+            )
+            await state.set_state(SetupStates.waiting_crm_label)
+        
+        @self.router.message(SetupStates.waiting_crm_label)
+        async def process_crm_label(message: Message, state: FSMContext):
+            """Process CRM label input."""
+            label = message.text.strip()[:50]  # Limit label length
+            await state.update_data(crm_label=label)
+            await message.answer(
+                f'<b>CRM:</b> {label}\n\n'
                 'Введите домен вашего аккаунта Kommo:\n'
                 '(например: <code>mycompany</code> или <code>mycompany.kommo.com</code>)'
             )
@@ -197,18 +352,13 @@ class KommoBot:
             token = message.text.strip()
             data = await state.get_data()
             domain = data.get('kommo_domain')
+            label = data.get('crm_label')
             
             # Delete message with token for security
             try:
                 await message.delete()
             except Exception:
                 pass
-            
-            tenant = await self.tenant_manager.get_by_telegram_id(message.from_user.id)
-            if not tenant:
-                await message.answer('❌ Ошибка. Используйте /start')
-                await state.clear()
-                return
             
             # Validate token by making test request
             is_valid = await self._validate_kommo_token(domain, token)
@@ -222,20 +372,38 @@ class KommoBot:
                 await state.clear()
                 return
             
+            # Register new tenant for this CRM
+            tenant = await self.tenant_manager.register(
+                telegram_user_id=message.from_user.id,
+                telegram_username=message.from_user.username,
+                label=label,
+            )
+            
             # Save credentials
             await self.tenant_manager.set_kommo_credentials(
                 tenant.id, domain, token
             )
             
+            # Auto-switch to the new CRM
+            await self.tenant_manager.set_active_tenant(message.from_user.id, tenant.id)
+            
             await state.clear()
             
-            # Check if OpenAI is configured
+            # Check if OpenAI is configured (try to copy from another tenant)
             tenant = await self.tenant_manager.get_by_id(tenant.id)
+            other_tenants = await self.tenant_manager.get_tenants_for_user(message.from_user.id)
+            for ot in other_tenants:
+                if ot.id != tenant.id and ot.has_openai_credentials():
+                    await self.tenant_manager.set_openai_key(tenant.id, ot.openai_api_key)
+                    tenant = await self.tenant_manager.get_by_id(tenant.id)
+                    break
+            
+            display_label = label or domain
             
             if tenant.has_openai_credentials():
                 # Start provisioning
                 await message.answer(
-                    '✅ <b>Kommo подключен!</b>\n\n'
+                    f'✅ <b>CRM "{display_label}" подключена!</b>\n\n'
                     '⏳ Создаю инфраструктуру...'
                 )
                 success, msg = await self.orchestrator.provision(tenant.id)
@@ -244,13 +412,14 @@ class KommoBot:
                     await message.answer(
                         f'✅ <b>Готово!</b>\n\n'
                         f'{msg}\n\n'
-                        f'Теперь вы можете использовать /ask для запросов к CRM.'
+                        f'CRM <b>{display_label}</b> теперь активная.\n'
+                        f'Используйте /ask для запросов.'
                     )
                 else:
                     await message.answer(f'❌ <b>Ошибка:</b> {msg}')
             else:
                 await message.answer(
-                    '✅ <b>Kommo подключен!</b>\n\n'
+                    f'✅ <b>CRM "{display_label}" подключена!</b>\n\n'
                     'Теперь добавьте OpenAI API ключ:\n'
                     '/openai'
                 )
@@ -268,7 +437,7 @@ class KommoBot:
         
         @self.router.message(SetupStates.waiting_openai_key)
         async def process_openai_key(message: Message, state: FSMContext):
-            """Process OpenAI API key."""
+            """Process OpenAI API key — applies to ALL user's CRMs."""
             api_key = message.text.strip()
             
             # Delete message with key for security
@@ -284,12 +453,6 @@ class KommoBot:
                 )
                 return
             
-            tenant = await self.tenant_manager.get_by_telegram_id(message.from_user.id)
-            if not tenant:
-                await message.answer('❌ Ошибка. Используйте /start')
-                await state.clear()
-                return
-            
             # Validate key
             is_valid = await self._validate_openai_key(api_key)
             
@@ -302,35 +465,34 @@ class KommoBot:
                 await state.clear()
                 return
             
-            # Save key
-            await self.tenant_manager.set_openai_key(tenant.id, api_key)
+            # Save key to ALL user's tenants
+            tenants = await self.tenant_manager.get_tenants_for_user(message.from_user.id)
+            for t in tenants:
+                await self.tenant_manager.set_openai_key(t.id, api_key)
+            
             await state.clear()
             
-            # Check if Kommo is configured
-            tenant = await self.tenant_manager.get_by_id(tenant.id)
-            
-            if tenant.has_kommo_credentials():
-                # Start provisioning if not already done
-                if tenant.status in (TenantStatus.PENDING, TenantStatus.ERROR):
-                    await message.answer(
-                        '✅ <b>OpenAI настроен!</b>\n\n'
-                        '⏳ Создаю инфраструктуру...'
-                    )
-                    success, msg = await self.orchestrator.provision(tenant.id)
-                    
+            # Provision any tenants that were waiting for OpenAI key
+            provisioned = []
+            for t in tenants:
+                t = await self.tenant_manager.get_by_id(t.id)
+                if t.has_kommo_credentials() and t.status in (TenantStatus.PENDING, TenantStatus.ERROR):
+                    success, msg = await self.orchestrator.provision(t.id)
                     if success:
-                        await message.answer(
-                            f'✅ <b>Готово!</b>\n\n'
-                            f'{msg}\n\n'
-                            f'Теперь вы можете использовать /ask для запросов к CRM.'
-                        )
-                    else:
-                        await message.answer(f'❌ <b>Ошибка:</b> {msg}')
-                else:
-                    await message.answer(
-                        '✅ <b>OpenAI настроен!</b>\n\n'
-                        'Используйте /ask для запросов к CRM.'
-                    )
+                        provisioned.append(t.label or t.kommo_domain)
+            
+            if provisioned:
+                names = ', '.join(provisioned)
+                await message.answer(
+                    f'✅ <b>OpenAI настроен для всех CRM!</b>\n\n'
+                    f'Активированы: {names}\n\n'
+                    f'Используйте /ask для запросов.'
+                )
+            elif tenants:
+                await message.answer(
+                    '✅ <b>OpenAI настроен для всех CRM!</b>\n\n'
+                    'Используйте /ask для запросов.'
+                )
             else:
                 await message.answer(
                     '✅ <b>OpenAI настроен!</b>\n\n'
@@ -341,7 +503,7 @@ class KommoBot:
         @self.router.message(Command('sync'))
         async def cmd_sync(message: Message):
             """Trigger data sync."""
-            tenant = await self.tenant_manager.get_by_telegram_id(message.from_user.id)
+            tenant = await self.tenant_manager.get_active_tenant(message.from_user.id)
             
             if not tenant or not tenant.is_ready():
                 await message.answer('❌ Сначала настройте подключение: /connect и /openai')
@@ -358,29 +520,16 @@ class KommoBot:
         
         @self.router.message(Command('disconnect'))
         async def cmd_disconnect(message: Message):
-            """Disconnect and deprovision."""
-            tenant = await self.tenant_manager.get_by_telegram_id(message.from_user.id)
-            
-            if not tenant:
-                await message.answer('❌ Вы не зарегистрированы.')
-                return
-            
-            await message.answer('⏳ Отключаю...')
-            
-            success, msg = await self.orchestrator.deprovision(tenant.id)
-            
-            if success:
-                await message.answer(
-                    '✅ <b>Отключено</b>\n\n'
-                    'Ваши данные сохранены. Используйте /connect для повторного подключения.'
-                )
-            else:
-                await message.answer(f'❌ Ошибка: {msg}')
+            """Disconnect active CRM (legacy, redirects to /remove_crm)."""
+            await message.answer(
+                'Используйте /remove_crm для отключения CRM.\n'
+                '/crm_list - посмотреть все подключения'
+            )
         
         @self.router.message(Command('ask'))
         async def cmd_ask(message: Message):
             """Handle AI question."""
-            tenant = await self.tenant_manager.get_by_telegram_id(message.from_user.id)
+            tenant = await self.tenant_manager.get_active_tenant(message.from_user.id)
             
             if not tenant or not tenant.is_ready():
                 await message.answer('❌ Сначала настройте подключение: /connect и /openai')
@@ -425,7 +574,7 @@ class KommoBot:
                 # In FSM flow, ignore
                 return
             
-            tenant = await self.tenant_manager.get_by_telegram_id(message.from_user.id)
+            tenant = await self.tenant_manager.get_active_tenant(message.from_user.id)
             
             if not tenant:
                 await message.answer('👋 Используйте /start для начала работы')
@@ -462,7 +611,7 @@ class KommoBot:
             
             await message.answer('🤔 Думаю...')
             
-            # Process with AI (pass user_id for conversation history)
+            # Process with AI (pass user_id:tenant_id for conversation history isolation)
             response = await self._process_ai_request(tenant, message.text, user_id=message.from_user.id)
             
             # Send with HTML parse mode for rich formatting
@@ -529,7 +678,8 @@ class KommoBot:
             )
             
             # Pass user_id for conversation history
-            response = await ai.chat(question, user_id=str(user_id or tenant.telegram_id))
+            history_key = f'{user_id or tenant.telegram_user_id}:{tenant.id}'
+            response = await ai.chat(question, user_id=history_key)
             return response
         except Exception as e:
             logger.error(f'AI request error: {e}')
