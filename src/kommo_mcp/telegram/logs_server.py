@@ -460,33 +460,48 @@ setInterval(() => loadData(true), 30000);
 </html>'''
 
 
+# ─── Reference to TenantManager (set at startup) ───
+_tenant_manager = None
+
+
+def set_tenant_manager(tm):
+    """Set tenant manager reference for /api/users endpoint."""
+    global _tenant_manager
+    _tenant_manager = tm
+
+
 # ─── Handlers ───
 
 async def login_page(request):
-    """Show login form."""
+    """Show login form (fallback HTML)."""
+    # If React SPA is built, serve index.html instead
+    spa_index = _get_spa_index()
+    if spa_index:
+        return web.Response(text=spa_index, content_type='text/html')
     if _check_auth(request):
         raise web.HTTPFound(URL_PREFIX + '/')
     html = LOGIN_HTML.replace('%%ERROR%%', '').replace('%%PREFIX%%', URL_PREFIX)
     return web.Response(text=html, content_type='text/html')
 
 
-async def login_handler(request):
-    """Handle login POST."""
-    data = await request.post()
-    email = data.get('email', '').strip().lower()
-    password = data.get('password', '')
+async def login_json_handler(request):
+    """Handle JSON login from React SPA."""
+    try:
+        data = await request.json()
+    except Exception:
+        data = await request.post()
+    email = (data.get('email') or '').strip().lower()
+    password = data.get('password') or ''
     pw_hash = hashlib.sha256(password.encode()).hexdigest()
 
     if email in AUTH_USERS and AUTH_USERS[email] == pw_hash:
         token = secrets.token_urlsafe(32)
         _auth_sessions[token] = {'email': email, 'expires': time.time() + SESSION_TTL}
-        resp = web.HTTPFound(URL_PREFIX + '/')
+        resp = web.json_response({'email': email})
         resp.set_cookie('session_token', token, max_age=SESSION_TTL, httponly=True, samesite='Lax', path='/')
         return resp
 
-    html = LOGIN_HTML.replace('%%ERROR%%',
-        '<p class="text-red-400 text-sm text-center">Invalid email or password</p>').replace('%%PREFIX%%', URL_PREFIX)
-    return web.Response(text=html, content_type='text/html')
+    return web.json_response({'error': 'Invalid email or password'}, status=401)
 
 
 async def logout_handler(request):
@@ -494,13 +509,25 @@ async def logout_handler(request):
     token = request.cookies.get('session_token')
     if token and token in _auth_sessions:
         del _auth_sessions[token]
-    resp = web.HTTPFound(URL_PREFIX + '/login')
+    resp = web.json_response({'ok': True})
     resp.del_cookie('session_token')
     return resp
 
 
+async def me_handler(request):
+    """Return current user info (auth check for SPA)."""
+    email = _check_auth(request)
+    if not email:
+        return web.json_response({'error': 'Unauthorized'}, status=401)
+    return web.json_response({'email': email})
+
+
 async def index_handler(request):
-    """Serve dashboard (auth required)."""
+    """Serve React SPA or fallback dashboard."""
+    spa_index = _get_spa_index()
+    if spa_index:
+        return web.Response(text=spa_index, content_type='text/html')
+    # Fallback to old inline dashboard
     email = _check_auth(request)
     if not email:
         raise web.HTTPFound(URL_PREFIX + '/login')
@@ -549,15 +576,132 @@ async def session_detail_handler(request):
     return web.json_response(session)
 
 
+async def users_handler(request):
+    """Get all users and their CRM connections (auth required)."""
+    if not _check_auth(request):
+        return web.json_response({'error': 'Unauthorized'}, status=401)
+
+    if not _tenant_manager:
+        return web.json_response({'error': 'Tenant manager not available'}, status=503)
+
+    all_tenants = await _tenant_manager.list_all()
+
+    # Group by telegram_user_id
+    by_user = {}
+    for t in all_tenants:
+        uid = t.telegram_user_id
+        if uid not in by_user:
+            by_user[uid] = {
+                'telegram_user_id': uid,
+                'telegram_username': t.telegram_username,
+                'tenants': [],
+                'active_tenant_id': None,
+            }
+        by_user[uid]['tenants'].append({
+            'id': t.id,
+            'label': t.label,
+            'kommo_domain': t.kommo_domain,
+            'status': t.status.value if hasattr(t.status, 'value') else str(t.status),
+            'has_kommo': t.has_kommo_credentials(),
+            'has_openai': t.has_openai_credentials(),
+            'created_at': t.created_at.isoformat() if t.created_at else None,
+            'requests_today': t.requests_today,
+            'requests_limit': t.requests_limit,
+            'last_activity_at': t.last_activity_at.isoformat() if t.last_activity_at else None,
+        })
+
+    # Set active tenant per user
+    for uid, user_data in by_user.items():
+        active = await _tenant_manager.get_active_tenant(uid)
+        if active:
+            user_data['active_tenant_id'] = active.id
+
+    users_list = sorted(by_user.values(), key=lambda u: len(u['tenants']), reverse=True)
+    active_count = sum(1 for t in all_tenants if (hasattr(t.status, 'value') and t.status.value == 'active') or str(t.status) == 'active')
+
+    return web.json_response({
+        'users': users_list,
+        'total_users': len(users_list),
+        'total_tenants': len(all_tenants),
+        'active_tenants': active_count,
+    })
+
+
+# ─── SPA static files ───
+
+_SPA_DIR = None
+_SPA_INDEX_CACHE = None
+
+
+def _get_spa_dir():
+    """Get path to React SPA build directory."""
+    global _SPA_DIR
+    if _SPA_DIR is not None:
+        return _SPA_DIR
+    # Check multiple possible locations
+    from pathlib import Path
+    candidates = [
+        Path('/opt/kommo-mcp/admin/dist'),
+        Path(__file__).parent.parent.parent.parent / 'admin' / 'dist',
+    ]
+    for p in candidates:
+        if p.exists() and (p / 'index.html').exists():
+            _SPA_DIR = p
+            logger.info(f'SPA directory found: {p}')
+            return p
+    _SPA_DIR = False
+    return False
+
+
+def _get_spa_index():
+    """Get SPA index.html content, or None if not available."""
+    global _SPA_INDEX_CACHE
+    if _SPA_INDEX_CACHE is not None:
+        return _SPA_INDEX_CACHE if _SPA_INDEX_CACHE else None
+    spa_dir = _get_spa_dir()
+    if not spa_dir:
+        _SPA_INDEX_CACHE = False
+        return None
+    index_path = spa_dir / 'index.html'
+    if index_path.exists():
+        _SPA_INDEX_CACHE = index_path.read_text(encoding='utf-8')
+        return _SPA_INDEX_CACHE
+    _SPA_INDEX_CACHE = False
+    return None
+
+
+async def spa_fallback(request):
+    """Serve SPA index.html for all non-API routes (client-side routing)."""
+    spa_index = _get_spa_index()
+    if spa_index:
+        return web.Response(text=spa_index, content_type='text/html')
+    raise web.HTTPNotFound()
+
+
 def create_logs_app():
     """Create aiohttp application for logs server."""
     app = web.Application()
-    app.router.add_get('/', index_handler)
-    app.router.add_get('/login', login_page)
-    app.router.add_post('/api/login', login_handler)
+
+    # API routes
+    app.router.add_post('/api/login', login_json_handler)
     app.router.add_get('/api/logout', logout_handler)
+    app.router.add_get('/api/me', me_handler)
     app.router.add_get('/api/sessions', sessions_handler)
     app.router.add_get('/api/session/{session_id}', session_detail_handler)
+    app.router.add_get('/api/users', users_handler)
+
+    # Static assets from React build
+    spa_dir = _get_spa_dir()
+    if spa_dir:
+        app.router.add_static('/assets', spa_dir / 'assets', show_index=False)
+
+    # SPA catch-all (must be last)
+    app.router.add_get('/', index_handler)
+    app.router.add_get('/login', spa_fallback)
+    app.router.add_get('/users', spa_fallback)
+    app.router.add_get('/sessions', spa_fallback)
+    app.router.add_get('/session/{tail:.*}', spa_fallback)
+
     return app
 
 

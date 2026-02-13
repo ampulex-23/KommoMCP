@@ -733,8 +733,9 @@ async def run_bot(token: str, data_dir: str = '/var/lib/kommo-saas'):
         postgres_password=os.getenv('POSTGRES_PASSWORD', ''),
     )
     
-    # Start logs server in background
-    from kommo_mcp.telegram.logs_server import run_logs_server
+    # Start logs server in background with tenant manager reference
+    from kommo_mcp.telegram.logs_server import run_logs_server, set_tenant_manager
+    set_tenant_manager(tenant_manager)
     logs_port = int(os.getenv('LOGS_PORT', '8765'))
     await run_logs_server(port=logs_port)
     logger.info(f'Logs server started on port {logs_port}')
