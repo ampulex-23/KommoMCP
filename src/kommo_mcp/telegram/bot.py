@@ -10,7 +10,7 @@ from typing import Optional
 
 from aiogram import Bot, Dispatcher, Router, F
 from aiogram.filters import Command, CommandStart
-from aiogram.types import Message, CallbackQuery
+from aiogram.types import Message, CallbackQuery, BotCommand
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.fsm.storage.memory import MemoryStorage
@@ -685,10 +685,31 @@ class KommoBot:
             logger.error(f'AI request error: {e}')
             return f'❌ Ошибка обработки запроса: {e}'
     
+    async def _set_bot_commands(self):
+        """Set bot menu commands via Telegram API."""
+        commands = [
+            BotCommand(command='start', description='Начать работу'),
+            BotCommand(command='connect', description='Подключить новую CRM'),
+            BotCommand(command='crm_list', description='Список всех CRM'),
+            BotCommand(command='switch', description='Переключить активную CRM'),
+            BotCommand(command='status', description='Статус текущей CRM'),
+            BotCommand(command='openai', description='Настроить OpenAI ключ'),
+            BotCommand(command='wizard', description='Мастер настройки CRM'),
+            BotCommand(command='remove_crm', description='Отключить CRM'),
+            BotCommand(command='help', description='Все команды'),
+            BotCommand(command='cancel', description='Отменить текущую операцию'),
+        ]
+        try:
+            await self.bot.set_my_commands(commands)
+            logger.info('Bot menu commands updated')
+        except Exception as e:
+            logger.error(f'Failed to set bot commands: {e}')
+    
     async def start(self):
         """Start the bot."""
         await self.tenant_manager.init()
         await self.orchestrator.init()
+        await self._set_bot_commands()
         await self.dp.start_polling(self.bot)
 
 
