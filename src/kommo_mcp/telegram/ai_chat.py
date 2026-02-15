@@ -1727,6 +1727,155 @@ class AIChat:
                 error = await resp.text()
                 return {'error': f'Failed to delete field: {error[:200]}'}
         
+        elif action == 'templates':
+            templates = [
+                {
+                    'code': 'capture',
+                    'name': 'Захват и первичная обработка',
+                    'description': 'Воронка для входящих лидов: от первого контакта до квалификации',
+                    'stages': ['Новая заявка', 'Первичный контакт', 'Квалификация', 'Передано в работу'],
+                    'fields': ['Источник лида', 'UTM-метка', 'Телефон подтверждён'],
+                },
+                {
+                    'code': 'qualification',
+                    'name': 'Квалификация лида',
+                    'description': 'Глубокая квалификация: выявление потребности, бюджета, сроков',
+                    'stages': ['Выявление потребности', 'Оценка бюджета', 'Определение сроков', 'Квалифицирован', 'Не целевой'],
+                    'fields': ['Бюджет', 'Срок принятия решения', 'ЛПР'],
+                },
+                {
+                    'code': 'followup',
+                    'name': 'Follow-up / напоминания',
+                    'description': 'Воронка дожима: повторные касания, напоминания, реактивация',
+                    'stages': ['Ожидает ответа', 'Повторный контакт', 'Назначена встреча', 'Реактивация'],
+                    'fields': ['Дата следующего контакта', 'Причина паузы'],
+                },
+                {
+                    'code': 'demo',
+                    'name': 'Демонстрация / встреча',
+                    'description': 'Воронка для проведения демо и встреч с клиентами',
+                    'stages': ['Запрос на демо', 'Демо назначено', 'Демо проведено', 'Обратная связь', 'Решение'],
+                    'fields': ['Дата демо', 'Участники', 'Формат встречи'],
+                },
+                {
+                    'code': 'proposal',
+                    'name': 'КП / согласование',
+                    'description': 'Воронка для подготовки и согласования коммерческих предложений',
+                    'stages': ['Подготовка КП', 'КП отправлено', 'На рассмотрении', 'Корректировка', 'Согласовано', 'Отклонено'],
+                    'fields': ['Сумма КП', 'Срок действия КП', 'Версия КП'],
+                },
+            ]
+            return {'templates': templates, 'hint': 'Use apply_template with template code to create pipeline from template'}
+
+        elif action == 'apply_template':
+            template_code = args.get('template')
+            if not template_code:
+                return {'error': 'template parameter is required (e.g. capture, qualification, followup, demo, proposal)'}
+
+            templates_map = {
+                'capture': {
+                    'name': 'Захват и первичная обработка',
+                    'stages': [
+                        ('Новая заявка', '#d6eaff', 10),
+                        ('Первичный контакт', '#c1e0ff', 20),
+                        ('Квалификация', '#ffdc7f', 30),
+                        ('Передано в работу', '#87f2c0', 40),
+                    ],
+                },
+                'qualification': {
+                    'name': 'Квалификация лида',
+                    'stages': [
+                        ('Выявление потребности', '#d6eaff', 10),
+                        ('Оценка бюджета', '#ffeab2', 20),
+                        ('Определение сроков', '#ffdc7f', 30),
+                        ('Квалифицирован', '#87f2c0', 40),
+                        ('Не целевой', '#ff8f92', 50),
+                    ],
+                },
+                'followup': {
+                    'name': 'Follow-up / напоминания',
+                    'stages': [
+                        ('Ожидает ответа', '#ffeab2', 10),
+                        ('Повторный контакт', '#ffdc7f', 20),
+                        ('Назначена встреча', '#c1e0ff', 30),
+                        ('Реактивация', '#f9deff', 40),
+                    ],
+                },
+                'demo': {
+                    'name': 'Демонстрация / встреча',
+                    'stages': [
+                        ('Запрос на демо', '#d6eaff', 10),
+                        ('Демо назначено', '#c1e0ff', 20),
+                        ('Демо проведено', '#ffdc7f', 30),
+                        ('Обратная связь', '#ffeab2', 40),
+                        ('Решение', '#87f2c0', 50),
+                    ],
+                },
+                'proposal': {
+                    'name': 'КП / согласование',
+                    'stages': [
+                        ('Подготовка КП', '#d6eaff', 10),
+                        ('КП отправлено', '#c1e0ff', 20),
+                        ('На рассмотрении', '#ffeab2', 30),
+                        ('Корректировка', '#ffdc7f', 40),
+                        ('Согласовано', '#87f2c0', 50),
+                        ('Отклонено', '#ff8f92', 60),
+                    ],
+                },
+            }
+
+            tpl = templates_map.get(template_code)
+            if not tpl:
+                return {'error': f'Unknown template: {template_code}. Available: {", ".join(templates_map.keys())}'}
+
+            if dry_run:
+                return {'dry_run': True, 'template': template_code, 'pipeline_name': tpl['name'], 'stages': [s[0] for s in tpl['stages']]}
+
+            # 1. Create pipeline
+            url = f'{self.kommo_base_url}/api/v4/leads/pipelines'
+            payload = [{'name': tpl['name'], 'is_main': False, 'is_unsorted_on': True, 'sort': 100, '_embedded': {'statuses': [{'name': tpl['stages'][0][0], 'sort': 10, 'color': tpl['stages'][0][1]}]}}]
+
+            async with session.post(url, headers=headers, json=payload) as resp:
+                if resp.status not in [200, 201]:
+                    error = await resp.text()
+                    return {'error': f'Failed to create pipeline: {error[:200]}'}
+                data = await resp.json()
+                pipelines = data.get('_embedded', {}).get('pipelines', [])
+                if not pipelines:
+                    return {'error': 'Pipeline created but no data returned'}
+                pipeline_id = pipelines[0].get('id')
+
+                # Delete default stages
+                default_stages = pipelines[0].get('_embedded', {}).get('statuses', [])
+                for stage in default_stages:
+                    sid = stage.get('id')
+                    if sid and sid not in [142, 143]:
+                        del_url = f'{self.kommo_base_url}/api/v4/leads/pipelines/{pipeline_id}/statuses/{sid}'
+                        async with session.delete(del_url, headers=headers) as del_resp:
+                            logger.info(f'Deleted default stage {sid}: {del_resp.status}')
+
+            # 2. Create template stages
+            created_stages = []
+            for stage_name, stage_color, stage_sort in tpl['stages']:
+                stage_url = f'{self.kommo_base_url}/api/v4/leads/pipelines/{pipeline_id}/statuses'
+                stage_payload = [{'name': stage_name, 'sort': stage_sort, 'color': stage_color}]
+                async with session.post(stage_url, headers=headers, json=stage_payload) as resp:
+                    if resp.status in [200, 201]:
+                        sdata = await resp.json()
+                        statuses = sdata.get('_embedded', {}).get('statuses', [])
+                        if statuses:
+                            created_stages.append({'id': statuses[0].get('id'), 'name': stage_name, 'sort': stage_sort})
+                    else:
+                        logger.warning(f'Failed to create stage {stage_name}: {resp.status}')
+
+            return {
+                'success': True,
+                'template': template_code,
+                'pipeline_id': pipeline_id,
+                'pipeline_name': tpl['name'],
+                'stages_created': created_stages,
+            }
+
         return {'error': f'Unknown setup action: {action}'}
     
     async def _handle_mock_data(self, session, headers, args: dict) -> dict:
