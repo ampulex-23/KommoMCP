@@ -340,6 +340,30 @@ Use MCP Client node with HTTP transport:
   - `detect` - Price outliers, volume spikes/drops, user concentration
   - `sales` - Win rate anomalies, losing big deals, instant wins
 
+### Objection Handling
+- `kommo_objections` - **Sales objection management** with actions:
+  - `handle` - Get response scripts for specific objections
+  - `library` - Browse objection categories with examples
+  - `predict` - Anticipate objections for a deal based on context
+
+### Deal Intelligence
+- `kommo_deal_intelligence` - **Complex deal analysis** with actions:
+  - `enterprise` - High-value deal tracking with risk levels
+  - `stakeholders` - Contact role mapping (Decision Maker, Influencer, User)
+  - `review` - Deal health scoring with issues and strengths
+
+### Contact Scoring
+- `kommo_contact_scoring` - **Contact engagement scoring** with actions:
+  - `score` - Score contacts by activity, data completeness, recency
+  - `value_segments` - VIP / Regular / Occasional segmentation by LTV
+
+### AI Sales Coach
+- `kommo_ai_coach` - **AI-powered sales coaching** with actions:
+  - `review_deal` - Deal-specific coaching with actionable advice
+  - `skill_assessment` - Manager skill radar: closing, speed, deal size, activity
+  - `skill_gaps` - Team-wide gap analysis with training recommendations
+  - `roleplay` - Sales role-play scenarios for practice
+
 ### Extended Search
 - `kommo_search` - **Enhanced search** with filters:
   - `min_price` / `max_price` - Price range filtering
