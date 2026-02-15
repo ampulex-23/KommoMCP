@@ -12,6 +12,7 @@ import aiohttp
 
 from kommo_mcp.telegram.tool_retriever import get_retriever, build_dynamic_prompt
 from kommo_mcp.telegram.interaction_logger import get_interaction_logger
+from kommo_mcp.planner.tool_graph_planner import ToolGraphPlanner
 
 logger = logging.getLogger(__name__)
 
@@ -1476,6 +1477,32 @@ MCP_TOOLS = [
     },
 ]
 
+# Index MCP_TOOLS by function name for fast filtering
+_MCP_TOOLS_INDEX: Dict[str, Dict] = {
+    tool['function']['name']: tool for tool in MCP_TOOLS
+}
+
+# Planner singleton
+_planner_instance: Optional[ToolGraphPlanner] = None
+
+
+def get_planner() -> ToolGraphPlanner:
+    """Get or create singleton ToolGraphPlanner instance."""
+    global _planner_instance
+    if _planner_instance is None:
+        _planner_instance = ToolGraphPlanner()
+    return _planner_instance
+
+
+def _filter_tools_by_plan(tool_names: List[str]) -> List[Dict]:
+    """Filter MCP_TOOLS to only include tools from the plan.
+    
+    Falls back to full MCP_TOOLS if no tools match.
+    """
+    filtered = [_MCP_TOOLS_INDEX[name] for name in tool_names if name in _MCP_TOOLS_INDEX]
+    return filtered if filtered else MCP_TOOLS
+
+
 SYSTEM_PROMPT = """Ты - AI-ассистент для ПОЛНОГО управления CRM Kommo.
 
 ⚡ ПЛАНИРОВАНИЕ СЛОЖНЫХ ЗАДАЧ:
@@ -1600,13 +1627,38 @@ class AIChat:
         session_id = ilog.start_session(user_id, message)
         
         try:
-            # Build dynamic prompt based on user query using RAG
+            # Step 1: Run Tool Graph Planner for deterministic chain planning
+            planner = get_planner()
+            planned_chain = planner.plan(message)
+            planned_tool_names = planner.get_tool_filter(planned_chain)
+            planner_prompt = ''
+
+            if planned_chain.chain:
+                # Filter MCP_TOOLS to only planned tools
+                active_tools = _filter_tools_by_plan(planned_tool_names)
+                planner_prompt = planner.build_prompt(planned_chain, message)
+                logger.info(
+                    f'Planner: {len(planned_chain.chain)} steps, '
+                    f'cost={planned_chain.cost}, '
+                    f'tools=[{", ".join(planned_tool_names)}], '
+                    f'{planned_chain.latency_ms}ms'
+                )
+            else:
+                # Fallback: no plan → use all tools
+                active_tools = MCP_TOOLS
+                logger.info('Planner: no chain found, using full tool set')
+
+            # Step 2: Build dynamic prompt (RAG + planner)
             if use_rag:
                 retriever = get_retriever()
                 dynamic_prompt = build_dynamic_prompt(message, retriever, top_k=5)
                 logger.info(f'RAG: retrieved tools for query, prompt size: {len(dynamic_prompt)} chars')
             else:
                 dynamic_prompt = SYSTEM_PROMPT
+
+            # Inject planner prompt into system prompt
+            if planner_prompt:
+                dynamic_prompt = dynamic_prompt + '\n\n' + planner_prompt
             
             # Log prompts
             ilog.log_prompt(SYSTEM_PROMPT, dynamic_prompt)
@@ -1626,7 +1678,7 @@ class AIChat:
             all_results = []
             
             for iteration in range(max_iterations):
-                response = await self._openai_request(messages=messages, tools=MCP_TOOLS)
+                response = await self._openai_request(messages=messages, tools=active_tools)
                 
                 # If no tool calls, we're done
                 if not response.get('tool_calls'):
