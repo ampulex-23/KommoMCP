@@ -1937,6 +1937,8 @@ class AIChat:
             
             url = f'{self.kommo_base_url}/api/v4/{entity_type}/{entity_id}/notes'
             async with session.get(url, headers=headers) as resp:
+                if resp.status == 204:
+                    return {'notes': []}
                 if resp.status == 200:
                     data = await resp.json()
                     notes = data.get('_embedded', {}).get('notes', [])
@@ -1957,6 +1959,8 @@ class AIChat:
             url = f'{self.kommo_base_url}/api/v4/{entity_type}/{entity_id}/notes'
             params = {'limit': 50}
             async with session.get(url, headers=headers, params=params) as resp:
+                if resp.status == 204:
+                    return {'history': [], 'message': 'No history for this entity'}
                 if resp.status == 200:
                     data = await resp.json()
                     notes = data.get('_embedded', {}).get('notes', [])
