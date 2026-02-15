@@ -237,6 +237,9 @@ Use MCP Client node with HTTP transport:
   - `closing_tips` - Deal closing advice
   - `objections` - Objection handling guide based on CRM data
   - `strategy` - Strategic recommendations: pipeline coverage, growth levers, process improvements
+  - `qualification` - BANT qualification analysis for a deal (lead_id): budget, authority, need, timeline
+  - `qualification_checklist` - Interactive BANT checklist with questions, red/green flags
+  - `negotiation` - Negotiation tips customized for deal size and context
 
 ### Pipeline Health
 - `kommo_pipeline_health` - **Deep pipeline analysis** with actions:
@@ -276,6 +279,7 @@ Use MCP Client node with HTTP transport:
   - `round_robin` - Equal distribution among team members
   - `auto_followup` - Create follow-up tasks for inactive deals
   - `auto_followup_smart` - Smart follow-ups based on inactivity and deal value with urgency levels
+
 
 ### Personal View
 - `kommo_my` - **Personal CRM dashboard** with actions:
@@ -349,6 +353,7 @@ Use MCP Client node with HTTP transport:
   - `apply` / `personalize` - Fill template with lead data
   - `sales_script` - Stage-specific sales scripts with objection handlers
   - `follow_up` - Personalized follow-up email templates based on deal context and inactivity
+  - `closing_script` - Closing scripts: assumptive, summary, urgency, alternative, trial close techniques
 
 ### Anomaly Detection
 - `kommo_anomaly` - **Anomaly detection** with actions:
@@ -368,6 +373,7 @@ Use MCP Client node with HTTP transport:
   - `stakeholders` - Contact role mapping (Decision Maker, Influencer, User)
   - `review` - Deal health scoring with issues and strengths
   - `pipeline_review` - Pipeline health review: issues, strengths, action items
+  - `closing_signals` - Closing signal detection: budget, engagement, contract language, blockers
 
 ### Contact Scoring
 - `kommo_contact_scoring` - **Contact engagement scoring** with actions:
@@ -382,17 +388,22 @@ Use MCP Client node with HTTP transport:
   - `skill_gaps` - Team-wide gap analysis with training recommendations
   - `roleplay` - Sales role-play scenarios for practice
   - `best_practices` - Top performer analysis: winning behaviors, patterns, team insights
+  - `micro_learning` - Personalized micro-lessons per user based on performance gaps
 
 ### Smart Reply
 - `kommo_smart_reply` - **Contextual reply suggestions** with actions:
   - `suggest` - Smart reply suggestions based on deal context and history
   - `objection_response` - Generate responses to client objections (price, timing, competitors)
   - `context` - Communication history context for a deal
+  - `auto_reply` - Auto-reply suggestions by message category (pricing, delivery, warranty, support)
 
 ### Communication Analytics
 - `kommo_communication_analytics` - **Communication quality monitoring** with actions:
   - `summary` - Conversation summary for a deal: stats, timeline, key topics
   - `quality` - Communication quality metrics by manager: note rate, win rate, score
+  - `sentiment` - Sentiment analysis of deal communications: positive/negative/neutral scoring
+  - `patterns` - Communication patterns: won vs lost deal interaction comparison
+  - `insights` - Key insights from deal communications: pricing, competitors, timeline signals
 
 ### Document Generator
 - `kommo_doc_generator` - **Document generation from CRM data** with actions:
@@ -401,6 +412,8 @@ Use MCP Client node with HTTP transport:
   - `case_study` - Case study templates from won deals
   - `commercial_offer` - Commercial offer generation personalized for a deal (lead_id)
   - `report` - Sales report: summary, by-manager breakdown, highlights
+  - `partner_report` - Partnership performance report with executive summary and metrics
+  - `exportable_report` - CSV-ready exportable report with deal data and summary stats
 
 ### Business Insights
 - `kommo_insights` - **Actionable business insights** with actions:
@@ -424,6 +437,10 @@ Use MCP Client node with HTTP transport:
   - `deal_context` - Full deal context: contacts, notes, tasks
   - `timeline` - Chronological event timeline for a deal
   - `graph` - Relationship graph: leads ↔ contacts ↔ companies
+  - `nl_query` - Natural language complex queries without SQL
+  - `problems` - Find problem deals: stale, no price, no responsible user
+  - `bottlenecks` - Pipeline bottleneck detection by stage congestion and age
+  - `rejection_reasons` - Lost deal rejection reason analysis from notes
 
 ### Extended Tasks
 - `kommo_tasks_ext` - **Extended task management** (new actions):
