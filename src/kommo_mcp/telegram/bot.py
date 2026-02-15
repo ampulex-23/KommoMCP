@@ -694,6 +694,7 @@ class KommoBot:
             BotCommand(command='switch', description='Переключить активную CRM'),
             BotCommand(command='status', description='Статус текущей CRM'),
             BotCommand(command='openai', description='Настроить OpenAI ключ'),
+            BotCommand(command='sync', description='Синхронизировать данные CRM'),
             BotCommand(command='wizard', description='Мастер настройки CRM'),
             BotCommand(command='remove_crm', description='Отключить CRM'),
             BotCommand(command='help', description='Все команды'),
