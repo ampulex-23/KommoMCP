@@ -518,6 +518,72 @@ class KommoBot:
             else:
                 await message.answer(f'❌ Ошибка синхронизации: {msg}')
         
+        @self.router.message(Command('digest'))
+        async def cmd_digest(message: Message):
+            """Send morning CRM digest."""
+            import time
+            from datetime import datetime
+            
+            tenant = await self.tenant_manager.get_active_tenant(message.from_user.id)
+            if not tenant or not tenant.is_ready():
+                await message.answer('❌ Сначала настройте подключение: /connect и /openai')
+                return
+            
+            await message.answer('📊 Собираю дайджест...')
+            
+            try:
+                import aiohttp
+                now = int(time.time())
+                today_start = now - (now % 86400)
+                base_url = f'https://{tenant.kommo_domain}'
+                headers_api = {'Authorization': f'Bearer {tenant.kommo_access_token}'}
+                
+                async with aiohttp.ClientSession() as sess:
+                    # Active deals
+                    async with sess.get(f'{base_url}/api/v4/leads', headers=headers_api, params={'limit': 250}) as resp:
+                        leads = []
+                        if resp.status == 200:
+                            data = await resp.json()
+                            leads = data.get('_embedded', {}).get('leads', [])
+                    
+                    active_deals = len(leads)
+                    total_revenue = sum((l.get('price', 0) or 0) for l in leads)
+                    new_today = sum(1 for l in leads if (l.get('created_at', 0) or 0) >= today_start)
+                    stale_threshold = now - 7 * 86400
+                    stale_deals = sum(1 for l in leads if (l.get('updated_at', 0) or 0) < stale_threshold)
+                    
+                    # Tasks
+                    async with sess.get(f'{base_url}/api/v4/tasks', headers=headers_api, params={'filter[is_completed]': 0, 'limit': 250}) as resp:
+                        tasks = []
+                        if resp.status == 200:
+                            data = await resp.json()
+                            tasks = data.get('_embedded', {}).get('tasks', [])
+                    
+                    overdue = sum(1 for t in tasks if (t.get('complete_till', 0) or 0) < now)
+                    today_tasks = sum(1 for t in tasks if today_start <= (t.get('complete_till', 0) or 0) < today_start + 86400)
+                
+                date_str = datetime.now().strftime('%d.%m.%Y')
+                digest = (
+                    f'<b>📊 Дайджест на {date_str}</b>\n\n'
+                    f'📈 <b>Сделки в работе:</b> {active_deals}\n'
+                    f'💰 <b>Сумма в воронке:</b> {total_revenue:,.0f} ₽\n'
+                    f'🆕 <b>Новых сегодня:</b> {new_today}\n'
+                    f'⚠️ <b>Зависших (>7 дн):</b> {stale_deals}\n\n'
+                    f'📋 <b>Задачи на сегодня:</b> {today_tasks}\n'
+                    f'🔴 <b>Просроченных:</b> {overdue}\n'
+                    f'📝 <b>Всего открытых:</b> {len(tasks)}'
+                )
+                
+                if overdue > 0:
+                    digest += '\n\n⚡ <i>Есть просроченные задачи — займитесь ими в первую очередь!</i>'
+                if stale_deals > 3:
+                    digest += f'\n\n💡 <i>{stale_deals} сделок без активности — проверьте их статус.</i>'
+                
+                await message.answer(digest)
+            except Exception as e:
+                logger.error(f'Digest error: {e}')
+                await message.answer(f'❌ Ошибка при сборе дайджеста: {e}')
+        
         @self.router.message(Command('disconnect'))
         async def cmd_disconnect(message: Message):
             """Disconnect active CRM (legacy, redirects to /remove_crm)."""
@@ -695,6 +761,7 @@ class KommoBot:
             BotCommand(command='status', description='Статус текущей CRM'),
             BotCommand(command='openai', description='Настроить OpenAI ключ'),
             BotCommand(command='sync', description='Синхронизировать данные CRM'),
+            BotCommand(command='digest', description='Утренний дайджест по CRM'),
             BotCommand(command='wizard', description='Мастер настройки CRM'),
             BotCommand(command='remove_crm', description='Отключить CRM'),
             BotCommand(command='help', description='Все команды'),

@@ -1,0 +1,31 @@
+name: kommo_pipeline_health
+category: analytics
+keywords:
+  - здоровье воронки
+  - health
+  - bottleneck
+  - узкое место
+  - velocity
+  - скорость продаж
+  - win rate
+  - win loss
+  - конверсия
+  - анализ воронки
+  - оптимизация
+description: |
+  Глубокий анализ здоровья воронки: bottlenecks, скорость, win/loss, конверсия по этапам.
+actions:
+  - action: check - общая оценка здоровья (health score 0-100)
+  - action: velocity - скорость продаж (цикл сделки, daily velocity)
+  - action: bottlenecks - узкие места (этапы с застоем)
+  - action: win_loss - анализ выигранных/проигранных (конверсия, средний чек)
+  - pipeline_id: ID воронки (опционально, анализирует все)
+  - days: период анализа в днях (по умолчанию 30)
+examples:
+  - query: "Как здоровье моей воронки?"
+  - query: "Где узкие места в продажах?"
+  - query: "Какая скорость продаж?"
+  - query: "Покажи win/loss ratio"
+  - query: "Анализ конверсии воронки"
+response_format: |
+  Возвращает: данные по этапам + hint для AI-рекомендаций

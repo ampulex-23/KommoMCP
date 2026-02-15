@@ -237,6 +237,32 @@ Use MCP Client node with HTTP transport:
   - `closing_tips` - Deal closing advice
   - `objections` - Objection handling guide based on CRM data
 
+### Pipeline Health
+- `kommo_pipeline_health` - **Deep pipeline analysis** with actions:
+  - `check` - Overall health score (0-100) with key metrics
+  - `velocity` - Sales speed: cycle times, daily velocity, median/fastest/slowest
+  - `bottlenecks` - Stage-level analysis: stale deals, avg age, congestion
+  - `win_loss` - Win/loss ratio, value comparison, cycle time analysis
+
+### Extended Search
+- `kommo_search` - **Enhanced search** with filters:
+  - `min_price` / `max_price` - Price range filtering
+  - `created_from` / `created_to` - Date range filtering
+  - `sort_by` / `sort_order` - Sort by price, created_at, updated_at
+  - `top_deals` - Top N deals by amount
+
+### Extended Tasks
+- `kommo_tasks_ext` - **Extended task management** (new actions):
+  - `prioritize` - AI-scored task prioritization
+  - `reassign` - Reassign task to another user
+  - `postpone` - Postpone task by N days
+  - `plan_day` - AI daily plan with overdue/today/tomorrow
+
+### Extended Contacts
+- `kommo_contacts_ext` - **Contact analysis** (new actions):
+  - `without_deals` - Find contacts with no linked deals
+  - `inactive` - Find contacts with no activity > N days
+
 ### Additional Tools
 - `kommo_webhooks` - Webhook management (list, create, delete)
 - `kommo_tags` - Tag management (list, create, delete, assign)
