@@ -307,6 +307,38 @@ Use MCP Client node with HTTP transport:
   - `lookalike` - Find deals similar to best performers
   - `best_manager` - Manager-client fit by deal size segment
   - `basket` - Product mix analysis (catalogs or tag-based)
+  - `by_behavior` - Activity-based segments: hot, warm, cold, frozen
+  - `retention` - Manager retention rates with repeat client analysis
+
+### Escalation
+- `kommo_escalation` - **Deal escalation management** with actions:
+  - `check` - Find deals needing escalation by priority
+  - `notify` - Critical/high-value deal notifications
+  - `sla` - SLA violation detection with breach severity
+
+### Reactivation
+- `kommo_reactivation` - **Client reactivation** with actions:
+  - `sleeping` - Inactive clients sorted by value at risk
+  - `lost_nurture` - Lost deals worth retrying with strategies
+  - `churn_prevention` - At-risk active deals with risk scoring
+
+### Contact Enrichment
+- `kommo_contact_enrichment` - **Contact data quality** with actions:
+  - `analyze` - Data quality scoring per contact
+  - `merge_duplicates` - Find duplicate contacts by name/phone
+  - `enrich` - Suggest missing fields prioritized by deal activity
+
+### Message Templates
+- `kommo_templates` - **Message templates & scripts** with actions:
+  - `list` - Available template categories
+  - `generate` - AI-generated template by type
+  - `apply` / `personalize` - Fill template with lead data
+  - `sales_script` - Stage-specific sales scripts with objection handlers
+
+### Anomaly Detection
+- `kommo_anomaly` - **Anomaly detection** with actions:
+  - `detect` - Price outliers, volume spikes/drops, user concentration
+  - `sales` - Win rate anomalies, losing big deals, instant wins
 
 ### Extended Search
 - `kommo_search` - **Enhanced search** with filters:

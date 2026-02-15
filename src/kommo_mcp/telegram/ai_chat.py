@@ -975,7 +975,7 @@ MCP_TOOLS = [
                 'properties': {
                     'action': {
                         'type': 'string',
-                        'enum': ['check', 'velocity', 'bottlenecks', 'win_loss', 'optimize'],
+                        'enum': ['check', 'velocity', 'bottlenecks', 'win_loss', 'optimize', 'hygiene'],
                         'description': 'Analysis type: check (overall health), velocity (speed), bottlenecks (stuck stages), win_loss (ratio analysis)',
                     },
                     'pipeline_id': {'type': 'integer', 'description': 'Pipeline ID (optional, analyzes all if omitted)'},
@@ -1016,8 +1016,8 @@ MCP_TOOLS = [
                 'properties': {
                     'action': {
                         'type': 'string',
-                        'enum': ['check', 'risks', 'performance', 'opportunities', 'trends'],
-                        'description': 'Alert type: check (all), risks, performance, opportunities, trends (metric direction alerts)',
+                        'enum': ['check', 'risks', 'performance', 'opportunities', 'trends', 'early_warning', 'team'],
+                        'description': 'Alert type: check, risks, performance, opportunities, trends, early_warning (predictive), team (per-user alerts)',
                     },
                     'days': {'type': 'integer', 'description': 'Analysis period in days (default 7)', 'default': 7},
                     'user_id': {'type': 'integer', 'description': 'Filter by user ID'},
@@ -1061,8 +1061,8 @@ MCP_TOOLS = [
                 'properties': {
                     'action': {
                         'type': 'string',
-                        'enum': ['auto_assign', 'round_robin', 'auto_followup'],
-                        'description': 'Automation type: auto_assign (by workload), round_robin (equal distribution), auto_followup (create follow-up tasks)',
+                        'enum': ['auto_assign', 'round_robin', 'auto_followup', 'auto_archive'],
+                        'description': 'Automation type: auto_assign, round_robin, auto_followup, auto_archive (archive old closed deals)',
                     },
                     'pipeline_id': {'type': 'integer', 'description': 'Pipeline ID'},
                     'lead_ids': {
@@ -1111,8 +1111,8 @@ MCP_TOOLS = [
                 'properties': {
                     'action': {
                         'type': 'string',
-                        'enum': ['leaderboard', 'achievements', 'challenges', 'points'],
-                        'description': 'Gamification type: leaderboard (team ranking), achievements (badges), challenges (competitions), points (score breakdown)',
+                        'enum': ['leaderboard', 'achievements', 'challenges', 'points', 'onboarding'],
+                        'description': 'Gamification type: leaderboard, achievements, challenges, points, onboarding (new hire ramp-up tracking)',
                     },
                     'days': {'type': 'integer', 'description': 'Period in days (default 30)', 'default': 30},
                     'metric': {
@@ -1175,8 +1175,8 @@ MCP_TOOLS = [
                 'properties': {
                     'action': {
                         'type': 'string',
-                        'enum': ['capacity'],
-                        'description': 'Planning type: capacity (team workload forecast)',
+                        'enum': ['capacity', 'forecast'],
+                        'description': 'Planning type: capacity (current workload), forecast (predicted load based on pipeline)',
                     },
                     'days': {'type': 'integer', 'description': 'Planning horizon in days (default 14)', 'default': 14},
                 },
@@ -1194,12 +1194,117 @@ MCP_TOOLS = [
                 'properties': {
                     'action': {
                         'type': 'string',
-                        'enum': ['by_volume', 'lookalike', 'best_manager', 'basket'],
-                        'description': 'Segment type: by_volume (purchase tiers), lookalike (similar to best), best_manager (manager-client fit), basket (product mix)',
+                        'enum': ['by_volume', 'lookalike', 'best_manager', 'basket', 'by_behavior', 'retention'],
+                        'description': 'Segment type: by_volume, lookalike, best_manager, basket, by_behavior (activity patterns), retention (manager retention rates)',
                     },
                     'pipeline_id': {'type': 'integer', 'description': 'Pipeline ID (optional)'},
                     'lead_id': {'type': 'integer', 'description': 'Lead ID for lookalike'},
                     'days': {'type': 'integer', 'description': 'Period in days (default 90)', 'default': 90},
+                },
+                'required': ['action'],
+            },
+        },
+    },
+    {
+        'type': 'function',
+        'function': {
+            'name': 'kommo_escalation',
+            'description': 'Deal escalation: detect problematic deals, SLA violations, send notifications',
+            'parameters': {
+                'type': 'object',
+                'properties': {
+                    'action': {
+                        'type': 'string',
+                        'enum': ['check', 'notify', 'sla'],
+                        'description': 'Escalation type: check (find deals needing escalation), notify (alert about critical deals), sla (SLA violation check)',
+                    },
+                    'days': {'type': 'integer', 'description': 'Threshold in days (default 7)', 'default': 7},
+                    'pipeline_id': {'type': 'integer', 'description': 'Pipeline ID (optional)'},
+                },
+                'required': ['action'],
+            },
+        },
+    },
+    {
+        'type': 'function',
+        'function': {
+            'name': 'kommo_reactivation',
+            'description': 'Client reactivation: sleeping clients, lost deal nurture, churn prevention',
+            'parameters': {
+                'type': 'object',
+                'properties': {
+                    'action': {
+                        'type': 'string',
+                        'enum': ['sleeping', 'lost_nurture', 'churn_prevention'],
+                        'description': 'Reactivation type: sleeping (inactive clients), lost_nurture (lost deals worth retrying), churn_prevention (at-risk active deals)',
+                    },
+                    'days': {'type': 'integer', 'description': 'Inactivity threshold in days (default 30)', 'default': 30},
+                    'min_value': {'type': 'integer', 'description': 'Minimum deal value filter'},
+                },
+                'required': ['action'],
+            },
+        },
+    },
+    {
+        'type': 'function',
+        'function': {
+            'name': 'kommo_contact_enrichment',
+            'description': 'Contact data enrichment: analyze completeness, find duplicates, suggest enrichment',
+            'parameters': {
+                'type': 'object',
+                'properties': {
+                    'action': {
+                        'type': 'string',
+                        'enum': ['analyze', 'merge_duplicates', 'enrich'],
+                        'description': 'Enrichment type: analyze (data quality score), merge_duplicates (find mergeable contacts), enrich (suggest missing data)',
+                    },
+                    'limit': {'type': 'integer', 'description': 'Max contacts to analyze (default 50)', 'default': 50},
+                },
+                'required': ['action'],
+            },
+        },
+    },
+    {
+        'type': 'function',
+        'function': {
+            'name': 'kommo_templates',
+            'description': 'Message templates: list, generate, personalize, sales scripts',
+            'parameters': {
+                'type': 'object',
+                'properties': {
+                    'action': {
+                        'type': 'string',
+                        'enum': ['list', 'generate', 'apply', 'personalize', 'sales_script'],
+                        'description': 'Template type: list (saved templates), generate (AI template), apply (fill template), personalize (customize for lead), sales_script (stage-specific script)',
+                    },
+                    'template_type': {
+                        'type': 'string',
+                        'enum': ['welcome', 'followup', 'proposal', 'closing', 'reactivation', 'custom'],
+                        'description': 'Template category',
+                    },
+                    'lead_id': {'type': 'integer', 'description': 'Lead ID for personalization'},
+                    'pipeline_id': {'type': 'integer', 'description': 'Pipeline ID for sales scripts'},
+                    'stage_name': {'type': 'string', 'description': 'Stage name for sales script'},
+                },
+                'required': ['action'],
+            },
+        },
+    },
+    {
+        'type': 'function',
+        'function': {
+            'name': 'kommo_anomaly',
+            'description': 'Anomaly detection: unusual patterns in deals, sales, activity',
+            'parameters': {
+                'type': 'object',
+                'properties': {
+                    'action': {
+                        'type': 'string',
+                        'enum': ['detect', 'sales'],
+                        'description': 'Detection type: detect (general anomalies), sales (sales-specific anomalies)',
+                    },
+                    'days': {'type': 'integer', 'description': 'Analysis period in days (default 30)', 'default': 30},
+                    'pipeline_id': {'type': 'integer', 'description': 'Pipeline ID (optional)'},
                 },
                 'required': ['action'],
             },
@@ -1760,6 +1865,21 @@ class AIChat:
         
         elif name == 'kommo_segments':
             return await self._handle_segments(session, headers, args)
+        
+        elif name == 'kommo_escalation':
+            return await self._handle_escalation(session, headers, args)
+        
+        elif name == 'kommo_reactivation':
+            return await self._handle_reactivation(session, headers, args)
+        
+        elif name == 'kommo_contact_enrichment':
+            return await self._handle_contact_enrichment(session, headers, args)
+        
+        elif name == 'kommo_templates':
+            return await self._handle_templates(session, headers, args)
+        
+        elif name == 'kommo_anomaly':
+            return await self._handle_anomaly(session, headers, args)
         
         # Default - return info about available tools
         return {'message': f'Tool {name} not fully implemented yet', 'args': args}
@@ -5788,6 +5908,41 @@ class AIChat:
                 'hint': 'Present optimization recommendations clearly. Prioritize by impact. Suggest specific actions for each recommendation.',
             }
 
+        elif action == 'hygiene':
+            results = []
+            for p in pipelines:
+                pid = p.get('id')
+                statuses = {s['id']: s.get('name') for s in p.get('_embedded', {}).get('statuses', []) if s.get('id') not in (142, 143)}
+                url = f'{self.kommo_base_url}/api/v4/leads'
+                params = {'filter[pipeline_id]': pid, 'limit': 250}
+                async with session.get(url, headers=headers, params=params) as resp:
+                    leads = []
+                    if resp.status == 200:
+                        data = await resp.json()
+                        leads = data.get('_embedded', {}).get('leads', [])
+
+                issues = []
+                no_price = [l for l in leads if l.get('status_id') not in (142, 143) and not (l.get('price') or 0)]
+                if no_price:
+                    issues.append({'type': 'no_price', 'count': len(no_price), 'message': f'{len(no_price)} active deals without price', 'sample': [l.get('name') for l in no_price[:3]]})
+                stale_30 = [l for l in leads if l.get('status_id') not in (142, 143) and (now - (l.get('updated_at') or now)) > 30 * 86400]
+                if stale_30:
+                    issues.append({'type': 'stale_30d', 'count': len(stale_30), 'message': f'{len(stale_30)} deals inactive 30+ days — consider archiving', 'sample': [l.get('name') for l in stale_30[:3]]})
+                no_responsible = [l for l in leads if l.get('status_id') not in (142, 143) and not l.get('responsible_user_id')]
+                if no_responsible:
+                    issues.append({'type': 'no_responsible', 'count': len(no_responsible), 'message': f'{len(no_responsible)} deals without responsible user'})
+                old_won = [l for l in leads if l.get('status_id') == 142 and (now - (l.get('updated_at') or now)) > 90 * 86400]
+                if old_won:
+                    issues.append({'type': 'old_closed', 'count': len(old_won), 'message': f'{len(old_won)} won deals older than 90 days still in pipeline'})
+
+                hygiene_score = max(0, 100 - len(no_price) * 2 - len(stale_30) * 3 - len(no_responsible) * 5 - len(old_won))
+                results.append({'pipeline': p.get('name'), 'hygiene_score': hygiene_score, 'issues': issues, 'total_active': len([l for l in leads if l.get('status_id') not in (142, 143)])})
+
+            return {
+                'pipelines': results,
+                'hint': 'Present hygiene score per pipeline. List issues by severity. Suggest cleanup actions for each issue type.',
+            }
+
         return {'error': f'Unknown pipeline_health action: {action}'}
 
     async def _handle_tasks_ext(self, session, headers, args: dict) -> dict:
@@ -6691,6 +6846,66 @@ class AIChat:
                 'hint': 'Present trend alerts with direction arrows. Critical/warning first. Suggest investigation for declining metrics.',
             }
 
+        elif action == 'early_warning':
+            warnings = []
+            stale_high = [l for l in active_leads if (l.get('price') or 0) > 50000 and (now - (l.get('updated_at') or now)) > 5 * 86400]
+            if stale_high:
+                warnings.append({'type': 'critical', 'category': 'high_value_stalling', 'message': f'{len(stale_high)} high-value deals (>50K) stalling', 'deals': [{'id': l.get('id'), 'name': l.get('name'), 'price': l.get('price'), 'days_inactive': round((now - (l.get('updated_at') or now)) / 86400)} for l in stale_high[:5]]})
+
+            new_leads = [l for l in active_leads if (now - l.get('created_at', now)) < 3 * 86400]
+            old_new = [l for l in new_leads if (now - (l.get('updated_at') or now)) > 1 * 86400]
+            if old_new:
+                warnings.append({'type': 'warning', 'category': 'slow_first_contact', 'message': f'{len(old_new)} new leads without activity in 24h', 'count': len(old_new)})
+
+            from collections import Counter
+            user_counts = Counter(l.get('responsible_user_id') for l in active_leads if l.get('responsible_user_id'))
+            if user_counts:
+                avg_load = sum(user_counts.values()) / len(user_counts)
+                overloaded = {uid: cnt for uid, cnt in user_counts.items() if cnt > avg_load * 1.5}
+                if overloaded:
+                    warnings.append({'type': 'warning', 'category': 'workload_imbalance', 'message': f'{len(overloaded)} users have 50%+ more deals than average', 'count': len(overloaded)})
+
+            if not warnings:
+                warnings.append({'type': 'info', 'category': 'all_clear', 'message': 'No early warnings detected — pipeline looks healthy'})
+
+            return {
+                'early_warnings': warnings,
+                'total_warnings': len([w for w in warnings if w['type'] != 'info']),
+                'hint': 'Present early warnings as predictive alerts. Critical first. Suggest immediate actions to prevent deal loss.',
+            }
+
+        elif action == 'team':
+            from collections import Counter
+            uurl = f'{self.kommo_base_url}/api/v4/users'
+            async with session.get(uurl, headers=headers) as resp:
+                users = {}
+                if resp.status == 200:
+                    udata = await resp.json()
+                    users = {u.get('id'): u.get('name') for u in udata.get('_embedded', {}).get('users', [])}
+
+            team_alerts = []
+            for uid, name in users.items():
+                u_leads = [l for l in active_leads if l.get('responsible_user_id') == uid]
+                u_stale = [l for l in u_leads if (now - (l.get('updated_at') or now)) > 7 * 86400]
+                alerts = []
+                if len(u_leads) > 25:
+                    alerts.append(f'Overloaded: {len(u_leads)} active deals')
+                if u_stale and len(u_stale) > len(u_leads) * 0.4:
+                    alerts.append(f'{len(u_stale)}/{len(u_leads)} deals stale (>40%)')
+                if len(u_leads) == 0:
+                    alerts.append('No active deals assigned')
+                no_price = len([l for l in u_leads if not (l.get('price') or 0)])
+                if no_price > len(u_leads) * 0.5 and len(u_leads) > 3:
+                    alerts.append(f'{no_price} deals without price (>50%)')
+                if alerts:
+                    team_alerts.append({'user': name, 'user_id': uid, 'active_deals': len(u_leads), 'alerts': alerts})
+
+            return {
+                'team_alerts': team_alerts,
+                'total_users_with_alerts': len(team_alerts),
+                'hint': 'Present per-user alerts. Group by severity. Suggest specific actions for each user.',
+            }
+
         return {'error': f'Unknown alerts action: {action}'}
 
     async def _handle_compare(self, session, headers, args: dict) -> dict:
@@ -7072,6 +7287,31 @@ class AIChat:
                 'hint': 'Show leads needing follow-up. If dry_run, ask to confirm with dry_run=false to create tasks.',
             }
 
+        elif action == 'auto_archive':
+            days_threshold = args.get('days', 90)
+            url = f'{self.kommo_base_url}/api/v4/leads'
+            params = {'limit': 250}
+            if pipeline_id:
+                params['filter[pipeline_id]'] = pipeline_id
+            async with session.get(url, headers=headers, params=params) as resp:
+                leads = []
+                if resp.status == 200:
+                    data = await resp.json()
+                    leads = data.get('_embedded', {}).get('leads', [])
+
+            closed = [l for l in leads if l.get('status_id') in (142, 143)]
+            old_closed = [l for l in closed if (now - (l.get('updated_at') or now)) > days_threshold * 86400]
+
+            archive_plan = [{'lead_id': l.get('id'), 'name': l.get('name'), 'status': 'won' if l.get('status_id') == 142 else 'lost', 'days_since_close': round((now - (l.get('updated_at') or now)) / 86400)} for l in old_closed[:50]]
+
+            return {
+                'action': 'auto_archive',
+                'days_threshold': days_threshold,
+                'candidates': archive_plan,
+                'total': len(old_closed),
+                'hint': 'Present archive candidates. Note: Kommo API does not support archiving directly — suggest deleting or moving to a dedicated archive pipeline.',
+            }
+
         return {'error': f'Unknown automation action: {action}'}
 
     async def _handle_my(self, session, headers, args: dict) -> dict:
@@ -7405,6 +7645,46 @@ class AIChat:
                 'hint': 'Present as points breakdown per user. Show total and how points were earned. Gamify with levels.',
             }
 
+        elif action == 'onboarding':
+            new_hire_threshold = days
+            onboarding_stats = []
+            for uid, name in user_map.items():
+                user_leads = [l for l in all_leads if l.get('responsible_user_id') == uid]
+                won = [l for l in user_leads if l.get('status_id') == 142 and l.get('updated_at', 0) >= cutoff]
+                lost = [l for l in user_leads if l.get('status_id') == 143 and l.get('updated_at', 0) >= cutoff]
+                total_closed = len(won) + len(lost)
+                active = [l for l in user_leads if l.get('status_id') not in (142, 143)]
+
+                milestones = []
+                if len(won) >= 1:
+                    milestones.append('First deal closed')
+                if len(won) >= 5:
+                    milestones.append('5 deals milestone')
+                if len(won) >= 10:
+                    milestones.append('10 deals — fully ramped')
+                revenue = sum(l.get('price', 0) or 0 for l in won)
+                if revenue >= 100000:
+                    milestones.append('100K revenue milestone')
+                conversion = len(won) / max(total_closed, 1) * 100
+
+                ramp_status = 'ramped' if len(won) >= 10 else ('progressing' if len(won) >= 3 else 'onboarding')
+                onboarding_stats.append({
+                    'user': name,
+                    'deals_won': len(won),
+                    'deals_lost': len(lost),
+                    'conversion': f'{conversion:.0f}%',
+                    'revenue': revenue,
+                    'active_deals': len(active),
+                    'milestones': milestones,
+                    'ramp_status': ramp_status,
+                })
+
+            return {
+                'period_days': days,
+                'onboarding': onboarding_stats,
+                'hint': 'Present as onboarding progress tracker. Show milestones achieved. Compare new hires with team average. Encourage with next milestone targets.',
+            }
+
         return {'error': f'Unknown gamification action: {action}'}
 
     async def _handle_loss_analysis(self, session, headers, args: dict) -> dict:
@@ -7674,6 +7954,52 @@ class AIChat:
                 'hint': 'Present as capacity planning table. Color-code by status. Recommend rebalancing if some are overloaded while others are available.',
             }
 
+        elif action == 'forecast':
+            url = f'{self.kommo_base_url}/api/v4/leads'
+            params = {'limit': 250, 'order[created_at]': 'desc'}
+            all_leads = []
+            page = 1
+            while page <= 3:
+                params['page'] = page
+                async with session.get(url, headers=headers, params=params) as resp:
+                    if resp.status == 200:
+                        data = await resp.json()
+                        leads = data.get('_embedded', {}).get('leads', [])
+                        all_leads.extend(leads)
+                        if len(leads) < 250:
+                            break
+                        page += 1
+                    else:
+                        break
+
+            active = [l for l in all_leads if l.get('status_id') not in (142, 143)]
+            recent_won = [l for l in all_leads if l.get('status_id') == 142 and (now - (l.get('updated_at') or now)) < 30 * 86400]
+            avg_deals_per_user = len(active) / max(len(users), 1)
+            est_new_per_week = len([l for l in all_leads if (now - l.get('created_at', now)) < 7 * 86400])
+
+            forecast = []
+            for user in users:
+                uid = user.get('id')
+                u_active = len([l for l in active if l.get('responsible_user_id') == uid])
+                u_won_month = len([l for l in recent_won if l.get('responsible_user_id') == uid])
+                est_incoming = round(est_new_per_week / max(len(users), 1))
+                projected_load = u_active + est_incoming * (days // 7) - u_won_month
+                forecast.append({
+                    'user': user.get('name'),
+                    'current_deals': u_active,
+                    'est_new_per_week': est_incoming,
+                    'est_closings_per_month': u_won_month,
+                    'projected_load_in_days': max(0, projected_load),
+                    'trend': 'growing' if projected_load > u_active * 1.2 else ('shrinking' if projected_load < u_active * 0.8 else 'stable'),
+                })
+
+            return {
+                'forecast_horizon_days': days,
+                'team_forecast': forecast,
+                'est_new_deals_per_week': est_new_per_week,
+                'hint': 'Present as workload forecast. Highlight users whose load is growing. Suggest preemptive rebalancing.',
+            }
+
         return {'error': f'Unknown team_planner action: {action}'}
 
     async def _handle_segments(self, session, headers, args: dict) -> dict:
@@ -7859,4 +8185,690 @@ class AIChat:
                 'hint': 'Present product catalog overview. For deeper basket analysis, link products to deals via catalog elements.',
             }
 
+        elif action == 'by_behavior':
+            active = [l for l in all_leads if l.get('status_id') not in (142, 143)]
+            segments = {'hot': [], 'warm': [], 'cold': [], 'frozen': []}
+            for l in active:
+                last_activity = (now - (l.get('updated_at') or now)) / 86400
+                if last_activity < 3:
+                    segments['hot'].append(l)
+                elif last_activity < 7:
+                    segments['warm'].append(l)
+                elif last_activity < 30:
+                    segments['cold'].append(l)
+                else:
+                    segments['frozen'].append(l)
+
+            result = {}
+            for seg_name, seg_leads in segments.items():
+                result[seg_name] = {
+                    'count': len(seg_leads),
+                    'value': sum(l.get('price', 0) or 0 for l in seg_leads),
+                    'avg_price': round(sum(l.get('price', 0) or 0 for l in seg_leads) / max(len(seg_leads), 1)),
+                    'sample': [{'id': l.get('id'), 'name': l.get('name'), 'days_inactive': round((now - (l.get('updated_at') or now)) / 86400)} for l in seg_leads[:3]],
+                }
+
+            return {
+                'behavior_segments': result,
+                'total_active': len(active),
+                'hint': 'Present as activity-based segments. Hot = engaged, Frozen = needs reactivation. Suggest actions per segment.',
+            }
+
+        elif action == 'retention':
+            uurl = f'{self.kommo_base_url}/api/v4/users'
+            async with session.get(uurl, headers=headers) as resp:
+                users = {}
+                if resp.status == 200:
+                    udata = await resp.json()
+                    users = {u.get('id'): u.get('name') for u in udata.get('_embedded', {}).get('users', [])}
+
+            won = [l for l in all_leads if l.get('status_id') == 142]
+            contact_deals = {}
+            for l in won:
+                contacts = l.get('_embedded', {}).get('contacts', [])
+                for c in contacts:
+                    cid = c.get('id')
+                    if cid not in contact_deals:
+                        contact_deals[cid] = []
+                    contact_deals[cid].append(l)
+
+            repeat_clients = {cid: deals for cid, deals in contact_deals.items() if len(deals) > 1}
+
+            manager_retention = {}
+            for uid, name in users.items():
+                u_won = [l for l in won if l.get('responsible_user_id') == uid]
+                u_contacts = set()
+                u_repeat = 0
+                for l in u_won:
+                    for c in l.get('_embedded', {}).get('contacts', []):
+                        cid = c.get('id')
+                        if cid in u_contacts:
+                            u_repeat += 1
+                        u_contacts.add(cid)
+                if len(u_contacts) >= 3:
+                    manager_retention[name] = {
+                        'total_clients': len(u_contacts),
+                        'repeat_clients': u_repeat,
+                        'retention_rate': f'{u_repeat / max(len(u_contacts), 1) * 100:.0f}%',
+                        'total_won': len(u_won),
+                    }
+
+            return {
+                'total_repeat_clients': len(repeat_clients),
+                'total_unique_clients': len(contact_deals),
+                'overall_retention': f'{len(repeat_clients) / max(len(contact_deals), 1) * 100:.0f}%',
+                'by_manager': dict(sorted(manager_retention.items(), key=lambda x: int(x[1]['retention_rate'].rstrip('%')), reverse=True)),
+                'hint': 'Present retention rates by manager. Higher retention = better relationship management. Suggest best practices from top performers.',
+            }
+
         return {'error': f'Unknown segments action: {action}'}
+
+    async def _handle_escalation(self, session, headers, args: dict) -> dict:
+        """Deal escalation: problematic deals, SLA violations, notifications."""
+        import time
+        action = args.get('action')
+        days = args.get('days', 7)
+        pipeline_id = args.get('pipeline_id')
+        now = int(time.time())
+
+        url = f'{self.kommo_base_url}/api/v4/leads'
+        params = {'limit': 250}
+        if pipeline_id:
+            params['filter[pipeline_id]'] = pipeline_id
+        async with session.get(url, headers=headers, params=params) as resp:
+            all_leads = []
+            if resp.status == 200:
+                data = await resp.json()
+                all_leads = data.get('_embedded', {}).get('leads', [])
+        active = [l for l in all_leads if l.get('status_id') not in (142, 143)]
+
+        uurl = f'{self.kommo_base_url}/api/v4/users'
+        async with session.get(uurl, headers=headers) as resp:
+            users = {}
+            if resp.status == 200:
+                udata = await resp.json()
+                users = {u.get('id'): u.get('name') for u in udata.get('_embedded', {}).get('users', [])}
+
+        if action == 'check':
+            escalations = []
+            for l in active:
+                issues = []
+                age = (now - (l.get('updated_at') or now)) / 86400
+                price = l.get('price', 0) or 0
+                if age > days and price > 50000:
+                    issues.append(f'High-value deal stale {age:.0f} days')
+                elif age > days * 2:
+                    issues.append(f'Deal inactive {age:.0f} days (2x threshold)')
+                if not l.get('responsible_user_id'):
+                    issues.append('No responsible user assigned')
+                if issues:
+                    escalations.append({
+                        'lead_id': l.get('id'),
+                        'name': l.get('name'),
+                        'price': price,
+                        'responsible': users.get(l.get('responsible_user_id'), 'Unassigned'),
+                        'days_inactive': round(age),
+                        'issues': issues,
+                        'priority': 'critical' if price > 100000 else ('high' if price > 50000 else 'medium'),
+                    })
+            escalations.sort(key=lambda x: {'critical': 0, 'high': 1, 'medium': 2}.get(x['priority'], 3))
+
+            return {
+                'escalations': escalations[:20],
+                'total': len(escalations),
+                'threshold_days': days,
+                'hint': 'Present escalations by priority. Critical first. Suggest immediate actions: reassign, contact client, or close.',
+            }
+
+        elif action == 'notify':
+            critical = [l for l in active if (l.get('price') or 0) > 100000 and (now - (l.get('updated_at') or now)) > days * 86400]
+            high = [l for l in active if 50000 < (l.get('price') or 0) <= 100000 and (now - (l.get('updated_at') or now)) > days * 86400]
+            notifications = []
+            for l in critical:
+                notifications.append({
+                    'type': 'critical',
+                    'lead_id': l.get('id'),
+                    'name': l.get('name'),
+                    'price': l.get('price'),
+                    'responsible': users.get(l.get('responsible_user_id'), 'Unassigned'),
+                    'message': f'CRITICAL: Deal "{l.get("name")}" ({l.get("price")}₽) inactive {round((now - (l.get("updated_at") or now)) / 86400)}d',
+                })
+            for l in high:
+                notifications.append({
+                    'type': 'high',
+                    'lead_id': l.get('id'),
+                    'name': l.get('name'),
+                    'price': l.get('price'),
+                    'responsible': users.get(l.get('responsible_user_id'), 'Unassigned'),
+                    'message': f'HIGH: Deal "{l.get("name")}" ({l.get("price")}₽) needs attention',
+                })
+
+            return {
+                'notifications': notifications,
+                'total': len(notifications),
+                'hint': 'Present as notification list. These are deals that need immediate manager/ROP attention. Suggest creating tasks or reassigning.',
+            }
+
+        elif action == 'sla':
+            sla_rules = {
+                'first_contact': 1,
+                'follow_up': 3,
+                'proposal': 7,
+                'decision': 14,
+            }
+            violations = []
+            for l in active:
+                age = (now - l.get('created_at', now)) / 86400
+                last_activity = (now - (l.get('updated_at') or now)) / 86400
+                if age < 3 and last_activity > sla_rules['first_contact']:
+                    violations.append({'lead_id': l.get('id'), 'name': l.get('name'), 'sla': 'first_contact', 'breach_days': round(last_activity - sla_rules['first_contact']), 'responsible': users.get(l.get('responsible_user_id'), 'Unassigned')})
+                elif last_activity > sla_rules['follow_up']:
+                    violations.append({'lead_id': l.get('id'), 'name': l.get('name'), 'sla': 'follow_up', 'breach_days': round(last_activity - sla_rules['follow_up']), 'responsible': users.get(l.get('responsible_user_id'), 'Unassigned')})
+
+            violations.sort(key=lambda x: x['breach_days'], reverse=True)
+            by_user = {}
+            for v in violations:
+                resp_name = v['responsible']
+                if resp_name not in by_user:
+                    by_user[resp_name] = 0
+                by_user[resp_name] += 1
+
+            return {
+                'sla_rules': sla_rules,
+                'violations': violations[:20],
+                'total_violations': len(violations),
+                'by_responsible': by_user,
+                'hint': 'Present SLA violations sorted by breach severity. Show which users have most violations. Suggest process improvements.',
+            }
+
+        return {'error': f'Unknown escalation action: {action}'}
+
+    async def _handle_reactivation(self, session, headers, args: dict) -> dict:
+        """Client reactivation: sleeping, lost nurture, churn prevention."""
+        import time
+        action = args.get('action')
+        days = args.get('days', 30)
+        min_value = args.get('min_value', 0)
+        now = int(time.time())
+        cutoff = now - days * 86400
+
+        if action == 'sleeping':
+            url = f'{self.kommo_base_url}/api/v4/leads'
+            params = {'limit': 250}
+            async with session.get(url, headers=headers, params=params) as resp:
+                all_leads = []
+                if resp.status == 200:
+                    data = await resp.json()
+                    all_leads = data.get('_embedded', {}).get('leads', [])
+
+            active = [l for l in all_leads if l.get('status_id') not in (142, 143)]
+            sleeping = [l for l in active if (now - (l.get('updated_at') or now)) > days * 86400 and (l.get('price') or 0) >= min_value]
+            sleeping.sort(key=lambda x: x.get('price', 0) or 0, reverse=True)
+
+            candidates = [{'lead_id': l.get('id'), 'name': l.get('name'), 'price': l.get('price', 0), 'days_inactive': round((now - (l.get('updated_at') or now)) / 86400), 'suggestion': 'Send check-in message' if (now - (l.get('updated_at') or now)) < 60 * 86400 else 'Consider closing or reactivation campaign'} for l in sleeping[:20]]
+
+            return {
+                'sleeping_clients': candidates,
+                'total': len(sleeping),
+                'total_value_at_risk': sum(l.get('price', 0) or 0 for l in sleeping),
+                'hint': 'Present sleeping clients by value. Suggest reactivation actions: call, email, special offer. High-value first.',
+            }
+
+        elif action == 'lost_nurture':
+            url = f'{self.kommo_base_url}/api/v4/leads'
+            params = {'filter[statuses][0][status_id]': 143, 'limit': 250, 'order[updated_at]': 'desc'}
+            async with session.get(url, headers=headers, params=params) as resp:
+                lost = []
+                if resp.status == 200:
+                    data = await resp.json()
+                    lost = data.get('_embedded', {}).get('leads', [])
+
+            worth_retrying = [l for l in lost if (l.get('price') or 0) >= max(min_value, 10000) and (now - (l.get('updated_at') or now)) < 180 * 86400]
+            worth_retrying.sort(key=lambda x: x.get('price', 0) or 0, reverse=True)
+
+            candidates = []
+            for l in worth_retrying[:20]:
+                days_since_loss = round((now - (l.get('updated_at') or now)) / 86400)
+                candidates.append({
+                    'lead_id': l.get('id'),
+                    'name': l.get('name'),
+                    'price': l.get('price', 0),
+                    'days_since_loss': days_since_loss,
+                    'strategy': 'New offer/discount' if days_since_loss < 30 else ('Check-in call' if days_since_loss < 90 else 'Reactivation campaign'),
+                })
+
+            return {
+                'nurture_candidates': candidates,
+                'total': len(worth_retrying),
+                'total_potential_value': sum(l.get('price', 0) or 0 for l in worth_retrying),
+                'hint': 'Present lost deals worth retrying. Suggest specific nurture strategies based on time since loss. Focus on high-value deals.',
+            }
+
+        elif action == 'churn_prevention':
+            url = f'{self.kommo_base_url}/api/v4/leads'
+            params = {'limit': 250}
+            async with session.get(url, headers=headers, params=params) as resp:
+                all_leads = []
+                if resp.status == 200:
+                    data = await resp.json()
+                    all_leads = data.get('_embedded', {}).get('leads', [])
+
+            active = [l for l in all_leads if l.get('status_id') not in (142, 143)]
+            at_risk = []
+            for l in active:
+                risk_score = 0
+                risk_factors = []
+                inactive_days = (now - (l.get('updated_at') or now)) / 86400
+                if inactive_days > 14:
+                    risk_score += 30
+                    risk_factors.append(f'Inactive {inactive_days:.0f} days')
+                if inactive_days > 30:
+                    risk_score += 20
+                age = (now - l.get('created_at', now)) / 86400
+                if age > 60:
+                    risk_score += 15
+                    risk_factors.append(f'Deal age {age:.0f} days')
+                if not (l.get('price') or 0):
+                    risk_score += 10
+                    risk_factors.append('No price set')
+                if risk_score >= 30:
+                    at_risk.append({
+                        'lead_id': l.get('id'),
+                        'name': l.get('name'),
+                        'price': l.get('price', 0),
+                        'risk_score': min(risk_score, 100),
+                        'risk_factors': risk_factors,
+                        'action': 'Urgent outreach' if risk_score > 60 else 'Schedule follow-up',
+                    })
+
+            at_risk.sort(key=lambda x: x['risk_score'], reverse=True)
+            return {
+                'at_risk_deals': at_risk[:20],
+                'total_at_risk': len(at_risk),
+                'total_value_at_risk': sum(d['price'] for d in at_risk),
+                'hint': 'Present at-risk deals by risk score. Suggest preventive actions. Focus on high-value deals with high risk.',
+            }
+
+        return {'error': f'Unknown reactivation action: {action}'}
+
+    async def _handle_contact_enrichment(self, session, headers, args: dict) -> dict:
+        """Contact data enrichment: analyze, merge duplicates, enrich."""
+        import time
+        action = args.get('action')
+        limit = args.get('limit', 50)
+        now = int(time.time())
+
+        url = f'{self.kommo_base_url}/api/v4/contacts'
+        params = {'limit': min(limit, 250), 'with': 'leads'}
+        async with session.get(url, headers=headers, params=params) as resp:
+            contacts = []
+            if resp.status == 200:
+                data = await resp.json()
+                contacts = data.get('_embedded', {}).get('contacts', [])
+
+        if action == 'analyze':
+            quality_scores = []
+            for c in contacts:
+                score = 0
+                fields_present = []
+                fields_missing = []
+                if c.get('name') and c['name'] != 'Unknown':
+                    score += 20
+                    fields_present.append('name')
+                else:
+                    fields_missing.append('name')
+                cfs = c.get('custom_fields_values') or []
+                has_phone = any(f.get('field_code') == 'PHONE' for f in cfs)
+                has_email = any(f.get('field_code') == 'EMAIL' for f in cfs)
+                if has_phone:
+                    score += 25
+                    fields_present.append('phone')
+                else:
+                    fields_missing.append('phone')
+                if has_email:
+                    score += 25
+                    fields_present.append('email')
+                else:
+                    fields_missing.append('email')
+                if c.get('company_id'):
+                    score += 15
+                    fields_present.append('company')
+                else:
+                    fields_missing.append('company')
+                leads = c.get('_embedded', {}).get('leads', [])
+                if leads:
+                    score += 15
+                    fields_present.append('linked_deals')
+                else:
+                    fields_missing.append('linked_deals')
+
+                quality_scores.append({
+                    'contact_id': c.get('id'),
+                    'name': c.get('name'),
+                    'quality_score': score,
+                    'fields_present': fields_present,
+                    'fields_missing': fields_missing,
+                })
+
+            avg_score = round(sum(q['quality_score'] for q in quality_scores) / max(len(quality_scores), 1))
+            poor = [q for q in quality_scores if q['quality_score'] < 50]
+
+            return {
+                'total_analyzed': len(quality_scores),
+                'avg_quality_score': avg_score,
+                'poor_quality_count': len(poor),
+                'poor_contacts': poor[:10],
+                'score_distribution': {
+                    'excellent (80-100)': len([q for q in quality_scores if q['quality_score'] >= 80]),
+                    'good (60-79)': len([q for q in quality_scores if 60 <= q['quality_score'] < 80]),
+                    'fair (40-59)': len([q for q in quality_scores if 40 <= q['quality_score'] < 60]),
+                    'poor (<40)': len([q for q in quality_scores if q['quality_score'] < 40]),
+                },
+                'hint': 'Present quality score distribution. List poor contacts with missing fields. Suggest enrichment priorities.',
+            }
+
+        elif action == 'merge_duplicates':
+            name_groups = {}
+            for c in contacts:
+                name = (c.get('name') or '').strip().lower()
+                if name and name != 'unknown':
+                    if name not in name_groups:
+                        name_groups[name] = []
+                    name_groups[name].append(c)
+
+            phone_groups = {}
+            for c in contacts:
+                cfs = c.get('custom_fields_values') or []
+                for f in cfs:
+                    if f.get('field_code') == 'PHONE':
+                        for v in f.get('values', []):
+                            phone = v.get('value', '').replace(' ', '').replace('-', '').replace('+', '')
+                            if phone and len(phone) >= 7:
+                                if phone not in phone_groups:
+                                    phone_groups[phone] = []
+                                phone_groups[phone].append(c)
+
+            duplicates = []
+            seen = set()
+            for name, group in name_groups.items():
+                if len(group) > 1:
+                    ids = tuple(sorted(c.get('id') for c in group))
+                    if ids not in seen:
+                        seen.add(ids)
+                        duplicates.append({'match_type': 'name', 'match_value': name, 'contacts': [{'id': c.get('id'), 'name': c.get('name')} for c in group]})
+            for phone, group in phone_groups.items():
+                if len(group) > 1:
+                    ids = tuple(sorted(c.get('id') for c in group))
+                    if ids not in seen:
+                        seen.add(ids)
+                        duplicates.append({'match_type': 'phone', 'match_value': phone, 'contacts': [{'id': c.get('id'), 'name': c.get('name')} for c in group]})
+
+            return {
+                'duplicate_groups': duplicates[:15],
+                'total_groups': len(duplicates),
+                'hint': 'Present duplicate groups. Suggest merging — keep the contact with more data. Note: actual merge requires manual action in Kommo UI.',
+            }
+
+        elif action == 'enrich':
+            needs_enrichment = []
+            for c in contacts:
+                missing = []
+                cfs = c.get('custom_fields_values') or []
+                if not any(f.get('field_code') == 'PHONE' for f in cfs):
+                    missing.append('phone')
+                if not any(f.get('field_code') == 'EMAIL' for f in cfs):
+                    missing.append('email')
+                if not c.get('company_id'):
+                    missing.append('company')
+                if missing:
+                    needs_enrichment.append({
+                        'contact_id': c.get('id'),
+                        'name': c.get('name'),
+                        'missing_fields': missing,
+                        'linked_deals': len(c.get('_embedded', {}).get('leads', [])),
+                        'priority': 'high' if len(c.get('_embedded', {}).get('leads', [])) > 0 else 'low',
+                    })
+
+            needs_enrichment.sort(key=lambda x: (0 if x['priority'] == 'high' else 1, -x['linked_deals']))
+            return {
+                'needs_enrichment': needs_enrichment[:20],
+                'total': len(needs_enrichment),
+                'hint': 'Present contacts needing enrichment. High priority = has active deals. Suggest data sources or manual outreach to fill gaps.',
+            }
+
+        return {'error': f'Unknown contact_enrichment action: {action}'}
+
+    async def _handle_templates(self, session, headers, args: dict) -> dict:
+        """Message templates: list, generate, personalize, sales scripts."""
+        import time
+        action = args.get('action')
+        template_type = args.get('template_type', 'followup')
+        lead_id = args.get('lead_id')
+        pipeline_id = args.get('pipeline_id')
+        stage_name = args.get('stage_name')
+        now = int(time.time())
+
+        templates_db = {
+            'welcome': {
+                'name': 'Welcome / First Contact',
+                'template': 'Здравствуйте, {contact_name}! Меня зовут {manager_name}, я представляю {company}. Благодарю за интерес к нашим услугам. Когда вам будет удобно обсудить детали?',
+                'variables': ['contact_name', 'manager_name', 'company'],
+            },
+            'followup': {
+                'name': 'Follow-up',
+                'template': '{contact_name}, добрый день! Напоминаю о нашем разговоре по поводу {deal_name}. Есть ли у вас вопросы? Готов обсудить в удобное для вас время.',
+                'variables': ['contact_name', 'deal_name'],
+            },
+            'proposal': {
+                'name': 'Commercial Proposal',
+                'template': '{contact_name}, направляю коммерческое предложение по {deal_name} на сумму {price}₽. Основные преимущества: [перечислить]. Готов ответить на вопросы.',
+                'variables': ['contact_name', 'deal_name', 'price'],
+            },
+            'closing': {
+                'name': 'Closing',
+                'template': '{contact_name}, мы обсудили все детали по {deal_name}. Предлагаю зафиксировать договоренности и перейти к оформлению. Какой следующий шаг будет удобен?',
+                'variables': ['contact_name', 'deal_name'],
+            },
+            'reactivation': {
+                'name': 'Reactivation',
+                'template': '{contact_name}, давно не общались! У нас появились новые возможности, которые могут быть вам интересны. Можем ли мы назначить короткий звонок?',
+                'variables': ['contact_name'],
+            },
+        }
+
+        if action == 'list':
+            return {
+                'templates': {k: {'name': v['name'], 'variables': v['variables']} for k, v in templates_db.items()},
+                'hint': 'Present available templates. User can ask to generate, personalize, or apply any template.',
+            }
+
+        elif action == 'generate':
+            return {
+                'generated_template': templates_db.get(template_type, templates_db['followup']),
+                'template_type': template_type,
+                'hint': 'Present the template. Offer to personalize it for a specific lead using personalize action with lead_id.',
+            }
+
+        elif action == 'apply' or action == 'personalize':
+            template = templates_db.get(template_type, templates_db['followup'])
+            if lead_id:
+                lurl = f'{self.kommo_base_url}/api/v4/leads/{lead_id}'
+                async with session.get(lurl, headers=headers, params={'with': 'contacts'}) as resp:
+                    if resp.status == 200:
+                        lead = await resp.json()
+                        contact_name = 'Клиент'
+                        contacts = lead.get('_embedded', {}).get('contacts', [])
+                        if contacts:
+                            curl = f'{self.kommo_base_url}/api/v4/contacts/{contacts[0]["id"]}'
+                            async with session.get(curl, headers=headers) as cresp:
+                                if cresp.status == 200:
+                                    cdata = await cresp.json()
+                                    contact_name = cdata.get('name', 'Клиент')
+
+                        filled = template['template'].replace('{contact_name}', contact_name).replace('{deal_name}', lead.get('name', 'сделка')).replace('{price}', str(lead.get('price', 0)))
+
+                        return {
+                            'personalized_message': filled,
+                            'lead': lead.get('name'),
+                            'contact': contact_name,
+                            'template_type': template_type,
+                            'hint': 'Present the personalized message ready to send. Offer to adjust tone or add details.',
+                        }
+                    else:
+                        return {'error': f'Lead {lead_id} not found'}
+            return {
+                'template': template['template'],
+                'note': 'Provide lead_id to personalize this template',
+                'hint': 'Template shown without personalization. Ask user for lead_id to fill in details.',
+            }
+
+        elif action == 'sales_script':
+            purl = f'{self.kommo_base_url}/api/v4/leads/pipelines'
+            async with session.get(purl, headers=headers) as resp:
+                pipelines = []
+                if resp.status == 200:
+                    pdata = await resp.json()
+                    pipelines = pdata.get('_embedded', {}).get('pipelines', [])
+
+            scripts = {}
+            for p in pipelines:
+                if pipeline_id and p.get('id') != pipeline_id:
+                    continue
+                stages = [s for s in p.get('_embedded', {}).get('statuses', []) if s.get('id') not in (142, 143)]
+                pipeline_scripts = {}
+                for s in stages:
+                    sname = s.get('name', '')
+                    pipeline_scripts[sname] = {
+                        'goal': f'Move deal to next stage from "{sname}"',
+                        'key_questions': [
+                            'What is the client\'s main pain point?',
+                            'What is the decision timeline?',
+                            'Who are the decision makers?',
+                        ],
+                        'objection_handlers': [
+                            'Price too high → Focus on ROI and value',
+                            'Need to think → Set specific follow-up date',
+                            'Competitor offer → Highlight unique advantages',
+                        ],
+                        'next_action': f'Schedule next touchpoint and move to next stage',
+                    }
+                scripts[p.get('name')] = pipeline_scripts
+
+            return {
+                'sales_scripts': scripts,
+                'hint': 'Present stage-specific sales scripts. Each stage has goals, key questions, objection handlers. Customize based on deal context.',
+            }
+
+        return {'error': f'Unknown templates action: {action}'}
+
+    async def _handle_anomaly(self, session, headers, args: dict) -> dict:
+        """Anomaly detection in deals and sales."""
+        import time
+        from datetime import datetime
+        from collections import Counter
+        action = args.get('action')
+        days = args.get('days', 30)
+        pipeline_id = args.get('pipeline_id')
+        now = int(time.time())
+        cutoff = now - days * 86400
+
+        url = f'{self.kommo_base_url}/api/v4/leads'
+        params = {'limit': 250, 'order[created_at]': 'desc'}
+        if pipeline_id:
+            params['filter[pipeline_id]'] = pipeline_id
+        all_leads = []
+        page = 1
+        while page <= 4:
+            params['page'] = page
+            async with session.get(url, headers=headers, params=params) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    leads = data.get('_embedded', {}).get('leads', [])
+                    all_leads.extend(leads)
+                    if len(leads) < 250:
+                        break
+                    page += 1
+                else:
+                    break
+
+        recent = [l for l in all_leads if l.get('created_at', 0) >= cutoff]
+
+        if action == 'detect':
+            anomalies = []
+            prices = [l.get('price', 0) or 0 for l in recent if (l.get('price') or 0) > 0]
+            if prices:
+                avg_price = sum(prices) / len(prices)
+                std_price = (sum((p - avg_price) ** 2 for p in prices) / len(prices)) ** 0.5
+                for l in recent:
+                    p = l.get('price', 0) or 0
+                    if p > 0 and std_price > 0 and abs(p - avg_price) > 2 * std_price:
+                        anomalies.append({'type': 'price_outlier', 'lead_id': l.get('id'), 'name': l.get('name'), 'price': p, 'avg_price': round(avg_price), 'deviation': f'{(p - avg_price) / std_price:.1f}σ'})
+
+            daily_counts = Counter()
+            for l in recent:
+                dt = datetime.fromtimestamp(l.get('created_at', now))
+                daily_counts[dt.strftime('%Y-%m-%d')] += 1
+            if daily_counts:
+                avg_daily = sum(daily_counts.values()) / max(len(daily_counts), 1)
+                for day, count in daily_counts.items():
+                    if count > avg_daily * 2.5:
+                        anomalies.append({'type': 'volume_spike', 'date': day, 'count': count, 'avg_daily': round(avg_daily, 1), 'message': f'{day}: {count} deals (avg {avg_daily:.0f})'})
+                    elif count == 0 or count < avg_daily * 0.2:
+                        anomalies.append({'type': 'volume_drop', 'date': day, 'count': count, 'avg_daily': round(avg_daily, 1), 'message': f'{day}: only {count} deals (avg {avg_daily:.0f})'})
+
+            user_counts = Counter(l.get('responsible_user_id') for l in recent if l.get('responsible_user_id'))
+            if user_counts:
+                avg_user = sum(user_counts.values()) / len(user_counts)
+                for uid, cnt in user_counts.items():
+                    if cnt > avg_user * 3:
+                        anomalies.append({'type': 'user_concentration', 'user_id': uid, 'count': cnt, 'avg': round(avg_user), 'message': f'User {uid} has {cnt} deals (avg {avg_user:.0f})'})
+
+            if not anomalies:
+                anomalies.append({'type': 'none', 'message': 'No anomalies detected in the period'})
+
+            return {
+                'period_days': days,
+                'total_analyzed': len(recent),
+                'anomalies': anomalies,
+                'hint': 'Present anomalies by type. Price outliers may be data entry errors or genuine big deals. Volume spikes/drops need investigation.',
+            }
+
+        elif action == 'sales':
+            won = [l for l in recent if l.get('status_id') == 142]
+            lost = [l for l in recent if l.get('status_id') == 143]
+            active = [l for l in recent if l.get('status_id') not in (142, 143)]
+
+            anomalies = []
+            if won and lost:
+                win_rate = len(won) / (len(won) + len(lost))
+                if win_rate < 0.15:
+                    anomalies.append({'type': 'low_win_rate', 'value': f'{win_rate:.0%}', 'message': f'Win rate critically low: {win_rate:.0%}'})
+                elif win_rate > 0.8:
+                    anomalies.append({'type': 'high_win_rate', 'value': f'{win_rate:.0%}', 'message': f'Win rate unusually high: {win_rate:.0%} — may indicate cherry-picking'})
+
+            won_prices = [l.get('price', 0) or 0 for l in won if (l.get('price') or 0) > 0]
+            lost_prices = [l.get('price', 0) or 0 for l in lost if (l.get('price') or 0) > 0]
+            if won_prices and lost_prices:
+                avg_won = sum(won_prices) / len(won_prices)
+                avg_lost = sum(lost_prices) / len(lost_prices)
+                if avg_lost > avg_won * 1.5:
+                    anomalies.append({'type': 'losing_big_deals', 'avg_won': round(avg_won), 'avg_lost': round(avg_lost), 'message': f'Losing bigger deals (avg lost {avg_lost:.0f} vs avg won {avg_won:.0f})'})
+
+            cycles = [(l.get('updated_at', now) - l.get('created_at', now)) / 86400 for l in won]
+            if cycles:
+                avg_cycle = sum(cycles) / len(cycles)
+                very_fast = [c for c in cycles if c < 1]
+                if len(very_fast) > len(cycles) * 0.3:
+                    anomalies.append({'type': 'instant_wins', 'count': len(very_fast), 'message': f'{len(very_fast)} deals closed in <1 day — verify data quality'})
+
+            if not anomalies:
+                anomalies.append({'type': 'none', 'message': 'No sales anomalies detected'})
+
+            return {
+                'period_days': days,
+                'stats': {'won': len(won), 'lost': len(lost), 'active': len(active)},
+                'anomalies': anomalies,
+                'hint': 'Present sales anomalies with context. Low win rate needs process review. Losing big deals needs strategy change. Instant wins need data verification.',
+            }
+
+        return {'error': f'Unknown anomaly action: {action}'}
