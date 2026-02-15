@@ -898,6 +898,66 @@ MCP_TOOLS = [
             },
         },
     },
+    {
+        'type': 'function',
+        'function': {
+            'name': 'kommo_export',
+            'description': 'Export CRM data as CSV/text. Returns formatted data for download.',
+            'parameters': {
+                'type': 'object',
+                'properties': {
+                    'action': {
+                        'type': 'string',
+                        'enum': ['leads_csv', 'contacts_csv', 'analytics'],
+                        'description': 'What to export: leads_csv, contacts_csv, or analytics summary',
+                    },
+                    'pipeline_id': {'type': 'integer', 'description': 'Filter leads by pipeline'},
+                    'status_id': {'type': 'integer', 'description': 'Filter leads by status'},
+                    'limit': {'type': 'integer', 'description': 'Max rows (default 100)', 'default': 100},
+                },
+                'required': ['action'],
+            },
+        },
+    },
+    {
+        'type': 'function',
+        'function': {
+            'name': 'kommo_digest',
+            'description': 'Generate CRM digest/summary: morning briefing, weekly report, or personal tasks',
+            'parameters': {
+                'type': 'object',
+                'properties': {
+                    'action': {
+                        'type': 'string',
+                        'enum': ['morning', 'weekly', 'my_tasks'],
+                        'description': 'Digest type: morning (today overview), weekly (week summary), my_tasks (tasks for today)',
+                    },
+                    'user_id': {'type': 'integer', 'description': 'CRM user ID (for my_tasks)'},
+                },
+                'required': ['action'],
+            },
+        },
+    },
+    {
+        'type': 'function',
+        'function': {
+            'name': 'kommo_advisor',
+            'description': 'AI-powered CRM advisor: recommendations, tips, analysis based on CRM data',
+            'parameters': {
+                'type': 'object',
+                'properties': {
+                    'action': {
+                        'type': 'string',
+                        'enum': ['next_action', 'pipeline_tips', 'loss_analysis', 'closing_tips', 'objections'],
+                        'description': 'Advice type',
+                    },
+                    'lead_id': {'type': 'integer', 'description': 'Lead ID for deal-specific advice'},
+                    'pipeline_id': {'type': 'integer', 'description': 'Pipeline ID for pipeline analysis'},
+                },
+                'required': ['action'],
+            },
+        },
+    },
 ]
 
 SYSTEM_PROMPT = """Ты - AI-ассистент для ПОЛНОГО управления CRM Kommo.
@@ -1347,6 +1407,15 @@ class AIChat:
         elif name == 'kommo_cleanup':
             return await self._handle_cleanup(session, headers, args)
         
+        elif name == 'kommo_export':
+            return await self._handle_export(session, headers, args)
+        
+        elif name == 'kommo_digest':
+            return await self._handle_digest(session, headers, args)
+        
+        elif name == 'kommo_advisor':
+            return await self._handle_advisor(session, headers, args)
+        
         # Default - return info about available tools
         return {'message': f'Tool {name} not fully implemented yet', 'args': args}
     
@@ -1764,6 +1833,41 @@ class AIChat:
                     'stages': ['Подготовка КП', 'КП отправлено', 'На рассмотрении', 'Корректировка', 'Согласовано', 'Отклонено'],
                     'fields': ['Сумма КП', 'Срок действия КП', 'Версия КП'],
                 },
+                {
+                    'code': 'autoservice',
+                    'name': 'Автосервис',
+                    'description': 'Воронка для автосервиса: от заявки до выдачи авто',
+                    'stages': ['Заявка', 'Диагностика', 'Согласование работ', 'В ремонте', 'Готово к выдаче', 'Выдано'],
+                    'fields': ['Марка авто', 'Гос. номер', 'Вид работ', 'Стоимость запчастей'],
+                },
+                {
+                    'code': 'realestate',
+                    'name': 'Недвижимость',
+                    'description': 'Воронка для агентства недвижимости: от заявки до сделки',
+                    'stages': ['Новая заявка', 'Выявление потребности', 'Подбор объектов', 'Показ', 'Переговоры', 'Бронь', 'Сделка'],
+                    'fields': ['Тип недвижимости', 'Бюджет', 'Район', 'Площадь'],
+                },
+                {
+                    'code': 'education',
+                    'name': 'Онлайн-школа',
+                    'description': 'Воронка для онлайн-школы: от лида до оплаты курса',
+                    'stages': ['Заявка на курс', 'Консультация', 'Пробный урок', 'Выбор тарифа', 'Оплата', 'Обучение'],
+                    'fields': ['Курс', 'Тариф', 'Промокод', 'Источник'],
+                },
+                {
+                    'code': 'ecommerce',
+                    'name': 'Интернет-магазин',
+                    'description': 'Воронка для e-commerce: от заказа до доставки',
+                    'stages': ['Новый заказ', 'Подтверждение', 'Комплектация', 'Отправлено', 'Доставлено', 'Возврат'],
+                    'fields': ['Номер заказа', 'Способ доставки', 'Трек-номер'],
+                },
+                {
+                    'code': 'b2b_sales',
+                    'name': 'B2B продажи',
+                    'description': 'Воронка для B2B: длинный цикл сделки с несколькими ЛПР',
+                    'stages': ['Лид', 'Квалификация', 'Выявление ЛПР', 'Презентация', 'Пилот/Тест', 'КП', 'Согласование', 'Контракт'],
+                    'fields': ['Компания', 'ЛПР', 'Бюджет', 'Срок принятия решения', 'Конкуренты'],
+                },
             ]
             return {'templates': templates, 'hint': 'Use apply_template with template code to create pipeline from template'}
 
@@ -1820,6 +1924,64 @@ class AIChat:
                         ('Корректировка', '#ffdc7f', 40),
                         ('Согласовано', '#87f2c0', 50),
                         ('Отклонено', '#ff8f92', 60),
+                    ],
+                },
+                'autoservice': {
+                    'name': 'Автосервис',
+                    'stages': [
+                        ('Заявка', '#d6eaff', 10),
+                        ('Диагностика', '#c1e0ff', 20),
+                        ('Согласование работ', '#ffeab2', 30),
+                        ('В ремонте', '#ffdc7f', 40),
+                        ('Готово к выдаче', '#87f2c0', 50),
+                        ('Выдано', '#ebffb1', 60),
+                    ],
+                },
+                'realestate': {
+                    'name': 'Недвижимость',
+                    'stages': [
+                        ('Новая заявка', '#d6eaff', 10),
+                        ('Выявление потребности', '#c1e0ff', 20),
+                        ('Подбор объектов', '#ffeab2', 30),
+                        ('Показ', '#ffdc7f', 40),
+                        ('Переговоры', '#f9deff', 50),
+                        ('Бронь', '#ccc8f9', 60),
+                        ('Сделка', '#87f2c0', 70),
+                    ],
+                },
+                'education': {
+                    'name': 'Онлайн-школа',
+                    'stages': [
+                        ('Заявка на курс', '#d6eaff', 10),
+                        ('Консультация', '#c1e0ff', 20),
+                        ('Пробный урок', '#ffeab2', 30),
+                        ('Выбор тарифа', '#ffdc7f', 40),
+                        ('Оплата', '#87f2c0', 50),
+                        ('Обучение', '#ebffb1', 60),
+                    ],
+                },
+                'ecommerce': {
+                    'name': 'Интернет-магазин',
+                    'stages': [
+                        ('Новый заказ', '#d6eaff', 10),
+                        ('Подтверждение', '#c1e0ff', 20),
+                        ('Комплектация', '#ffeab2', 30),
+                        ('Отправлено', '#ffdc7f', 40),
+                        ('Доставлено', '#87f2c0', 50),
+                        ('Возврат', '#ff8f92', 60),
+                    ],
+                },
+                'b2b_sales': {
+                    'name': 'B2B продажи',
+                    'stages': [
+                        ('Лид', '#d6eaff', 10),
+                        ('Квалификация', '#c1e0ff', 20),
+                        ('Выявление ЛПР', '#98cbff', 30),
+                        ('Презентация', '#ffeab2', 40),
+                        ('Пилот/Тест', '#ffdc7f', 50),
+                        ('КП', '#f9deff', 60),
+                        ('Согласование', '#ccc8f9', 70),
+                        ('Контракт', '#87f2c0', 80),
                     ],
                 },
             }
@@ -4347,3 +4509,535 @@ class AIChat:
             return {'action': 'full_reset', 'success': True, **results}
         
         return {'error': f'Unknown cleanup action: {action}'}
+
+    async def _handle_export(self, session, headers, args: dict) -> dict:
+        """Export CRM data as CSV-formatted text."""
+        import time
+        action = args.get('action')
+        limit = min(args.get('limit', 100), 500)
+        pipeline_id = args.get('pipeline_id')
+
+        if action == 'leads_csv':
+            url = f'{self.kommo_base_url}/api/v4/leads'
+            params = {'limit': limit, 'with': 'contacts'}
+            if pipeline_id:
+                params['filter[pipeline_id]'] = pipeline_id
+
+            all_leads = []
+            page = 1
+            while len(all_leads) < limit:
+                params['page'] = page
+                async with session.get(url, headers=headers, params=params) as resp:
+                    if resp.status != 200:
+                        break
+                    data = await resp.json()
+                    leads = data.get('_embedded', {}).get('leads', [])
+                    if not leads:
+                        break
+                    all_leads.extend(leads)
+                    page += 1
+                    if len(leads) < 250:
+                        break
+
+            all_leads = all_leads[:limit]
+            csv_lines = ['ID;Название;Бюджет;Статус;Воронка;Ответственный;Создано']
+            for lead in all_leads:
+                created = time.strftime('%Y-%m-%d', time.localtime(lead.get('created_at', 0)))
+                csv_lines.append(f'{lead.get("id")};{lead.get("name", "")};{lead.get("price", 0)};{lead.get("status_id", "")};{lead.get("pipeline_id", "")};{lead.get("responsible_user_id", "")};{created}')
+
+            return {
+                'format': 'csv',
+                'rows': len(all_leads),
+                'csv_data': '\n'.join(csv_lines),
+                'hint': 'Present this data as a formatted table to the user',
+            }
+
+        elif action == 'contacts_csv':
+            url = f'{self.kommo_base_url}/api/v4/contacts'
+            params = {'limit': limit}
+
+            all_contacts = []
+            page = 1
+            while len(all_contacts) < limit:
+                params['page'] = page
+                async with session.get(url, headers=headers, params=params) as resp:
+                    if resp.status != 200:
+                        break
+                    data = await resp.json()
+                    contacts = data.get('_embedded', {}).get('contacts', [])
+                    if not contacts:
+                        break
+                    all_contacts.extend(contacts)
+                    page += 1
+                    if len(contacts) < 250:
+                        break
+
+            all_contacts = all_contacts[:limit]
+            csv_lines = ['ID;Имя;Телефон;Email;Ответственный;Создано']
+            for c in all_contacts:
+                created = time.strftime('%Y-%m-%d', time.localtime(c.get('created_at', 0)))
+                phone = ''
+                email = ''
+                for cf in c.get('custom_fields_values', []) or []:
+                    code = cf.get('field_code', '')
+                    vals = cf.get('values', [])
+                    if code == 'PHONE' and vals:
+                        phone = vals[0].get('value', '')
+                    elif code == 'EMAIL' and vals:
+                        email = vals[0].get('value', '')
+                name = c.get('name', '')
+                csv_lines.append(f'{c.get("id")};{name};{phone};{email};{c.get("responsible_user_id", "")};{created}')
+
+            return {
+                'format': 'csv',
+                'rows': len(all_contacts),
+                'csv_data': '\n'.join(csv_lines),
+                'hint': 'Present this data as a formatted table to the user',
+            }
+
+        elif action == 'analytics':
+            # Collect summary analytics across all pipelines
+            pipelines_url = f'{self.kommo_base_url}/api/v4/leads/pipelines'
+            async with session.get(pipelines_url, headers=headers) as resp:
+                if resp.status != 200:
+                    return {'error': f'Failed to get pipelines: {resp.status}'}
+                pipelines_data = await resp.json()
+                pipelines = pipelines_data.get('_embedded', {}).get('pipelines', [])
+
+            summary = []
+            grand_total_deals = 0
+            grand_total_revenue = 0
+
+            for p in pipelines:
+                p_id = p.get('id')
+                leads_url = f'{self.kommo_base_url}/api/v4/leads'
+                params = {'filter[pipeline_id]': p_id, 'limit': 250}
+                async with session.get(leads_url, headers=headers, params=params) as resp:
+                    leads = []
+                    if resp.status == 200:
+                        data = await resp.json()
+                        leads = data.get('_embedded', {}).get('leads', [])
+
+                total_deals = len(leads)
+                total_revenue = sum((l.get('price', 0) or 0) for l in leads)
+                grand_total_deals += total_deals
+                grand_total_revenue += total_revenue
+
+                summary.append({
+                    'pipeline': p.get('name'),
+                    'deals': total_deals,
+                    'revenue': total_revenue,
+                    'avg_check': round(total_revenue / total_deals) if total_deals else 0,
+                })
+
+            return {
+                'pipelines': summary,
+                'totals': {
+                    'deals': grand_total_deals,
+                    'revenue': grand_total_revenue,
+                    'avg_check': round(grand_total_revenue / grand_total_deals) if grand_total_deals else 0,
+                    'pipelines_count': len(pipelines),
+                },
+            }
+
+        return {'error': f'Unknown export action: {action}'}
+
+    async def _handle_digest(self, session, headers, args: dict) -> dict:
+        """Generate CRM digest: morning briefing, weekly summary, personal tasks."""
+        import time
+        from datetime import datetime, timedelta
+
+        action = args.get('action')
+        user_id = args.get('user_id')
+
+        if action == 'morning':
+            now = int(time.time())
+            today_start = now - (now % 86400)
+
+            # 1. Active deals count
+            leads_url = f'{self.kommo_base_url}/api/v4/leads'
+            params = {'limit': 250}
+            async with session.get(leads_url, headers=headers, params=params) as resp:
+                leads = []
+                if resp.status == 200:
+                    data = await resp.json()
+                    leads = data.get('_embedded', {}).get('leads', [])
+
+            active_deals = len(leads)
+            total_revenue = sum((l.get('price', 0) or 0) for l in leads)
+            new_today = sum(1 for l in leads if (l.get('created_at', 0) or 0) >= today_start)
+
+            # 2. Overdue tasks
+            tasks_url = f'{self.kommo_base_url}/api/v4/tasks'
+            params = {'filter[is_completed]': 0, 'limit': 250}
+            async with session.get(tasks_url, headers=headers, params=params) as resp:
+                tasks = []
+                if resp.status == 200:
+                    data = await resp.json()
+                    tasks = data.get('_embedded', {}).get('tasks', [])
+
+            overdue_tasks = [t for t in tasks if (t.get('complete_till', 0) or 0) < now and not t.get('is_completed')]
+            today_tasks = [t for t in tasks if today_start <= (t.get('complete_till', 0) or 0) < today_start + 86400]
+
+            # 3. Stale deals (no activity > 7 days)
+            stale_threshold = now - 7 * 86400
+            stale_deals = [l for l in leads if (l.get('updated_at', 0) or 0) < stale_threshold]
+
+            return {
+                'digest_type': 'morning',
+                'date': datetime.now().strftime('%d.%m.%Y'),
+                'active_deals': active_deals,
+                'total_pipeline_value': total_revenue,
+                'new_deals_today': new_today,
+                'tasks_today': len(today_tasks),
+                'overdue_tasks': len(overdue_tasks),
+                'stale_deals': len(stale_deals),
+                'hint': 'Format this as a morning briefing for the user. Use emoji and clear structure.',
+            }
+
+        elif action == 'weekly':
+            now = int(time.time())
+            week_ago = now - 7 * 86400
+
+            # Deals created this week
+            leads_url = f'{self.kommo_base_url}/api/v4/leads'
+            params = {'limit': 250, 'filter[created_at][from]': week_ago}
+            async with session.get(leads_url, headers=headers, params=params) as resp:
+                new_leads = []
+                if resp.status == 200:
+                    data = await resp.json()
+                    new_leads = data.get('_embedded', {}).get('leads', [])
+
+            # Won deals (status 142)
+            params_won = {'limit': 250, 'filter[statuses][0][status_id]': 142}
+            async with session.get(leads_url, headers=headers, params=params_won) as resp:
+                won_leads = []
+                if resp.status == 200:
+                    data = await resp.json()
+                    won_leads = data.get('_embedded', {}).get('leads', [])
+
+            won_this_week = [l for l in won_leads if (l.get('closed_at', 0) or 0) >= week_ago]
+            won_revenue = sum((l.get('price', 0) or 0) for l in won_this_week)
+
+            # Lost deals (status 143)
+            params_lost = {'limit': 250, 'filter[statuses][0][status_id]': 143}
+            async with session.get(leads_url, headers=headers, params=params_lost) as resp:
+                lost_leads = []
+                if resp.status == 200:
+                    data = await resp.json()
+                    lost_leads = data.get('_embedded', {}).get('leads', [])
+
+            lost_this_week = [l for l in lost_leads if (l.get('closed_at', 0) or 0) >= week_ago]
+
+            # Completed tasks
+            tasks_url = f'{self.kommo_base_url}/api/v4/tasks'
+            params_tasks = {'filter[is_completed]': 1, 'limit': 250}
+            async with session.get(tasks_url, headers=headers, params=params_tasks) as resp:
+                completed_tasks = []
+                if resp.status == 200:
+                    data = await resp.json()
+                    completed_tasks = data.get('_embedded', {}).get('tasks', [])
+
+            return {
+                'digest_type': 'weekly',
+                'period': f'{datetime.fromtimestamp(week_ago).strftime("%d.%m")} - {datetime.now().strftime("%d.%m.%Y")}',
+                'new_deals': len(new_leads),
+                'new_deals_value': sum((l.get('price', 0) or 0) for l in new_leads),
+                'won_deals': len(won_this_week),
+                'won_revenue': won_revenue,
+                'lost_deals': len(lost_this_week),
+                'tasks_completed': len(completed_tasks),
+                'conversion': f'{round(len(won_this_week) / max(len(new_leads), 1) * 100)}%',
+                'hint': 'Format this as a weekly summary report. Use emoji and clear structure.',
+            }
+
+        elif action == 'my_tasks':
+            now = int(time.time())
+            today_end = now - (now % 86400) + 86400
+
+            tasks_url = f'{self.kommo_base_url}/api/v4/tasks'
+            params = {'filter[is_completed]': 0, 'limit': 100}
+            if user_id:
+                params['filter[responsible_user_id]'] = user_id
+
+            async with session.get(tasks_url, headers=headers, params=params) as resp:
+                tasks = []
+                if resp.status == 200:
+                    data = await resp.json()
+                    tasks = data.get('_embedded', {}).get('tasks', [])
+
+            overdue = []
+            today = []
+            upcoming = []
+            for t in tasks:
+                deadline = t.get('complete_till', 0) or 0
+                task_info = {
+                    'id': t.get('id'),
+                    'text': t.get('text', '')[:80],
+                    'type': t.get('task_type_id'),
+                    'deadline': time.strftime('%d.%m %H:%M', time.localtime(deadline)) if deadline else 'нет',
+                    'entity_id': t.get('entity_id'),
+                    'entity_type': t.get('entity_type'),
+                }
+                if deadline < now:
+                    overdue.append(task_info)
+                elif deadline < today_end:
+                    today.append(task_info)
+                else:
+                    upcoming.append(task_info)
+
+            return {
+                'digest_type': 'my_tasks',
+                'overdue': overdue,
+                'today': today,
+                'upcoming': upcoming[:10],
+                'total_pending': len(tasks),
+                'hint': 'Format as a task list grouped by urgency. Overdue first (with warning), then today, then upcoming.',
+            }
+
+        return {'error': f'Unknown digest action: {action}'}
+
+    async def _handle_advisor(self, session, headers, args: dict) -> dict:
+        """AI-powered CRM advisor: recommendations based on actual CRM data."""
+        import time
+        action = args.get('action')
+        lead_id = args.get('lead_id')
+        pipeline_id = args.get('pipeline_id')
+
+        if action == 'next_action':
+            if not lead_id:
+                return {'error': 'lead_id is required for next_action advice'}
+
+            url = f'{self.kommo_base_url}/api/v4/leads/{lead_id}'
+            params = {'with': 'contacts,catalog_elements'}
+            async with session.get(url, headers=headers, params=params) as resp:
+                if resp.status != 200:
+                    return {'error': f'Lead not found: {resp.status}'}
+                lead = await resp.json()
+
+            # Get tasks for this lead
+            tasks_url = f'{self.kommo_base_url}/api/v4/tasks'
+            tasks_params = {'filter[entity_id]': lead_id, 'filter[entity_type]': 'leads', 'filter[is_completed]': 0}
+            async with session.get(tasks_url, headers=headers, params=tasks_params) as resp:
+                pending_tasks = []
+                if resp.status == 200:
+                    data = await resp.json()
+                    pending_tasks = data.get('_embedded', {}).get('tasks', [])
+
+            # Get notes/history
+            notes_url = f'{self.kommo_base_url}/api/v4/leads/{lead_id}/notes'
+            async with session.get(notes_url, headers=headers, params={'limit': 10}) as resp:
+                notes = []
+                if resp.status == 200:
+                    data = await resp.json()
+                    notes = data.get('_embedded', {}).get('notes', [])
+
+            now = int(time.time())
+            days_since_update = (now - (lead.get('updated_at', now) or now)) // 86400
+            days_since_creation = (now - (lead.get('created_at', now) or now)) // 86400
+            price = lead.get('price', 0) or 0
+            has_contacts = bool(lead.get('_embedded', {}).get('contacts'))
+
+            return {
+                'lead': {
+                    'name': lead.get('name'),
+                    'price': price,
+                    'status_id': lead.get('status_id'),
+                    'pipeline_id': lead.get('pipeline_id'),
+                    'days_in_pipeline': days_since_creation,
+                    'days_since_update': days_since_update,
+                    'has_contacts': has_contacts,
+                    'pending_tasks': len(pending_tasks),
+                    'notes_count': len(notes),
+                },
+                'analysis': {
+                    'is_stale': days_since_update > 7,
+                    'no_tasks': len(pending_tasks) == 0,
+                    'no_contacts': not has_contacts,
+                    'no_price': price == 0,
+                    'long_cycle': days_since_creation > 30,
+                },
+                'hint': 'Based on this data, provide specific actionable recommendations: what to do next with this deal, what risks exist, and what actions to take. Be specific and practical.',
+            }
+
+        elif action == 'pipeline_tips':
+            # Analyze pipeline health and give recommendations
+            pipelines_url = f'{self.kommo_base_url}/api/v4/leads/pipelines'
+            async with session.get(pipelines_url, headers=headers) as resp:
+                if resp.status != 200:
+                    return {'error': f'Failed to get pipelines: {resp.status}'}
+                pipelines_data = await resp.json()
+                pipelines = pipelines_data.get('_embedded', {}).get('pipelines', [])
+
+            if pipeline_id:
+                pipelines = [p for p in pipelines if p.get('id') == pipeline_id]
+
+            now = int(time.time())
+            results = []
+
+            for p in pipelines:
+                p_id = p.get('id')
+                statuses = p.get('_embedded', {}).get('statuses', [])
+
+                leads_url = f'{self.kommo_base_url}/api/v4/leads'
+                params = {'filter[pipeline_id]': p_id, 'limit': 250}
+                async with session.get(leads_url, headers=headers, params=params) as resp:
+                    leads = []
+                    if resp.status == 200:
+                        data = await resp.json()
+                        leads = data.get('_embedded', {}).get('leads', [])
+
+                stage_counts = {}
+                stale_by_stage = {}
+                revenue_by_stage = {}
+                for lead in leads:
+                    sid = lead.get('status_id')
+                    stage_counts[sid] = stage_counts.get(sid, 0) + 1
+                    revenue_by_stage[sid] = revenue_by_stage.get(sid, 0) + (lead.get('price', 0) or 0)
+                    if (now - (lead.get('updated_at', now) or now)) > 7 * 86400:
+                        stale_by_stage[sid] = stale_by_stage.get(sid, 0) + 1
+
+                stages_analysis = []
+                for s in statuses:
+                    sid = s.get('id')
+                    if sid in [142, 143]:
+                        continue
+                    count = stage_counts.get(sid, 0)
+                    stale = stale_by_stage.get(sid, 0)
+                    stages_analysis.append({
+                        'name': s.get('name'),
+                        'deals': count,
+                        'stale': stale,
+                        'stale_pct': f'{round(stale / max(count, 1) * 100)}%',
+                        'revenue': revenue_by_stage.get(sid, 0),
+                    })
+
+                bottleneck = max(stages_analysis, key=lambda x: x['deals']) if stages_analysis else None
+
+                results.append({
+                    'pipeline': p.get('name'),
+                    'total_deals': len(leads),
+                    'total_revenue': sum((l.get('price', 0) or 0) for l in leads),
+                    'stages': stages_analysis,
+                    'bottleneck': bottleneck['name'] if bottleneck else None,
+                })
+
+            return {
+                'pipelines': results,
+                'hint': 'Analyze this pipeline data and provide specific recommendations: where are bottlenecks, which stages have too many stale deals, what can be improved. Be actionable.',
+            }
+
+        elif action == 'loss_analysis':
+            # Analyze lost deals
+            leads_url = f'{self.kommo_base_url}/api/v4/leads'
+            params = {'filter[statuses][0][status_id]': 143, 'limit': 250}
+            if pipeline_id:
+                params['filter[pipeline_id]'] = pipeline_id
+
+            async with session.get(leads_url, headers=headers, params=params) as resp:
+                lost_leads = []
+                if resp.status == 200:
+                    data = await resp.json()
+                    lost_leads = data.get('_embedded', {}).get('leads', [])
+
+            now = int(time.time())
+            total_lost = len(lost_leads)
+            total_lost_value = sum((l.get('price', 0) or 0) for l in lost_leads)
+
+            # Analyze by pipeline
+            by_pipeline = {}
+            cycle_times = []
+            for l in lost_leads:
+                pid = l.get('pipeline_id')
+                by_pipeline[pid] = by_pipeline.get(pid, 0) + 1
+                created = l.get('created_at', 0) or 0
+                closed = l.get('closed_at', 0) or 0
+                if created and closed:
+                    cycle_times.append((closed - created) // 86400)
+
+            avg_cycle = round(sum(cycle_times) / max(len(cycle_times), 1)) if cycle_times else 0
+
+            # Recent losses (last 30 days)
+            month_ago = now - 30 * 86400
+            recent_losses = [l for l in lost_leads if (l.get('closed_at', 0) or 0) >= month_ago]
+
+            return {
+                'total_lost': total_lost,
+                'total_lost_value': total_lost_value,
+                'recent_losses_30d': len(recent_losses),
+                'recent_lost_value': sum((l.get('price', 0) or 0) for l in recent_losses),
+                'avg_cycle_days': avg_cycle,
+                'by_pipeline': by_pipeline,
+                'hint': 'Analyze loss patterns and provide insights: why deals are being lost, what patterns exist, and specific recommendations to reduce losses.',
+            }
+
+        elif action == 'closing_tips':
+            if not lead_id:
+                return {'error': 'lead_id is required for closing_tips'}
+
+            url = f'{self.kommo_base_url}/api/v4/leads/{lead_id}'
+            params = {'with': 'contacts'}
+            async with session.get(url, headers=headers, params=params) as resp:
+                if resp.status != 200:
+                    return {'error': f'Lead not found: {resp.status}'}
+                lead = await resp.json()
+
+            now = int(time.time())
+            price = lead.get('price', 0) or 0
+            days_in_pipeline = (now - (lead.get('created_at', now) or now)) // 86400
+            has_contacts = bool(lead.get('_embedded', {}).get('contacts'))
+
+            return {
+                'lead': {
+                    'name': lead.get('name'),
+                    'price': price,
+                    'days_in_pipeline': days_in_pipeline,
+                    'has_contacts': has_contacts,
+                    'status_id': lead.get('status_id'),
+                },
+                'hint': 'Based on this deal data, provide specific closing tips: what objections to expect at this price point, how to accelerate the decision, what closing techniques to use. Be practical and specific to this deal.',
+            }
+
+        elif action == 'objections':
+            # Get pipeline context for objection handling
+            pipelines_url = f'{self.kommo_base_url}/api/v4/leads/pipelines'
+            async with session.get(pipelines_url, headers=headers) as resp:
+                pipelines = []
+                if resp.status == 200:
+                    data = await resp.json()
+                    pipelines = data.get('_embedded', {}).get('pipelines', [])
+
+            pipeline_names = [p.get('name', '') for p in pipelines]
+
+            # Get lost deals for pattern analysis
+            leads_url = f'{self.kommo_base_url}/api/v4/leads'
+            params = {'filter[statuses][0][status_id]': 143, 'limit': 50}
+            async with session.get(leads_url, headers=headers, params=params) as resp:
+                lost_leads = []
+                if resp.status == 200:
+                    data = await resp.json()
+                    lost_leads = data.get('_embedded', {}).get('leads', [])
+
+            # Get notes from lost deals for objection patterns
+            loss_reasons = []
+            for l in lost_leads[:10]:
+                notes_url = f'{self.kommo_base_url}/api/v4/leads/{l["id"]}/notes'
+                async with session.get(notes_url, headers=headers, params={'limit': 5}) as resp:
+                    if resp.status == 200:
+                        ndata = await resp.json()
+                        for n in ndata.get('_embedded', {}).get('notes', []):
+                            text = n.get('params', {}).get('text', '') if isinstance(n.get('params'), dict) else ''
+                            if text:
+                                loss_reasons.append(text[:100])
+
+            return {
+                'business_context': {
+                    'pipelines': pipeline_names,
+                    'lost_deals_count': len(lost_leads),
+                    'avg_deal_value': round(sum((l.get('price', 0) or 0) for l in lost_leads) / max(len(lost_leads), 1)),
+                },
+                'loss_notes_sample': loss_reasons[:5],
+                'hint': 'Based on this CRM context and loss patterns, generate a practical objection handling guide: top 5-7 common objections for this type of business, with specific response scripts for each. Make it actionable.',
+            }
+
+        return {'error': f'Unknown advisor action: {action}'}

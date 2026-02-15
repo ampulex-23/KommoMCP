@@ -180,8 +180,8 @@ Use MCP Client node with HTTP transport:
 
 ### CRM Setup
 - `kommo_setup` - **CRM configuration** with actions:
-  - `templates` - List available pipeline templates (5 built-in)
-  - `apply_template` - Apply template (capture, qualification, followup, demo, proposal)
+  - `templates` - List available pipeline templates (10 built-in)
+  - `apply_template` - Apply template (capture, qualification, followup, demo, proposal, autoservice, realestate, education, ecommerce, b2b_sales)
   - `create_pipeline` - Create a new pipeline
   - `create_stage` - Add stage to pipeline
   - `update_pipeline` / `update_stage` - Rename, recolor
@@ -216,6 +216,26 @@ Use MCP Client node with HTTP transport:
   - `top_deals` - Top deals by amount
   - `pipeline_summary` - Pipeline overview
   - `manager_stats` - Manager performance
+
+### Export
+- `kommo_export` - **Data export** with actions:
+  - `leads_csv` - Export leads as CSV table
+  - `contacts_csv` - Export contacts as CSV table
+  - `analytics` - Summary analytics across all pipelines
+
+### Digest
+- `kommo_digest` - **CRM digests and summaries** with actions:
+  - `morning` - Morning briefing (deals, tasks, overdue, stale)
+  - `weekly` - Weekly report (new/won/lost deals, tasks completed)
+  - `my_tasks` - Personal task list (overdue, today, upcoming)
+
+### AI Advisor
+- `kommo_advisor` - **AI-powered recommendations** with actions:
+  - `next_action` - What to do next with a deal
+  - `pipeline_tips` - Pipeline optimization recommendations
+  - `loss_analysis` - Lost deals analysis and patterns
+  - `closing_tips` - Deal closing advice
+  - `objections` - Objection handling guide based on CRM data
 
 ### Additional Tools
 - `kommo_webhooks` - Webhook management (list, create, delete)
