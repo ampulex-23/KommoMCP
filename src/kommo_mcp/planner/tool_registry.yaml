@@ -1569,11 +1569,11 @@ edges:
 capability_map:
   # Analytics intents
   - intent: analytics
-    keywords: [аналитика, статистика, отчет, метрики, kpi, показатели, report]
+    keywords: [аналитика, аналитику, подробную, статистика, статистику, отчет, отчёт, метрики, kpi, показатели, report, analytics, конверсия, конверсию, воронка, воронки, воронкам, воронке, проведи, покажи]
     capabilities: [pipeline_analytics, conversion_rates, stage_stats, manager_stats]
 
   - intent: forecast
-    keywords: [прогноз, forecast, план, ожидания, предсказание, закроем]
+    keywords: [прогноз, прогнозу, forecast, план, плану, ожидания, предсказание, закроем, выручка, выручку, revenue, продажи, продаж]
     capabilities: [pipeline_forecast, revenue_forecast, deal_probability, closing_forecast]
 
   - intent: comparison
@@ -1582,7 +1582,7 @@ capability_map:
 
   # Deal management intents
   - intent: deal_management
-    keywords: [сделка, сделку, лид, deal, lead, создать сделку, обновить, переместить, перемести, передвинь, воронку]
+    keywords: [сделка, сделку, сделки, лид, лиды, deal, lead, создать сделку, обновить, переместить, перемести, передвинь, передвинуть]
     capabilities: [update_lead, move_lead, clone_lead, add_note, create_task]
 
   - intent: deal_analysis
@@ -1613,7 +1613,7 @@ capability_map:
 
   # Search intents
   - intent: search
-    keywords: [найти, найди, поиск, search, где, покажи, список, find]
+    keywords: [найти, найди, поиск, search, где, список, find, фильтр, фильтрация]
     capabilities: [search, find_deals, find_contacts, deal_context]
 
   # Automation intents
@@ -1627,12 +1627,12 @@ capability_map:
 
   # Team intents
   - intent: team
-    keywords: [команда, команды, менеджер, менеджеров, сотрудник, team, нагрузка, нагрузку, workload, эффективность]
+    keywords: [команда, команды, команде, менеджер, менеджеров, менеджеры, сотрудник, сотрудников, team, нагрузка, нагрузку, workload, эффективность, продуктивность]
     capabilities: [user_list, user_workload, leaderboard, capacity_planning, performance_metrics]
 
   # Setup intents
   - intent: setup
-    keywords: [настроить, создать воронку, этап, поле, pipeline, stage, field]
+    keywords: [настроить, настройка, создать воронку, этап, этапы, поле, поля, pipeline, stage, field, шаблон воронки]
     capabilities: [pipeline_crud, stage_crud, field_crud, templates]
 
   # VIP / complex intents
