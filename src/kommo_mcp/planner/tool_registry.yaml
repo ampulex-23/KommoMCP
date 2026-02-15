@@ -1,0 +1,1649 @@
+# Tool Graph Registry for MCP Agent
+# Each tool defines: id, name, category, actions (with inputs/outputs/preconditions/effects)
+# Graph edges: REQUIRES (dependency), PRODUCES (output), SEQUENCE (ordering), PARALLEL (can run together)
+
+tools:
+  # ============================================================
+  # CATEGORY: Pipeline & Analytics (read-only, no preconditions)
+  # ============================================================
+  - id: kommo_list_pipelines
+    name: kommo_list_pipelines
+    category: pipeline
+    description: List all pipelines with stages
+    capabilities: [list_pipelines, get_stages]
+    inputs: []
+    outputs: [pipeline_id, pipeline_name, stage_id, stage_name]
+    preconditions: []
+    effects: []
+    cost: 0.1
+
+  - id: kommo_pipeline_analytics
+    name: kommo_pipeline_analytics
+    category: analytics
+    description: Pipeline conversion rates, deal counts, revenue by stage
+    capabilities: [pipeline_analytics, conversion_rates, stage_stats]
+    inputs: ["pipeline_id?"]
+    outputs: [conversion_rate, deal_count, revenue_by_stage, stage_stats]
+    preconditions: []
+    effects: []
+    cost: 0.2
+
+  - id: kommo_manager_stats
+    name: kommo_manager_stats
+    category: analytics
+    description: Manager performance statistics
+    capabilities: [manager_stats, performance_metrics]
+    inputs: ["user_id?"]
+    outputs: [manager_stats, deals_count, won_sum, conversion]
+    preconditions: []
+    effects: []
+    cost: 0.2
+
+  # ============================================================
+  # CATEGORY: Deals
+  # ============================================================
+  - id: kommo_deals_ext
+    name: kommo_deals_ext
+    category: deals
+    description: Extended deal management
+    capabilities: [deal_analysis, deal_health, deal_velocity, at_risk_deals]
+    actions:
+      - id: by_stage
+        inputs: ["pipeline_id?"]
+        outputs: [deals_by_stage]
+      - id: health
+        inputs: ["pipeline_id?"]
+        outputs: [deal_health_score]
+      - id: velocity
+        inputs: ["pipeline_id?"]
+        outputs: [sales_velocity, cycle_time]
+      - id: at_risk
+        inputs: ["pipeline_id?", "days?"]
+        outputs: [at_risk_deals, risk_score]
+      - id: by_user
+        inputs: ["user_id?"]
+        outputs: [deals_by_user]
+    preconditions: []
+    effects: []
+    cost: 0.2
+
+  - id: kommo_deal_intelligence
+    name: kommo_deal_intelligence
+    category: deals
+    description: Deep deal analysis and intelligence
+    capabilities: [enterprise_analysis, stakeholder_mapping, deal_review, closing_signals]
+    actions:
+      - id: enterprise
+        inputs: [lead_id]
+        outputs: [enterprise_analysis, deal_complexity]
+      - id: stakeholders
+        inputs: [lead_id]
+        outputs: [stakeholder_map, decision_makers]
+      - id: review
+        inputs: [lead_id]
+        outputs: [deal_health, issues, strengths]
+      - id: pipeline_review
+        inputs: ["pipeline_id?"]
+        outputs: [pipeline_issues, action_items]
+      - id: closing_signals
+        inputs: [lead_id]
+        outputs: [closing_signals, close_probability]
+    preconditions: []
+    effects: []
+    cost: 0.3
+
+  # ============================================================
+  # CATEGORY: Tasks
+  # ============================================================
+  - id: kommo_tasks_ext
+    name: kommo_tasks_ext
+    category: tasks
+    description: Task management and planning
+    capabilities: [task_management, task_planning, meeting_prep]
+    actions:
+      - id: overdue
+        inputs: []
+        outputs: [overdue_tasks]
+      - id: stats
+        inputs: ["user_id?"]
+        outputs: [task_stats]
+      - id: by_entity
+        inputs: [entity_id]
+        outputs: [entity_tasks]
+      - id: today
+        inputs: ["user_id?"]
+        outputs: [today_tasks]
+      - id: prioritize
+        inputs: []
+        outputs: [prioritized_tasks]
+      - id: reassign
+        inputs: [task_id, user_id]
+        outputs: [task_reassigned]
+        effects: [task_owner_changed]
+      - id: postpone
+        inputs: [task_id, days]
+        outputs: [task_postponed]
+        effects: [task_deadline_changed]
+      - id: plan_day
+        inputs: ["user_id?"]
+        outputs: [daily_plan]
+      - id: mass_create
+        inputs: [user_ids, task_text]
+        outputs: [tasks_created]
+        effects: [tasks_created]
+      - id: smart_reminders
+        inputs: []
+        outputs: [reminders]
+      - id: meeting_briefing
+        inputs: [lead_id]
+        outputs: [meeting_brief]
+      - id: meeting_prep
+        inputs: [lead_id]
+        outputs: [meeting_agenda, checklist]
+    preconditions: []
+    effects: []
+    cost: 0.2
+
+  # ============================================================
+  # CATEGORY: Contacts & Companies
+  # ============================================================
+  - id: kommo_contacts_ext
+    name: kommo_contacts_ext
+    category: contacts
+    description: Contact analysis and management
+    capabilities: [contact_search, contact_analysis]
+    actions:
+      - id: search
+        inputs: [query]
+        outputs: [contacts, contact_id]
+      - id: without_deals
+        inputs: []
+        outputs: [orphan_contacts]
+      - id: inactive
+        inputs: ["days?"]
+        outputs: [inactive_contacts]
+      - id: linked
+        inputs: [contact_id]
+        outputs: [linked_entities]
+      - id: by_responsible
+        inputs: ["user_id?"]
+        outputs: [contacts_by_user]
+    preconditions: []
+    effects: []
+    cost: 0.2
+
+  - id: kommo_companies
+    name: kommo_companies
+    category: contacts
+    description: Company management
+    capabilities: [company_crud, company_analysis]
+    actions:
+      - id: list
+        inputs: []
+        outputs: [companies, company_id]
+      - id: get
+        inputs: [company_id]
+        outputs: [company_details]
+      - id: create
+        inputs: [company_name]
+        outputs: [company_id]
+        effects: [company_created]
+      - id: update
+        inputs: [company_id, fields]
+        outputs: [company_updated]
+        effects: [company_updated]
+      - id: get_contacts
+        inputs: [company_id]
+        outputs: [company_contacts]
+      - id: get_leads
+        inputs: [company_id]
+        outputs: [company_leads]
+      - id: link_contact
+        inputs: [company_id, contact_id]
+        outputs: [link_created]
+        effects: [contact_linked_to_company]
+    preconditions: []
+    cost: 0.2
+
+  - id: kommo_contact_scoring
+    name: kommo_contact_scoring
+    category: contacts
+    description: Contact and company scoring
+    capabilities: [contact_scoring, company_scoring, relationship_analysis, account_scoring]
+    actions:
+      - id: score
+        inputs: ["limit?"]
+        outputs: [contact_scores]
+      - id: value_segments
+        inputs: ["limit?"]
+        outputs: [value_segments]
+      - id: by_value
+        inputs: ["limit?"]
+        outputs: [contacts_by_value]
+      - id: company_scoring
+        inputs: []
+        outputs: [company_scores, company_tiers]
+      - id: relationship_strength
+        inputs: ["limit?"]
+        outputs: [relationship_scores]
+      - id: account_scoring
+        inputs: []
+        outputs: [account_scores, account_tiers]
+    preconditions: []
+    effects: []
+    cost: 0.3
+
+  - id: kommo_contact_enrichment
+    name: kommo_contact_enrichment
+    category: contacts
+    description: Contact data enrichment
+    capabilities: [contact_enrichment, duplicate_merge, social_profile]
+    actions:
+      - id: analyze
+        inputs: [contact_id]
+        outputs: [contact_analysis]
+      - id: enrich
+        inputs: [contact_id]
+        outputs: [enriched_data]
+        effects: [contact_enriched]
+      - id: profile
+        inputs: [contact_id]
+        outputs: [contact_profile]
+      - id: social
+        inputs: [contact_id]
+        outputs: [social_profiles]
+    preconditions: []
+    cost: 0.3
+
+  - id: kommo_duplicates
+    name: kommo_duplicates
+    category: contacts
+    description: Duplicate detection and merge
+    capabilities: [find_duplicates, merge_contacts]
+    actions:
+      - id: find_contacts
+        inputs: []
+        outputs: [duplicate_contacts]
+      - id: find_companies
+        inputs: []
+        outputs: [duplicate_companies]
+      - id: merge_contacts
+        inputs: [contact_ids]
+        outputs: [merged_contact_id]
+        effects: [contacts_merged]
+    preconditions: []
+    cost: 0.3
+
+  # ============================================================
+  # CATEGORY: Communications
+  # ============================================================
+  - id: kommo_communications
+    name: kommo_communications
+    category: communications
+    description: Communication history and analysis
+    capabilities: [comm_history, call_log, comm_timeline]
+    actions:
+      - id: history
+        inputs: [entity_type, entity_id]
+        outputs: [comm_history]
+      - id: calls
+        inputs: ["entity_id?"]
+        outputs: [call_records]
+      - id: timeline
+        inputs: [entity_type, entity_id]
+        outputs: [event_timeline]
+      - id: summary
+        inputs: [entity_type, entity_id]
+        outputs: [comm_summary]
+      - id: no_contact
+        inputs: ["days?"]
+        outputs: [no_contact_entities]
+    preconditions: []
+    effects: []
+    cost: 0.2
+
+  - id: kommo_communication_analytics
+    name: kommo_communication_analytics
+    category: communications
+    description: Communication quality and sentiment analysis
+    capabilities: [sentiment_analysis, comm_patterns, comm_quality]
+    actions:
+      - id: summary
+        inputs: [lead_id]
+        outputs: [comm_summary]
+      - id: quality
+        inputs: ["lead_id?"]
+        outputs: [quality_score]
+      - id: sentiment
+        inputs: [lead_id]
+        outputs: [sentiment_score, sentiment_label]
+      - id: patterns
+        inputs: ["pipeline_id?"]
+        outputs: [comm_patterns]
+      - id: insights
+        inputs: [lead_id]
+        outputs: [comm_insights]
+    preconditions: []
+    effects: []
+    cost: 0.3
+
+  - id: kommo_smart_reply
+    name: kommo_smart_reply
+    category: communications
+    description: AI-powered reply suggestions
+    capabilities: [reply_suggestion, objection_handling, auto_reply]
+    actions:
+      - id: suggest
+        inputs: [lead_id]
+        outputs: [reply_suggestions]
+      - id: objection_response
+        inputs: [lead_id, "objection?"]
+        outputs: [objection_responses]
+      - id: context
+        inputs: [lead_id]
+        outputs: [conversation_context]
+      - id: auto_reply
+        inputs: [lead_id]
+        outputs: [auto_reply_text]
+    preconditions: []
+    effects: []
+    cost: 0.3
+
+  # ============================================================
+  # CATEGORY: Search
+  # ============================================================
+  - id: kommo_search
+    name: kommo_search
+    category: search
+    description: Enhanced CRM search
+    capabilities: [search, find_deals, find_contacts, deal_context, audit]
+    actions:
+      - id: all
+        inputs: [query]
+        outputs: [search_results, lead_id, contact_id]
+      - id: leads
+        inputs: ["query?", "pipeline_id?", "min_price?", "max_price?"]
+        outputs: [leads, lead_id]
+      - id: contacts
+        inputs: ["query?"]
+        outputs: [contacts, contact_id]
+      - id: query
+        inputs: [query]
+        outputs: [search_results]
+      - id: related
+        inputs: [lead_id]
+        outputs: [related_entities]
+      - id: similar
+        inputs: [lead_id]
+        outputs: [similar_deals]
+      - id: top_deals
+        inputs: ["limit?"]
+        outputs: [top_deals]
+      - id: deal_context
+        inputs: [lead_id]
+        outputs: [deal_context, contacts, notes, tasks]
+      - id: timeline
+        inputs: [lead_id]
+        outputs: [event_timeline]
+      - id: graph
+        inputs: [lead_id]
+        outputs: [relationship_graph]
+      - id: nl_query
+        inputs: [query]
+        outputs: [query_results]
+      - id: problems
+        inputs: ["pipeline_id?"]
+        outputs: [problem_deals]
+      - id: bottlenecks
+        inputs: ["pipeline_id?"]
+        outputs: [bottleneck_stages]
+      - id: rejection_reasons
+        inputs: ["pipeline_id?"]
+        outputs: [rejection_reasons]
+      - id: payment_status
+        inputs: ["lead_id?"]
+        outputs: [payment_status]
+      - id: audit_trail
+        inputs: [lead_id]
+        outputs: [audit_events]
+    preconditions: []
+    effects: []
+    cost: 0.2
+
+  # ============================================================
+  # CATEGORY: Insights & Analytics
+  # ============================================================
+  - id: kommo_insights
+    name: kommo_insights
+    category: analytics
+    description: Business insights and root cause analysis
+    capabilities: [business_insights, rfm_analysis, root_cause, stale_analysis, campaign_roi]
+    actions:
+      - id: top_clients
+        inputs: ["limit?"]
+        outputs: [top_clients]
+      - id: rfm
+        inputs: []
+        outputs: [rfm_segments]
+      - id: workload
+        inputs: []
+        outputs: [workload_distribution]
+      - id: opportunities
+        inputs: []
+        outputs: [opportunities]
+      - id: big_deals
+        inputs: []
+        outputs: [big_deals]
+      - id: actionable
+        inputs: ["pipeline_id?"]
+        outputs: [actionable_insights]
+      - id: root_cause
+        inputs: ["pipeline_id?"]
+        outputs: [root_causes, loss_patterns]
+      - id: stale_analysis
+        inputs: ["pipeline_id?"]
+        outputs: [stale_deals, value_at_risk]
+      - id: campaign_roi
+        inputs: ["pipeline_id?"]
+        outputs: [campaign_roi, source_efficiency]
+    preconditions: []
+    effects: []
+    cost: 0.3
+
+  - id: kommo_ltv
+    name: kommo_ltv
+    category: analytics
+    description: Customer LTV analytics
+    capabilities: [ltv_analysis, cohort_analysis]
+    actions:
+      - id: by_source
+        inputs: []
+        outputs: [ltv_by_source]
+      - id: by_pipeline
+        inputs: []
+        outputs: [ltv_by_pipeline]
+      - id: cohorts
+        inputs: []
+        outputs: [cohort_data]
+      - id: segments
+        inputs: []
+        outputs: [ltv_segments]
+    preconditions: []
+    effects: []
+    cost: 0.3
+
+  - id: kommo_activity
+    name: kommo_activity
+    category: analytics
+    description: Team activity analytics
+    capabilities: [activity_feed, productivity_metrics, kpi_tracking]
+    actions:
+      - id: feed
+        inputs: []
+        outputs: [activity_feed]
+      - id: productivity
+        inputs: []
+        outputs: [productivity_rankings]
+      - id: kpi
+        inputs: ["user_id?"]
+        outputs: [kpi_metrics]
+      - id: recommendations
+        inputs: ["user_id?"]
+        outputs: [improvement_recommendations]
+      - id: correlations
+        inputs: []
+        outputs: [activity_correlations]
+    preconditions: []
+    effects: []
+    cost: 0.3
+
+  # ============================================================
+  # CATEGORY: Forecasting
+  # ============================================================
+  - id: kommo_forecast
+    name: kommo_forecast
+    category: forecasting
+    description: Sales forecasting
+    capabilities: [pipeline_forecast, revenue_forecast, deal_probability, closing_forecast]
+    actions:
+      - id: pipeline
+        inputs: ["pipeline_id?"]
+        outputs: [pipeline_forecast]
+      - id: revenue
+        inputs: ["days?"]
+        outputs: [revenue_forecast]
+      - id: deal_probability
+        inputs: [lead_id]
+        outputs: [win_probability]
+      - id: trends
+        inputs: ["days?"]
+        outputs: [trend_data]
+      - id: cashflow
+        inputs: ["days?"]
+        outputs: [cashflow_forecast]
+      - id: plan_fact
+        inputs: ["pipeline_id?", "target?"]
+        outputs: [plan_fact_data]
+      - id: closing_forecast
+        inputs: ["pipeline_id?"]
+        outputs: [closing_candidates, expected_revenue]
+    preconditions: []
+    effects: []
+    cost: 0.3
+
+  # ============================================================
+  # CATEGORY: Advisor & Coaching
+  # ============================================================
+  - id: kommo_advisor
+    name: kommo_advisor
+    category: advisor
+    description: AI-powered sales recommendations
+    capabilities: [next_action, closing_tips, objection_handling, qualification, negotiation, communication_style, product_recommendations, talking_points]
+    actions:
+      - id: next_action
+        inputs: ["lead_id?"]
+        outputs: [recommended_actions]
+      - id: pipeline_tips
+        inputs: ["pipeline_id?"]
+        outputs: [pipeline_recommendations]
+      - id: loss_analysis
+        inputs: ["pipeline_id?"]
+        outputs: [loss_patterns]
+      - id: closing_tips
+        inputs: ["lead_id?"]
+        outputs: [closing_advice]
+      - id: objections
+        inputs: ["lead_id?"]
+        outputs: [objection_guide]
+      - id: strategy
+        inputs: []
+        outputs: [strategic_recommendations]
+      - id: qualification
+        inputs: [lead_id]
+        outputs: [bant_analysis]
+      - id: qualification_checklist
+        inputs: [lead_id]
+        outputs: [qualification_checklist]
+      - id: negotiation
+        inputs: ["lead_id?"]
+        outputs: [negotiation_tips]
+      - id: communication_style
+        inputs: [lead_id]
+        outputs: [detected_style, style_recommendations]
+      - id: product_recommendations
+        inputs: [lead_id]
+        outputs: [product_recs, upsell_opportunities]
+      - id: talking_points
+        inputs: [lead_id]
+        outputs: [talking_points]
+    preconditions: []
+    effects: []
+    cost: 0.3
+
+  - id: kommo_ai_coach
+    name: kommo_ai_coach
+    category: advisor
+    description: AI sales coaching
+    capabilities: [deal_coaching, skill_assessment, best_practices]
+    actions:
+      - id: review_deal
+        inputs: [lead_id]
+        outputs: [coaching_advice]
+      - id: skill_assessment
+        inputs: [user_id]
+        outputs: [skill_radar]
+      - id: skill_gaps
+        inputs: []
+        outputs: [team_gaps]
+      - id: roleplay
+        inputs: ["scenario?"]
+        outputs: [roleplay_scenario]
+      - id: best_practices
+        inputs: []
+        outputs: [best_practices]
+      - id: micro_learning
+        inputs: ["user_id?"]
+        outputs: [micro_lessons]
+    preconditions: []
+    effects: []
+    cost: 0.3
+
+  - id: kommo_objections
+    name: kommo_objections
+    category: advisor
+    description: Objection handling library
+    capabilities: [objection_library, objection_prediction]
+    actions:
+      - id: handle
+        inputs: [objection]
+        outputs: [handling_strategies]
+      - id: library
+        inputs: []
+        outputs: [objection_library]
+      - id: predict
+        inputs: [lead_id]
+        outputs: [predicted_objections]
+      - id: best_practices
+        inputs: []
+        outputs: [objection_best_practices]
+    preconditions: []
+    effects: []
+    cost: 0.2
+
+  # ============================================================
+  # CATEGORY: Pipeline Health & Alerts
+  # ============================================================
+  - id: kommo_pipeline_health
+    name: kommo_pipeline_health
+    category: pipeline
+    description: Deep pipeline health analysis
+    capabilities: [pipeline_health, velocity_analysis, bottleneck_detection]
+    actions:
+      - id: check
+        inputs: ["pipeline_id?"]
+        outputs: [health_score, key_metrics]
+      - id: velocity
+        inputs: ["pipeline_id?"]
+        outputs: [sales_velocity, cycle_times]
+      - id: bottlenecks
+        inputs: ["pipeline_id?"]
+        outputs: [bottleneck_stages]
+      - id: win_loss
+        inputs: ["pipeline_id?"]
+        outputs: [win_loss_ratio]
+      - id: optimize
+        inputs: ["pipeline_id?"]
+        outputs: [optimization_recommendations]
+    preconditions: []
+    effects: []
+    cost: 0.3
+
+  - id: kommo_alerts
+    name: kommo_alerts
+    category: pipeline
+    description: Proactive CRM alerts
+    capabilities: [risk_alerts, performance_alerts, opportunity_alerts]
+    actions:
+      - id: check
+        inputs: []
+        outputs: [all_alerts]
+      - id: risks
+        inputs: []
+        outputs: [risk_deals]
+      - id: performance
+        inputs: []
+        outputs: [performance_alerts]
+      - id: opportunities
+        inputs: []
+        outputs: [opportunity_alerts]
+    preconditions: []
+    effects: []
+    cost: 0.2
+
+  # ============================================================
+  # CATEGORY: Entity Actions (mutations)
+  # ============================================================
+  - id: kommo_entity_actions
+    name: kommo_entity_actions
+    category: entity
+    description: CRUD operations on leads, contacts, companies
+    capabilities: [add_note, create_task, update_lead, move_lead, link_contact, clone_lead]
+    actions:
+      - id: add_note
+        inputs: [entity_type, entity_id, note_text]
+        outputs: [note_created]
+        effects: [note_added]
+      - id: get_notes
+        inputs: [entity_type, entity_id]
+        outputs: [notes]
+      - id: get_history
+        inputs: [entity_type, entity_id]
+        outputs: [entity_history]
+      - id: create_task
+        inputs: [entity_type, entity_id, task_text]
+        outputs: [task_id]
+        effects: [task_created]
+      - id: get_tasks
+        inputs: [entity_type, entity_id]
+        outputs: [entity_tasks]
+      - id: complete_task
+        inputs: [task_id]
+        outputs: [task_completed]
+        effects: [task_completed]
+      - id: update_lead
+        inputs: [entity_id, fields]
+        outputs: [lead_updated]
+        effects: [lead_updated]
+      - id: update_contact
+        inputs: [entity_id, fields]
+        outputs: [contact_updated]
+        effects: [contact_updated]
+      - id: move_lead
+        inputs: [entity_id, pipeline_id, status_id]
+        outputs: [lead_moved]
+        effects: [lead_stage_changed]
+      - id: link_contact
+        inputs: [entity_id, contact_id]
+        outputs: [link_created]
+        effects: [contact_linked]
+      - id: clone_lead
+        inputs: [entity_id]
+        outputs: [new_lead_id]
+        effects: [lead_created]
+      - id: reactivate_lead
+        inputs: [entity_id]
+        outputs: [lead_reactivated]
+        effects: [lead_reactivated]
+    preconditions: []
+    cost: 0.4
+
+  - id: kommo_bulk_actions
+    name: kommo_bulk_actions
+    category: entity
+    description: Bulk operations on multiple entities
+    capabilities: [mass_update, mass_move, mass_tag, mass_assign, mass_delete]
+    actions:
+      - id: mass_update
+        inputs: [entity_type, entity_ids, fields]
+        outputs: [updated_count]
+        effects: [entities_updated]
+      - id: mass_move
+        inputs: [entity_ids, pipeline_id, status_id]
+        outputs: [moved_count]
+        effects: [leads_moved]
+      - id: mass_tag
+        inputs: [entity_type, entity_ids, tags]
+        outputs: [tagged_count]
+        effects: [tags_added]
+      - id: mass_assign
+        inputs: [entity_ids, responsible_user_id]
+        outputs: [assigned_count]
+        effects: [ownership_changed]
+      - id: mass_delete
+        inputs: [entity_type, entity_ids]
+        outputs: [deleted_count]
+        effects: [entities_deleted]
+    preconditions: []
+    cost: 0.5
+
+  # ============================================================
+  # CATEGORY: Setup & Configuration
+  # ============================================================
+  - id: kommo_setup
+    name: kommo_setup
+    category: setup
+    description: CRM structure management
+    capabilities: [pipeline_crud, stage_crud, field_crud, templates]
+    actions:
+      - id: create_pipeline
+        inputs: [pipeline_name]
+        outputs: [pipeline_id]
+        effects: [pipeline_created]
+      - id: update_pipeline
+        inputs: [pipeline_id, pipeline_name]
+        outputs: [pipeline_updated]
+        effects: [pipeline_updated]
+      - id: delete_pipeline
+        inputs: [pipeline_id]
+        outputs: [pipeline_deleted]
+        effects: [pipeline_deleted]
+      - id: create_stage
+        inputs: [pipeline_id, stage_name]
+        outputs: [stage_id]
+        effects: [stage_created]
+      - id: update_stage
+        inputs: [pipeline_id, stage_id, "stage_name?"]
+        outputs: [stage_updated]
+        effects: [stage_updated]
+      - id: delete_stage
+        inputs: [pipeline_id, stage_id]
+        outputs: [stage_deleted]
+        effects: [stage_deleted]
+      - id: create_field
+        inputs: [field_name, field_type, entity_type]
+        outputs: [field_id]
+        effects: [field_created]
+      - id: templates
+        inputs: []
+        outputs: [available_templates]
+      - id: apply_template
+        inputs: [template]
+        outputs: [pipeline_id]
+        effects: [pipeline_created, stages_created]
+    preconditions: []
+    cost: 0.5
+
+  # ============================================================
+  # CATEGORY: Templates & Documents
+  # ============================================================
+  - id: kommo_templates
+    name: kommo_templates
+    category: templates
+    description: Message and document templates
+    capabilities: [template_generation, personalization, sales_scripts]
+    actions:
+      - id: generate
+        inputs: ["template_type?", "lead_id?"]
+        outputs: [generated_template]
+      - id: apply
+        inputs: [template_id, lead_id]
+        outputs: [applied_template]
+      - id: personalize
+        inputs: [lead_id, "template_type?"]
+        outputs: [personalized_content]
+      - id: sales_script
+        inputs: ["lead_id?"]
+        outputs: [sales_script]
+      - id: follow_up
+        inputs: [lead_id]
+        outputs: [follow_up_template]
+      - id: closing_script
+        inputs: ["lead_id?"]
+        outputs: [closing_script]
+    preconditions: []
+    effects: []
+    cost: 0.3
+
+  - id: kommo_doc_generator
+    name: kommo_doc_generator
+    category: templates
+    description: Document generation
+    capabilities: [presentation_gen, proposal_gen, report_gen]
+    actions:
+      - id: presentation
+        inputs: ["lead_id?", "pipeline_id?"]
+        outputs: [presentation_content]
+      - id: proposal
+        inputs: [lead_id]
+        outputs: [proposal_content]
+      - id: case_study
+        inputs: ["lead_id?"]
+        outputs: [case_study_content]
+      - id: commercial_offer
+        inputs: [lead_id]
+        outputs: [commercial_offer]
+      - id: report
+        inputs: ["pipeline_id?"]
+        outputs: [report_content]
+      - id: partner_report
+        inputs: ["pipeline_id?"]
+        outputs: [partner_report]
+      - id: exportable_report
+        inputs: ["pipeline_id?"]
+        outputs: [csv_report]
+    preconditions: []
+    effects: []
+    cost: 0.3
+
+  # ============================================================
+  # CATEGORY: Automation & Workflows
+  # ============================================================
+  - id: kommo_automation
+    name: kommo_automation
+    category: automation
+    description: Process automation
+    capabilities: [auto_assign, auto_followup, auto_archive]
+    actions:
+      - id: auto_assign
+        inputs: ["pipeline_id?"]
+        outputs: [assignment_result]
+        effects: [leads_assigned]
+      - id: round_robin
+        inputs: ["pipeline_id?"]
+        outputs: [assignment_result]
+        effects: [leads_assigned]
+      - id: auto_followup
+        inputs: ["days?"]
+        outputs: [followup_result]
+        effects: [tasks_created]
+      - id: auto_archive
+        inputs: ["days?"]
+        outputs: [archive_result]
+        effects: [leads_archived]
+    preconditions: []
+    cost: 0.4
+
+  - id: kommo_escalation
+    name: kommo_escalation
+    category: automation
+    description: Escalation management
+    capabilities: [escalation_check, sla_monitoring]
+    actions:
+      - id: check
+        inputs: []
+        outputs: [escalation_alerts]
+      - id: notify
+        inputs: [lead_id]
+        outputs: [notification_sent]
+        effects: [notification_sent]
+      - id: sla
+        inputs: []
+        outputs: [sla_status]
+      - id: support
+        inputs: [lead_id]
+        outputs: [escalation_result]
+        effects: [lead_escalated]
+    preconditions: []
+    cost: 0.3
+
+  - id: kommo_reactivation
+    name: kommo_reactivation
+    category: automation
+    description: Client reactivation campaigns
+    capabilities: [sleeping_clients, lost_nurture, churn_prevention]
+    actions:
+      - id: sleeping
+        inputs: ["days?"]
+        outputs: [sleeping_clients]
+      - id: lost_nurture
+        inputs: []
+        outputs: [nurture_candidates]
+      - id: churn_prevention
+        inputs: []
+        outputs: [churn_risk_clients]
+      - id: win_back
+        inputs: []
+        outputs: [win_back_candidates]
+    preconditions: []
+    effects: []
+    cost: 0.3
+
+  # ============================================================
+  # CATEGORY: Comparison & Anomaly
+  # ============================================================
+  - id: kommo_compare
+    name: kommo_compare
+    category: analytics
+    description: Data comparison and trend analysis
+    capabilities: [period_comparison, trend_analysis, pattern_detection]
+    actions:
+      - id: periods
+        inputs: ["days?"]
+        outputs: [period_comparison]
+      - id: trends
+        inputs: ["days?"]
+        outputs: [trend_data]
+      - id: patterns
+        inputs: []
+        outputs: [detected_patterns]
+      - id: correlations
+        inputs: []
+        outputs: [correlations]
+    preconditions: []
+    effects: []
+    cost: 0.3
+
+  - id: kommo_anomaly
+    name: kommo_anomaly
+    category: analytics
+    description: Anomaly detection
+    capabilities: [anomaly_detection, sales_anomalies]
+    actions:
+      - id: detect
+        inputs: ["pipeline_id?"]
+        outputs: [anomalies]
+      - id: sales
+        inputs: []
+        outputs: [sales_anomalies]
+    preconditions: []
+    effects: []
+    cost: 0.3
+
+  # ============================================================
+  # CATEGORY: Segments & Scoring
+  # ============================================================
+  - id: kommo_segments
+    name: kommo_segments
+    category: analytics
+    description: Customer segmentation
+    capabilities: [volume_segments, lookalike, behavior_segments, retention]
+    actions:
+      - id: by_volume
+        inputs: []
+        outputs: [volume_segments]
+      - id: lookalike
+        inputs: ["lead_id?"]
+        outputs: [lookalike_contacts]
+      - id: best_manager
+        inputs: []
+        outputs: [manager_match]
+      - id: retention
+        inputs: []
+        outputs: [retention_segments]
+    preconditions: []
+    effects: []
+    cost: 0.3
+
+  - id: kommo_loss_analysis
+    name: kommo_loss_analysis
+    category: analytics
+    description: Lost deal analysis
+    capabilities: [loss_reasons, loss_patterns]
+    actions:
+      - id: reasons
+        inputs: ["pipeline_id?"]
+        outputs: [loss_reasons]
+      - id: patterns
+        inputs: ["pipeline_id?"]
+        outputs: [loss_patterns]
+      - id: by_manager
+        inputs: []
+        outputs: [losses_by_manager]
+    preconditions: []
+    effects: []
+    cost: 0.3
+
+  - id: kommo_smart_time
+    name: kommo_smart_time
+    category: analytics
+    description: Timing optimization
+    capabilities: [best_call_time, customer_journey_timing]
+    actions:
+      - id: best_call_time
+        inputs: ["contact_id?"]
+        outputs: [best_times]
+      - id: customer_journey
+        inputs: []
+        outputs: [journey_timing]
+      - id: lead_response
+        inputs: []
+        outputs: [response_times]
+    preconditions: []
+    effects: []
+    cost: 0.2
+
+  # ============================================================
+  # CATEGORY: Gamification & Team
+  # ============================================================
+  - id: kommo_gamification
+    name: kommo_gamification
+    category: team
+    description: Sales gamification
+    capabilities: [leaderboard, achievements, challenges]
+    actions:
+      - id: leaderboard
+        inputs: ["days?"]
+        outputs: [leaderboard]
+      - id: achievements
+        inputs: ["user_id?"]
+        outputs: [achievements]
+      - id: challenges
+        inputs: []
+        outputs: [active_challenges]
+      - id: daily_quests
+        inputs: ["user_id?"]
+        outputs: [daily_quests]
+    preconditions: []
+    effects: []
+    cost: 0.2
+
+  - id: kommo_team_planner
+    name: kommo_team_planner
+    category: team
+    description: Team capacity planning
+    capabilities: [capacity_planning, team_forecast]
+    actions:
+      - id: capacity
+        inputs: []
+        outputs: [team_capacity]
+      - id: forecast
+        inputs: []
+        outputs: [team_forecast]
+    preconditions: []
+    effects: []
+    cost: 0.2
+
+  # ============================================================
+  # CATEGORY: Utility
+  # ============================================================
+  - id: kommo_users
+    name: kommo_users
+    category: utility
+    description: CRM user management
+    capabilities: [user_list, user_workload]
+    actions:
+      - id: list
+        inputs: []
+        outputs: [users, user_id]
+      - id: get
+        inputs: [user_id]
+        outputs: [user_details]
+      - id: workload
+        inputs: []
+        outputs: [user_workload]
+    preconditions: []
+    effects: []
+    cost: 0.1
+
+  - id: kommo_reports
+    name: kommo_reports
+    category: utility
+    description: Pre-built reports
+    capabilities: [sales_report, pipeline_report, manager_report]
+    actions:
+      - id: sales_summary
+        inputs: ["days?"]
+        outputs: [sales_summary]
+      - id: pipeline_report
+        inputs: ["pipeline_id?"]
+        outputs: [pipeline_report]
+      - id: manager_report
+        inputs: ["user_id?"]
+        outputs: [manager_report]
+      - id: stale_deals
+        inputs: ["days?"]
+        outputs: [stale_deals]
+      - id: top_deals
+        inputs: ["limit?"]
+        outputs: [top_deals]
+    preconditions: []
+    effects: []
+    cost: 0.2
+
+  - id: kommo_digest
+    name: kommo_digest
+    category: utility
+    description: Automated digests
+    capabilities: [morning_digest, weekly_digest]
+    actions:
+      - id: morning
+        inputs: []
+        outputs: [morning_digest]
+      - id: weekly
+        inputs: []
+        outputs: [weekly_digest]
+      - id: my_tasks
+        inputs: []
+        outputs: [personal_tasks]
+    preconditions: []
+    effects: []
+    cost: 0.2
+
+  - id: kommo_my
+    name: kommo_my
+    category: utility
+    description: Personal dashboard
+    capabilities: [my_pipeline, my_workload, my_insights]
+    actions:
+      - id: pipeline
+        inputs: []
+        outputs: [my_pipeline]
+      - id: workload
+        inputs: []
+        outputs: [my_workload]
+      - id: team
+        inputs: []
+        outputs: [my_team]
+      - id: insights
+        inputs: []
+        outputs: [my_insights]
+    preconditions: []
+    effects: []
+    cost: 0.2
+
+  - id: kommo_webhooks
+    name: kommo_webhooks
+    category: utility
+    description: Webhook management
+    capabilities: [webhook_crud]
+    actions:
+      - id: list
+        inputs: []
+        outputs: [webhooks]
+      - id: create
+        inputs: [destination, events]
+        outputs: [webhook_id]
+        effects: [webhook_created]
+      - id: delete
+        inputs: [webhook_id]
+        outputs: [webhook_deleted]
+        effects: [webhook_deleted]
+    preconditions: []
+    cost: 0.3
+
+  - id: kommo_tags
+    name: kommo_tags
+    category: utility
+    description: Tag management
+    capabilities: [tag_crud, tag_search]
+    actions:
+      - id: list
+        inputs: ["entity_type?"]
+        outputs: [tags]
+      - id: add
+        inputs: [entity_type, entity_id, tag_name]
+        outputs: [tag_added]
+        effects: [tag_added]
+      - id: remove
+        inputs: [entity_type, entity_id, tag_name]
+        outputs: [tag_removed]
+        effects: [tag_removed]
+      - id: search_by_tag
+        inputs: [entity_type, tag_name]
+        outputs: [tagged_entities]
+    preconditions: []
+    cost: 0.2
+
+  - id: kommo_custom_fields
+    name: kommo_custom_fields
+    category: utility
+    description: Custom fields management
+    capabilities: [field_crud, field_values]
+    actions:
+      - id: list
+        inputs: ["entity_type?"]
+        outputs: [custom_fields]
+      - id: get_values
+        inputs: [entity_type, entity_id]
+        outputs: [field_values]
+      - id: set_value
+        inputs: [entity_type, entity_id, field_id, value]
+        outputs: [value_set]
+        effects: [field_value_changed]
+    preconditions: []
+    cost: 0.2
+
+  - id: kommo_sources
+    name: kommo_sources
+    category: utility
+    description: Lead sources management
+    capabilities: [source_management, source_analytics]
+    actions:
+      - id: list
+        inputs: []
+        outputs: [sources]
+      - id: create
+        inputs: [source_name]
+        outputs: [source_id]
+        effects: [source_created]
+      - id: analytics
+        inputs: []
+        outputs: [source_analytics]
+    preconditions: []
+    cost: 0.2
+
+  - id: kommo_links
+    name: kommo_links
+    category: utility
+    description: Entity relationship management
+    capabilities: [entity_linking]
+    actions:
+      - id: get
+        inputs: [entity_type, entity_id]
+        outputs: [linked_entities]
+      - id: link
+        inputs: [entity_type, entity_id, to_entity_type, to_entity_id]
+        outputs: [link_created]
+        effects: [entities_linked]
+      - id: unlink
+        inputs: [entity_type, entity_id, to_entity_type, to_entity_id]
+        outputs: [link_removed]
+        effects: [entities_unlinked]
+    preconditions: []
+    cost: 0.3
+
+  - id: kommo_catalogs
+    name: kommo_catalogs
+    category: utility
+    description: Product catalogs
+    capabilities: [catalog_management, product_linking]
+    actions:
+      - id: list_catalogs
+        inputs: []
+        outputs: [catalogs]
+      - id: list_elements
+        inputs: [catalog_id]
+        outputs: [catalog_elements]
+      - id: create_element
+        inputs: [catalog_id, element_name]
+        outputs: [element_id]
+        effects: [element_created]
+      - id: link_to_lead
+        inputs: [catalog_id, element_id, lead_id]
+        outputs: [link_created]
+        effects: [product_linked_to_lead]
+    preconditions: []
+    cost: 0.3
+
+  - id: kommo_events
+    name: kommo_events
+    category: utility
+    description: CRM event log
+    capabilities: [event_log, event_stats]
+    actions:
+      - id: list
+        inputs: []
+        outputs: [events]
+      - id: by_entity
+        inputs: [entity_type, entity_id]
+        outputs: [entity_events]
+      - id: stats
+        inputs: []
+        outputs: [event_stats]
+    preconditions: []
+    effects: []
+    cost: 0.2
+
+  - id: kommo_calls
+    name: kommo_calls
+    category: utility
+    description: Call records
+    capabilities: [call_log, call_stats]
+    actions:
+      - id: list
+        inputs: []
+        outputs: [call_records]
+      - id: log_call
+        inputs: [entity_id, direction, duration]
+        outputs: [call_logged]
+        effects: [call_logged]
+      - id: stats
+        inputs: []
+        outputs: [call_stats]
+    preconditions: []
+    cost: 0.2
+
+  - id: kommo_export
+    name: kommo_export
+    category: utility
+    description: Data export
+    capabilities: [csv_export, analytics_export]
+    actions:
+      - id: leads_csv
+        inputs: ["pipeline_id?"]
+        outputs: [csv_data]
+      - id: contacts_csv
+        inputs: []
+        outputs: [csv_data]
+      - id: analytics
+        inputs: []
+        outputs: [analytics_export]
+    preconditions: []
+    effects: []
+    cost: 0.3
+
+  - id: kommo_mock_data
+    name: kommo_mock_data
+    category: setup
+    description: Test data generation
+    capabilities: [mock_data_generation]
+    actions:
+      - id: generate_all
+        inputs: ["count?", "pipeline_id?"]
+        outputs: [generated_entities]
+        effects: [entities_created]
+      - id: contacts
+        inputs: ["count?"]
+        outputs: [contact_ids]
+        effects: [contacts_created]
+      - id: companies
+        inputs: ["count?"]
+        outputs: [company_ids]
+        effects: [companies_created]
+      - id: leads
+        inputs: ["count?", pipeline_id]
+        outputs: [lead_ids]
+        effects: [leads_created]
+    preconditions: []
+    cost: 0.5
+
+  - id: kommo_cleanup
+    name: kommo_cleanup
+    category: setup
+    description: Data cleanup and reset
+    capabilities: [data_cleanup, crm_reset]
+    actions:
+      - id: delete_leads
+        inputs: []
+        outputs: [deleted_count]
+        effects: [leads_deleted]
+      - id: delete_contacts
+        inputs: []
+        outputs: [deleted_count]
+        effects: [contacts_deleted]
+      - id: delete_companies
+        inputs: []
+        outputs: [deleted_count]
+        effects: [companies_deleted]
+      - id: full_reset
+        inputs: []
+        outputs: [reset_result]
+        effects: [crm_reset]
+    preconditions: []
+    cost: 0.9
+
+# ============================================================
+# GRAPH EDGES: Define relationships between tools
+# ============================================================
+edges:
+  # Sequence edges: tool A should run before tool B
+  - from: kommo_list_pipelines
+    to: kommo_pipeline_analytics
+    type: SEQUENCE
+    weight: 0.9
+    reason: Need pipeline_id for analytics
+
+  - from: kommo_list_pipelines
+    to: kommo_setup
+    type: SEQUENCE
+    weight: 0.8
+    reason: Need to know existing pipelines before modifying
+
+  - from: kommo_search
+    to: kommo_entity_actions
+    type: SEQUENCE
+    weight: 0.9
+    reason: Find entity first, then act on it
+
+  - from: kommo_search
+    to: kommo_deal_intelligence
+    type: SEQUENCE
+    weight: 0.8
+    reason: Find deal first, then analyze
+
+  - from: kommo_search
+    to: kommo_advisor
+    type: SEQUENCE
+    weight: 0.7
+    reason: Find deal for context-specific advice
+
+  - from: kommo_contacts_ext
+    to: kommo_contact_enrichment
+    type: SEQUENCE
+    weight: 0.8
+    reason: Find contact first, then enrich
+
+  - from: kommo_contacts_ext
+    to: kommo_contact_scoring
+    type: SEQUENCE
+    weight: 0.7
+    reason: Find contacts, then score them
+
+  - from: kommo_entity_actions.add_note
+    to: kommo_entity_actions.create_task
+    type: SEQUENCE
+    weight: 0.5
+    reason: Often note + follow-up task together
+
+  - from: kommo_entity_actions.move_lead
+    to: kommo_entity_actions.add_note
+    type: SEQUENCE
+    weight: 0.6
+    reason: Document stage change with a note
+
+  - from: kommo_advisor.qualification
+    to: kommo_entity_actions.add_note
+    type: SEQUENCE
+    weight: 0.7
+    reason: Save qualification results as note
+
+  - from: kommo_forecast.deal_probability
+    to: kommo_advisor.closing_tips
+    type: SEQUENCE
+    weight: 0.6
+    reason: Get probability, then closing advice
+
+  - from: kommo_deal_intelligence.closing_signals
+    to: kommo_templates.closing_script
+    type: SEQUENCE
+    weight: 0.7
+    reason: Detect signals, then prepare closing script
+
+  - from: kommo_communication_analytics.sentiment
+    to: kommo_advisor.communication_style
+    type: SEQUENCE
+    weight: 0.6
+    reason: Understand sentiment, then adapt style
+
+  - from: kommo_insights.stale_analysis
+    to: kommo_reactivation.sleeping
+    type: SEQUENCE
+    weight: 0.7
+    reason: Find stale deals, then reactivate
+
+  - from: kommo_loss_analysis.reasons
+    to: kommo_advisor.strategy
+    type: SEQUENCE
+    weight: 0.6
+    reason: Understand losses, then strategize
+
+  # Parallel edges: tools that can run simultaneously
+  - from: kommo_pipeline_analytics
+    to: kommo_manager_stats
+    type: PARALLEL
+    weight: 0.8
+    reason: Independent analytics can run in parallel
+
+  - from: kommo_contact_scoring
+    to: kommo_communication_analytics
+    type: PARALLEL
+    weight: 0.7
+    reason: Independent analyses
+
+  - from: kommo_alerts.check
+    to: kommo_digest.morning
+    type: PARALLEL
+    weight: 0.8
+    reason: Both are read-only summaries
+
+  - from: kommo_forecast.pipeline
+    to: kommo_pipeline_health.check
+    type: PARALLEL
+    weight: 0.8
+    reason: Independent pipeline analyses
+
+  # Requires edges: tool A requires output of tool B
+  - from: kommo_entity_actions.move_lead
+    to: kommo_list_pipelines
+    type: REQUIRES
+    weight: 1.0
+    reason: Need pipeline_id and status_id to move
+
+  - from: kommo_setup.create_stage
+    to: kommo_list_pipelines
+    type: REQUIRES
+    weight: 1.0
+    reason: Need pipeline_id to create stage
+
+  - from: kommo_bulk_actions.mass_move
+    to: kommo_list_pipelines
+    type: REQUIRES
+    weight: 1.0
+    reason: Need pipeline_id and status_id for mass move
+
+  - from: kommo_mock_data.leads
+    to: kommo_list_pipelines
+    type: REQUIRES
+    weight: 1.0
+    reason: Need pipeline_id to create leads
+
+  - from: kommo_catalogs.link_to_lead
+    to: kommo_catalogs.list_elements
+    type: REQUIRES
+    weight: 0.9
+    reason: Need element_id to link
+
+# ============================================================
+# CAPABILITY MAP: User intents → capabilities
+# ============================================================
+capability_map:
+  # Analytics intents
+  - intent: analytics
+    keywords: [аналитика, статистика, отчет, метрики, kpi, показатели, report]
+    capabilities: [pipeline_analytics, conversion_rates, stage_stats, manager_stats]
+
+  - intent: forecast
+    keywords: [прогноз, forecast, план, ожидания, предсказание, закроем]
+    capabilities: [pipeline_forecast, revenue_forecast, deal_probability, closing_forecast]
+
+  - intent: comparison
+    keywords: [сравнить, сравнение, тренд, динамика, рост, падение, compare]
+    capabilities: [period_comparison, trend_analysis]
+
+  # Deal management intents
+  - intent: deal_management
+    keywords: [сделка, сделку, лид, deal, lead, создать сделку, обновить, переместить, перемести, передвинь, воронку]
+    capabilities: [update_lead, move_lead, clone_lead, add_note, create_task]
+
+  - intent: deal_analysis
+    keywords: [анализ сделки, анализ сделок, здоровье, риск, вероятность, intelligence, проблемные, проблемн]
+    capabilities: [deal_analysis, deal_health, closing_signals, enterprise_analysis]
+
+  - intent: qualification
+    keywords: [квалификация, квалифицируй, квалифициров, bant, qualify, оценить лид, скоринг лида]
+    capabilities: [qualification, bant_analysis]
+
+  # Contact management intents
+  - intent: contact_management
+    keywords: [контакт, клиент, компания, contact, company, создать контакт]
+    capabilities: [contact_search, company_crud, contact_enrichment]
+
+  - intent: scoring
+    keywords: [скоринг, scoring, оценка, рейтинг, сегмент, tier]
+    capabilities: [contact_scoring, company_scoring, account_scoring]
+
+  # Communication intents
+  - intent: communication
+    keywords: [общение, коммуникация, письмо, звонок, ответ, reply, message]
+    capabilities: [reply_suggestion, comm_history, sentiment_analysis, auto_reply]
+
+  - intent: template
+    keywords: [шаблон, template, скрипт, кп, предложение, документ]
+    capabilities: [template_generation, personalization, sales_scripts, presentation_gen]
+
+  # Search intents
+  - intent: search
+    keywords: [найти, найди, поиск, search, где, покажи, список, find]
+    capabilities: [search, find_deals, find_contacts, deal_context]
+
+  # Automation intents
+  - intent: automation
+    keywords: [автоматизация, автоматически, автоматическое, автоматическ, распределение, auto, workflow, процесс, настрой]
+    capabilities: [auto_assign, auto_followup, auto_archive, escalation_check]
+
+  - intent: reactivation
+    keywords: [реактивация, реактивацию, спящие, спящих, потерянные, потерянных, churn, win back, вернуть, разбудить]
+    capabilities: [sleeping_clients, lost_nurture, churn_prevention]
+
+  # Team intents
+  - intent: team
+    keywords: [команда, команды, менеджер, менеджеров, сотрудник, team, нагрузка, нагрузку, workload, эффективность]
+    capabilities: [user_list, user_workload, leaderboard, capacity_planning, performance_metrics]
+
+  # Setup intents
+  - intent: setup
+    keywords: [настроить, создать воронку, этап, поле, pipeline, stage, field]
+    capabilities: [pipeline_crud, stage_crud, field_crud, templates]
+
+  # VIP / complex intents
+  - intent: vip_client
+    keywords: [vip, важный клиент, ключевой, premium, enterprise]
+    capabilities: [contact_scoring, account_scoring, enterprise_analysis, tag_crud]
+
+  - intent: closing
+    keywords: [закрытие, закрыть, close, closing, завершить, подписать, win, сигнал]
+    capabilities: [closing_signals, closing_tips, closing_forecast, closing_script]
+
+  - intent: problem_solving
+    keywords: [проблема, проблемн, bottleneck, узкое место, застряли, стагнация, отказ, решение, предложи]
+    capabilities: [bottleneck_detection, stale_analysis, root_cause, loss_reasons]
