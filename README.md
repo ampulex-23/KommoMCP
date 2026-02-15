@@ -236,6 +236,7 @@ Use MCP Client node with HTTP transport:
   - `loss_analysis` - Lost deals analysis and patterns
   - `closing_tips` - Deal closing advice
   - `objections` - Objection handling guide based on CRM data
+  - `strategy` - Strategic recommendations: pipeline coverage, growth levers, process improvements
 
 ### Pipeline Health
 - `kommo_pipeline_health` - **Deep pipeline analysis** with actions:
@@ -274,6 +275,7 @@ Use MCP Client node with HTTP transport:
   - `auto_assign` - Assign leads by workload (least busy first)
   - `round_robin` - Equal distribution among team members
   - `auto_followup` - Create follow-up tasks for inactive deals
+  - `auto_followup_smart` - Smart follow-ups based on inactivity and deal value with urgency levels
 
 ### Personal View
 - `kommo_my` - **Personal CRM dashboard** with actions:
@@ -288,6 +290,9 @@ Use MCP Client node with HTTP transport:
   - `achievements` - Badge system: Deal Machine, Whale Hunter, Speed Closer, etc.
   - `challenges` - Sales competitions: Deal Sprint, Revenue Race
   - `points` - Points breakdown: deals, revenue bonus, big deals, fast closes
+  - `badges` - Achievement badges: First Deal, Deal Machine, Whale Hunter, Speed Closer, etc.
+  - `daily_quests` - Personalized daily quests with difficulty and point rewards
+  - `streaks` - Performance streaks with point multiplier bonuses
 
 ### Loss Analysis
 - `kommo_loss_analysis` - **Deep lost deals analysis** with actions:
@@ -343,6 +348,7 @@ Use MCP Client node with HTTP transport:
   - `generate` - AI-generated template by type
   - `apply` / `personalize` - Fill template with lead data
   - `sales_script` - Stage-specific sales scripts with objection handlers
+  - `follow_up` - Personalized follow-up email templates based on deal context and inactivity
 
 ### Anomaly Detection
 - `kommo_anomaly` - **Anomaly detection** with actions:
@@ -375,6 +381,7 @@ Use MCP Client node with HTTP transport:
   - `skill_assessment` - Manager skill radar: closing, speed, deal size, activity
   - `skill_gaps` - Team-wide gap analysis with training recommendations
   - `roleplay` - Sales role-play scenarios for practice
+  - `best_practices` - Top performer analysis: winning behaviors, patterns, team insights
 
 ### Smart Reply
 - `kommo_smart_reply` - **Contextual reply suggestions** with actions:
@@ -392,6 +399,21 @@ Use MCP Client node with HTTP transport:
   - `presentation` - Client presentation outline (personalized with lead_id)
   - `proposal` - Commercial proposal structure with deal context
   - `case_study` - Case study templates from won deals
+  - `commercial_offer` - Commercial offer generation personalized for a deal (lead_id)
+  - `report` - Sales report: summary, by-manager breakdown, highlights
+
+### Business Insights
+- `kommo_insights` - **Actionable business insights** with actions:
+  - `actionable` - Priority insights: risks, conversion issues, data quality, pipeline coverage
+  - `root_cause` - Root cause analysis of lost deals: patterns, by manager, by price range
+
+### Activity Analytics
+- `kommo_activity` - **Team activity analytics** with actions:
+  - `feed` - Chronological activity feed: deals created, won, tasks completed
+  - `productivity` - Productivity rankings with score breakdown
+  - `kpi` - Activity KPIs per user: deals, revenue, win rate, tasks, overdue
+  - `recommendations` - Personalized improvement recommendations per user
+  - `correlations` - Activity-result correlations: what top performers do differently
 
 ### Extended Search
 - `kommo_search` - **Enhanced search** with filters:
@@ -409,6 +431,10 @@ Use MCP Client node with HTTP transport:
   - `reassign` - Reassign task to another user
   - `postpone` - Postpone task by N days
   - `plan_day` - AI daily plan with overdue/today/tomorrow
+  - `mass_create` - Mass task creation for team members
+  - `smart_reminders` - Smart reminders for inactive deals sorted by urgency
+  - `meeting_briefing` - Pre-meeting briefing card with contacts, comms, talking points
+  - `meeting_prep` - Meeting preparation guide with agenda, concerns, checklist
 
 ### Extended Contacts
 - `kommo_contacts_ext` - **Contact analysis** (new actions):
