@@ -1,47 +1,39 @@
 # KommoMCP
 
-MCP Server for Kommo/amoCRM with analytics focus. Enables AI assistants to interact with your CRM data through natural language.
-
-## Coverage
-
-**136 / 1000 user stories implemented** (13.6%)
-
-| Category | Range | Implemented | Total |
-|----------|-------|-------------|-------|
-| Analytics & Reports | 1-100 | 34 | 100 |
-| Automation | 101-200 | 39 | 100 |
-| Communications | 201-300 | 4 | 100 |
-| Search & Navigation | 301-400 | 12 | 100 |
-| Deal Management | 401-500 | 10 | 100 |
-| Contacts & Companies | 501-600 | 22 | 100 |
-| Tasks & Activities | 601-700 | 14 | 100 |
-| Integrations | 701-800 | 0 | 100 |
-| AI Assistant | 801-900 | 0 | 100 |
-| Advanced Scenarios | 901-1000 | 1 | 100 |
+AI-powered CRM assistant for Kommo/amoCRM. Telegram bot with natural language interface for full CRM management — analytics, setup, entity operations, monitoring.
 
 ## Features
 
-- 🔌 **MCP Protocol** - Works with Claude Desktop, Cursor, Windsurf, n8n
-- 📊 **Analytics** - Pipeline analytics, manager performance, sales forecasts
-- 🔄 **Data Sync** - Incremental sync from Kommo API to PostgreSQL
-- ⚡ **Async** - Built with asyncio for high performance
-- 🗄️ **PostgreSQL** - Local database for big data analytics
-- 🌐 **HTTP Transport** - REST API for n8n and other integrations
-- 🧠 **RAG Architecture** - Dynamic tool retrieval for scalable prompts
+- 🤖 **Telegram Bot** — AI assistant (`@kommo_wizard_bot`) for CRM via natural language
+- 🧠 **RAG Architecture** — Dynamic tool retrieval, compact prompts (~500 tokens vs 3000+)
+- 🏢 **Multi-Tenant SaaS** — Each user gets isolated CRM connection, own API keys
+- � **20+ Tool Handlers** — Setup, analytics, reports, entities, bulk ops, cleanup, templates
+- 🎨 **React Admin Panel** — Dashboard, users/CRM monitoring, AI session logs
+- 🔄 **Data Sync** — Incremental sync from Kommo API to PostgreSQL
+- ⚡ **Async** — Built with asyncio + aiohttp for high performance
+- 🗄️ **PostgreSQL** — Local database for big data analytics
+- 🌐 **MCP Protocol** — Works with Claude Desktop, Cursor, Windsurf, n8n
+- 🛡️ **Pipeline Templates** — 5 ready-made pipeline templates (capture, qualification, followup, demo, proposal)
 
 ## Architecture Overview
 
 ```
 ┌─────────────────┐     ┌──────────────────┐     ┌─────────────────┐
-│   AI Assistant  │────▶│   MCP Server     │────▶│   Kommo API     │
-│ (Claude/Cursor) │     │                  │     │                 │
+│  Telegram Bot   │────▶│  AI Chat Engine  │────▶│   Kommo API     │
+│ (@kommo_wizard) │     │  (GPT-4o + RAG)  │     │  (per tenant)   │
 └─────────────────┘     └────────┬─────────┘     └─────────────────┘
-                                │
-                                ▼
-                       ┌──────────────────┐
-                       │   PostgreSQL     │
-                       │   (Big Data)     │
-                       └──────────────────┘
+                                 │
+                    ┌────────────┼────────────┐
+                    ▼            ▼            ▼
+              ┌──────────┐ ┌──────────┐ ┌──────────┐
+              │ Tenant A │ │ Tenant B │ │ Tenant C │
+              │ (own DB) │ │ (own DB) │ │ (own DB) │
+              └──────────┘ └──────────┘ └──────────┘
+
+┌─────────────────┐     ┌──────────────────┐
+│  React Admin    │────▶│  Logs Server     │
+│  (SPA /logs/)   │     │  (aiohttp:8765)  │
+└─────────────────┘     └──────────────────┘
 ```
 
 ### RAG-Based Tool Retrieval
@@ -184,169 +176,64 @@ Use MCP Client node with HTTP transport:
 - **URL**: `https://your-domain.com/mcp`
 - **Transport**: HTTP Streamable
 
-## Available Tools
-
-### Sync & Status
-- `kommo_ping` - Check API connection
-- `kommo_sync_start` - Start data synchronization (full or incremental)
-- `kommo_sync_status` - Get sync status
-
-### Data Access
-- `kommo_pipelines_list` - List all pipelines with stages
-- `kommo_users_list` - List all users
-- `kommo_leads_list` - List leads with filtering, sorting, date ranges
-- `kommo_lead_get` - Get lead details with contacts
-- `kommo_lead_create` - Create new lead
-- `kommo_contacts_list` - List contacts
-- `kommo_contact_create` - Create new contact
-
-### Analytics
-- `kommo_analytics` - **Universal analytics tool** with actions:
-  - `pipeline` - Pipeline performance (conversion, avg check, cycle time)
-  - `funnel` - Funnel conversion analysis by stage
-  - `forecast` - Sales predictions (expected, optimistic, pessimistic)
-  - `managers` - Manager performance comparison
-  - `revenue` - Revenue trend by day/week/month
-  - `stale` - Find stuck deals without activity
-  - `sources` - Lead sources effectiveness
-  - `churn` - Customers at risk of churn
-  - `scoring` - Score leads to prioritize
-  - `duplicates` - Find duplicate contacts/companies
-
-*Legacy individual tools still available for backward compatibility*
-
-### Entity Management
-- `kommo_entity` - **Universal CRUD tool** with actions:
-  - `get` - Get entity by ID with related entities
-  - `list` - List entities with filters, sorting, pagination
-  - `create` - Create new entity
-  - `update` - Update entity fields
-  - `link` / `unlink` - Link/unlink entities
-  - `move` - Move lead to another stage
-  - `history` - Get entity change history
-
-### Bulk Operations
-- `kommo_bulk` - **Mass operations** with actions:
-  - `assign` - Reassign entities to user
-  - `move` - Move multiple leads to stage
-  - `tag` - Add tags to entities
-  - `create_tasks` - Create tasks for multiple entities
-  - `update` - Update multiple entities
-  - `export` - Export entities
-
-### Smart Search
-- `kommo_search` - **Intelligent search** with actions:
-  - `query` - Natural language search across entities
-  - `related` - Find all related entities
-  - `recent` - Recently modified entities
-  - `similar` - Find similar entities
-
-### Reports
-- `kommo_report` - **Formatted reports** with actions:
-  - `summary` - Period summary (deals, revenue, conversion)
-  - `comparison` - Compare with previous period
-  - `pipeline_health` - Pipeline health check with recommendations
-  - `activity` - Manager activity report
-  - `custom` - Custom report with selected metrics
-
-### Automation
-- `kommo_automate` - **AI-powered automation** with actions:
-  - `suggest` - Get AI recommendations for automation
-  - `stale_followup` - Create tasks for stale deals
-  - `escalation` - Escalate deals to manager
-
-### Business Insights
-- `kommo_insights` - **Business intelligence** with actions:
-  - `top_clients` - Top clients by revenue
-  - `rfm` - RFM segmentation (Recency, Frequency, Monetary)
-  - `workload` - Manager workload distribution
-  - `opportunities` - Upsell/reactivation opportunities
-  - `big_deals` - Large deals in pipeline
-  - `ranking` - Manager ranking by revenue/conversion/deals
-  - `compare` - Period comparison (month/quarter/year)
-  - `yoy` - Year-over-year comparison
-
-### Deals Extended
-- `kommo_deals_ext` - **Extended deal management** with actions:
-  - `by_stage` - Deals grouped by stage
-  - `health` - Deal health analysis (stale, no tasks)
-  - `velocity` - Win rate, cycle time, deals per day
-  - `at_risk` - Deals at risk of being lost
-  - `by_user` - Deals by responsible user
-
-### LTV Analytics
-- `kommo_ltv` - **Customer Lifetime Value** with actions:
-  - `by_source` - LTV by lead source
-  - `by_pipeline` - LTV by pipeline
-  - `cohorts` - Cohort analysis by first purchase
-  - `segments` - Customer segmentation (VIP, Regular, Low)
-
-### Tasks
-- `kommo_tasks_ext` - **Extended task management** with actions:
-  - `overdue` - Get overdue tasks
-  - `stats` - Task statistics (completion rate, by user)
-  - `today` - Tasks due today
-  - `by_entity` - Tasks for specific entity
-  - `without_responsible` - Tasks without assigned user
-
-### Contacts
-- `kommo_contacts_ext` - **Extended contact management** with actions:
-  - `search` - Smart contact search with filters
-  - `without_deals` - Find contacts without deals
-  - `linked` - Get linked entities (deals, companies, tasks)
-  - `duplicates` - Find duplicate contacts
-  - `merge_preview` - Preview merge of contacts
-  - `activity` - Contact activity summary
-  - `by_responsible` - Contacts by responsible user
-  - `recent` - Recently created contacts
-
-### Search
-- `kommo_search` - **Advanced search** with actions:
-  - `all` - Search across leads, contacts, companies
-  - `leads` - Lead search with filters (pipeline, price, status)
-  - `contacts` - Contact search
-  - `query` - API text search
-  - `related` - Get related entities
-  - `recent` - Recently updated
-  - `similar` - Find similar entities
-
-### Communications
-- `kommo_communications` - **Communication history** with actions:
-  - `history` - Full communication history for entity
-  - `calls` - Call statistics (incoming/outgoing, duration)
-  - `timeline` - Activity timeline for period
-  - `last_contact` - When was last contact with entity
-  - `by_user` - Communication stats by user
-  - `summary` - Overall communication summary
-  - `no_contact` - Clients with no recent contact
+## AI Tool Handlers (Telegram Bot)
 
 ### CRM Setup
 - `kommo_setup` - **CRM configuration** with actions:
-  - `templates` - List available pipeline templates
-  - `apply_template` - Apply template (sales, services, rental, realestate, education, ecommerce)
+  - `templates` - List available pipeline templates (5 built-in)
+  - `apply_template` - Apply template (capture, qualification, followup, demo, proposal)
   - `create_pipeline` - Create a new pipeline
   - `create_stage` - Add stage to pipeline
-  - `create_field` - Create custom field
+  - `update_pipeline` / `update_stage` - Rename, recolor
+  - `delete_pipeline` / `delete_stage` - Delete with lead migration
+  - `reorder_stages` - Change stage order
+  - `create_field` / `update_field` / `delete_field` - Custom fields CRUD
   - `create_source` - Add lead source
 
-### Data Quality
-- `kommo_data_quality` - **Data quality analysis** with actions:
-  - `report` - Full quality report with scores
-  - `deals` - Check deal quality (missing fields)
-  - `duplicates` - Find duplicate contacts/companies
-  - `validate` - Validate data completeness
+### Entity Actions
+- `kommo_entity_actions` - **Entity operations** with actions:
+  - `add_note` - Add note to entity
+  - `get_notes` / `get_history` - Get notes and history
+  - `create_task` / `get_tasks` / `complete_task` - Task management
+  - `update_lead` / `move_lead` - Lead updates
+  - `link_contact` / `unlink_contact` - Contact linking
 
-### Smart Alerts
-- `kommo_alerts` - **Notifications and digests** with actions:
-  - `check` - Generate all alerts (stale deals, overdue tasks, churn, performance)
-  - `digest` - Daily/weekly/monthly digest with key metrics
-  - `stale` - Stale deals alerts only
-  - `overdue` - Overdue tasks alerts only
-  - `performance` - Manager performance drop alerts
+### Bulk Operations
+- `kommo_bulk_actions` - **Mass operations** with actions:
+  - `mass_move` - Move multiple leads to stage
+  - `mass_tag` - Add tags to entities
+  - `mass_assign` - Reassign entities
+  - `mass_update` - Update fields in bulk
+
+### Users & Teams
+- `kommo_users` - **User management** with actions:
+  - `list` - List all CRM users
+  - `workload` - Manager workload distribution
+  - `activity` - User activity stats
+
+### Reports
+- `kommo_reports` - **CRM reports** with actions:
+  - `top_deals` - Top deals by amount
+  - `pipeline_summary` - Pipeline overview
+  - `manager_stats` - Manager performance
+
+### Additional Tools
+- `kommo_webhooks` - Webhook management (list, create, delete)
+- `kommo_tags` - Tag management (list, create, delete, assign)
+- `kommo_custom_fields` - Custom fields CRUD + mass operations
+- `kommo_sources` - Lead sources management and analytics
+- `kommo_companies` - Company management (list, get, create, update)
+- `kommo_duplicates` - Duplicate detection and merge
+- `kommo_links` - Entity relationship management
+- `kommo_catalogs` - Product catalogs management
+- `kommo_events` - CRM event log
+- `kommo_calls` - Call records management
+- `kommo_cleanup` - Data cleanup and CRM reset
+- `kommo_mock_data` - Generate test data (contacts, companies, leads)
 
 ### Quick Actions
-- `kommo_task_create` - Create tasks linked to leads/contacts/companies
-- `kommo_note_create` - Add notes to any entity
+- `kommo_list_pipelines` - List all pipelines with stages
+- `kommo_search_contacts` - Quick contact search
 
 ## Example Queries
 
@@ -399,39 +286,116 @@ Ask your AI assistant:
 - "Клиенты без контакта"
 - "Сводка по коммуникациям"
 
-## Deployment
+## Admin Panel
 
-### VDS with nginx + SSL
+React SPA for monitoring and management, served at `/logs/`.
+
+**Stack:** React + Vite + TailwindCSS + Recharts
+
+**Pages:**
+- **Login** — Cookie-based session auth
+- **Dashboard** — Session stats, charts (sessions over time, activity by user), recent sessions
+- **Users & CRM** — Telegram users, connected CRM tenants, statuses (active/pending/error), Kommo domains
+- **Sessions** — AI interaction sessions with search and status filter
+- **Session Detail** — Full iteration breakdown: user message, tool calls, results, errors, response
+
+**API Endpoints:**
+- `POST /api/login` — JSON auth
+- `GET /api/me` — Current user
+- `GET /api/users` — All TG users with CRM tenants
+- `GET /api/sessions` — Session list with stats
+- `GET /api/session/{id}` — Session detail
 
 ```bash
-# Install on server
+# Dev
+cd admin && npm run dev
+
+# Build
+cd admin && npm run build
+# Output: admin/dist/ → served by logs_server
+```
+
+## Telegram Bot Commands
+
+| Command | Description |
+|---------|-------------|
+| `/start` | Start, show welcome |
+| `/connect` | Connect new CRM |
+| `/crm_list` | List all connected CRMs |
+| `/switch` | Switch active CRM |
+| `/status` | Current CRM status |
+| `/openai` | Set OpenAI API key |
+| `/sync` | Sync CRM data to local DB |
+| `/wizard` | CRM setup wizard |
+| `/remove_crm` | Disconnect a CRM |
+| `/help` | All commands |
+| `/cancel` | Cancel current operation |
+
+Any plain text message is treated as an AI query to the active CRM.
+
+## Deployment
+
+### VDS with nginx + systemd
+
+```bash
+# Server setup
 cd /opt/kommo-mcp
 python -m venv venv
 source venv/bin/activate
 pip install -e .
 
-# Create systemd service
-sudo systemctl enable kommo-webhooks
-sudo systemctl start kommo-webhooks
+# Build admin panel
+cd admin && npm install && npm run build
 
-# Configure nginx with SSL
+# systemd service
+sudo systemctl enable kommo-telegram-bot
+sudo systemctl start kommo-telegram-bot
+
+# nginx proxy
+# /logs/ → localhost:8765 (admin panel + API)
+# /mcp   → localhost:8001 (MCP HTTP transport)
 sudo certbot --nginx -d your-domain.com
+```
+
+## Project Structure
+
+```
+KommoMCP/
+├── src/kommo_mcp/
+│   ├── telegram/
+│   │   ├── bot.py              # Telegram bot (aiogram)
+│   │   ├── ai_chat.py          # AI chat engine (GPT-4o + tools)
+│   │   ├── logs_server.py      # Admin panel backend + SPA serving
+│   │   └── tools/              # YAML tool definitions for RAG
+│   ├── saas/
+│   │   ├── manager.py          # TenantManager (multi-tenant)
+│   │   └── orchestrator.py     # DB orchestration per tenant
+│   └── server.py               # MCP server (stdio + HTTP)
+├── admin/                       # React admin panel
+│   ├── src/
+│   │   ├── pages/              # Login, Dashboard, Users, Sessions, SessionDetail
+│   │   ├── components/         # Layout with sidebar
+│   │   └── api.js              # API client
+│   └── vite.config.js
+├── deploy/
+│   └── amomcp-nginx.conf
+└── README.md
 ```
 
 ## Development
 
 ```bash
-# Install dev dependencies
-poetry install --with dev
+# Install dependencies
+pip install -e ".[dev]"
 
-# Run tests
-poetry run pytest
+# Run bot locally
+python -m kommo_mcp.telegram
+
+# Run admin panel dev server
+cd admin && npm run dev
 
 # Lint
-poetry run ruff check .
-
-# Type check
-poetry run mypy src
+ruff check src/
 ```
 
 ## License
