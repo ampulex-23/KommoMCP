@@ -243,6 +243,39 @@ Use MCP Client node with HTTP transport:
   - `velocity` - Sales speed: cycle times, daily velocity, median/fastest/slowest
   - `bottlenecks` - Stage-level analysis: stale deals, avg age, congestion
   - `win_loss` - Win/loss ratio, value comparison, cycle time analysis
+  - `optimize` - Optimization recommendations per stage
+
+### Forecasting
+- `kommo_forecast` - **Sales forecasting** with actions:
+  - `pipeline` - Weighted pipeline forecast by stage proximity
+  - `revenue` - Monthly revenue prediction with growth trend
+  - `deal_probability` - Per-deal win probability scoring (lead_id)
+  - `trends` - Weekly trend analysis: new deals, value, won/lost
+
+### Proactive Alerts
+- `kommo_alerts` - **CRM health alerts** with actions:
+  - `check` - All alerts: stale deals, overdue tasks, missing data
+  - `risks` - At-risk deals with risk score and factors
+  - `performance` - Team performance alerts: overload, stale ratio
+  - `opportunities` - Reactivation, follow-up, no-next-step opportunities
+
+### Period Comparison
+- `kommo_compare` - **Data comparison and analysis** with actions:
+  - `periods` - This period vs previous: deals, revenue, conversion
+  - `trends` - Weekly metric trends with direction detection
+  - `patterns` - Day/hour patterns, seasonal conversion analysis
+  - `correlations` - Price vs conversion, source performance analysis
+
+### Smart Automation
+- `kommo_automation` - **Lead distribution and follow-up** with actions:
+  - `auto_assign` - Assign leads by workload (least busy first)
+  - `round_robin` - Equal distribution among team members
+  - `auto_followup` - Create follow-up tasks for inactive deals
+
+### Personal View
+- `kommo_my` - **Personal CRM dashboard** with actions:
+  - `pipeline` - My active deals by stage with top deals
+  - `workload` - My task/deal load with workload score
 
 ### Extended Search
 - `kommo_search` - **Enhanced search** with filters:
