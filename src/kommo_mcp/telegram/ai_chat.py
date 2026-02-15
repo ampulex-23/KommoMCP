@@ -172,7 +172,7 @@ MCP_TOOLS = [
                 'properties': {
                     'action': {
                         'type': 'string',
-                        'enum': ['top_clients', 'rfm', 'workload', 'opportunities', 'big_deals', 'ranking', 'compare', 'yoy', 'actionable', 'root_cause'],
+                        'enum': ['top_clients', 'rfm', 'workload', 'opportunities', 'big_deals', 'ranking', 'compare', 'yoy', 'actionable', 'root_cause', 'stale_analysis', 'campaign_roi'],
                         'description': 'Action to perform',
                     },
                     'pipeline_id': {'type': 'integer', 'description': 'Pipeline ID'},
@@ -193,7 +193,7 @@ MCP_TOOLS = [
                 'properties': {
                     'action': {
                         'type': 'string',
-                        'enum': ['all', 'leads', 'contacts', 'query', 'related', 'recent', 'similar', 'top_deals', 'deal_context', 'timeline', 'graph', 'nl_query', 'problems', 'bottlenecks', 'rejection_reasons'],
+                        'enum': ['all', 'leads', 'contacts', 'query', 'related', 'recent', 'similar', 'top_deals', 'deal_context', 'timeline', 'graph', 'nl_query', 'problems', 'bottlenecks', 'rejection_reasons', 'payment_status', 'audit_trail'],
                         'description': 'Search action',
                     },
                     'query': {'type': 'string', 'description': 'Search query'},
@@ -955,7 +955,7 @@ MCP_TOOLS = [
                 'properties': {
                     'action': {
                         'type': 'string',
-                        'enum': ['next_action', 'pipeline_tips', 'loss_analysis', 'closing_tips', 'objections', 'next_best', 'funnel_optimize', 'strategy', 'qualification', 'qualification_checklist', 'negotiation'],
+                        'enum': ['next_action', 'pipeline_tips', 'loss_analysis', 'closing_tips', 'objections', 'next_best', 'funnel_optimize', 'strategy', 'qualification', 'qualification_checklist', 'negotiation', 'communication_style', 'product_recommendations', 'talking_points'],
                         'description': 'Advice type',
                     },
                     'lead_id': {'type': 'integer', 'description': 'Lead ID for deal-specific advice'},
@@ -995,7 +995,7 @@ MCP_TOOLS = [
                 'properties': {
                     'action': {
                         'type': 'string',
-                        'enum': ['pipeline', 'revenue', 'deal_probability', 'trends', 'cashflow', 'whatif', 'revenue_model', 'plan_fact'],
+                        'enum': ['pipeline', 'revenue', 'deal_probability', 'trends', 'cashflow', 'whatif', 'revenue_model', 'plan_fact', 'closing_forecast'],
                         'description': 'Forecast type: pipeline, revenue, deal_probability, trends, cashflow (expected payments), whatif (scenario modeling)',
                     },
                     'pipeline_id': {'type': 'integer', 'description': 'Pipeline ID (optional)'},
@@ -1362,7 +1362,7 @@ MCP_TOOLS = [
                 'properties': {
                     'action': {
                         'type': 'string',
-                        'enum': ['score', 'value_segments', 'by_value'],
+                        'enum': ['score', 'value_segments', 'by_value', 'company_scoring', 'relationship_strength', 'account_scoring'],
                         'description': 'Action: score (score contacts by engagement), value_segments (segment by lifetime value)',
                     },
                     'limit': {'type': 'integer', 'description': 'Max contacts (default 50)', 'default': 50},
@@ -2195,6 +2195,95 @@ class AIChat:
                     'rejection_reasons': reason_list,
                     'total_lost_analyzed': min(len(lost), 50),
                     'hint': 'Present rejection reasons ranked by frequency. Suggest process improvements for top reasons.',
+                }
+
+            elif action == 'payment_status':
+                lead_id = args.get('lead_id')
+                if lead_id:
+                    lurl = f'{self.kommo_base_url}/api/v4/leads/{lead_id}'
+                    async with session.get(lurl, headers=headers, params={'with': 'contacts'}) as resp:
+                        if resp.status != 200:
+                            return {'error': f'Lead {lead_id} not found'}
+                        lead = await resp.json()
+                    nurl = f'{self.kommo_base_url}/api/v4/leads/{lead_id}/notes'
+                    async with session.get(nurl, headers=headers, params={'limit': 20}) as resp:
+                        notes = []
+                        if resp.status == 200:
+                            ndata = await resp.json()
+                            notes = ndata.get('_embedded', {}).get('notes', [])
+                    all_text = ' '.join((n.get('params', {}).get('text', '') or '') for n in notes).lower()
+                    price = lead.get('price', 0) or 0
+                    paid = 'оплат' in all_text or 'оплач' in all_text or 'счёт оплач' in all_text
+                    invoiced = 'счёт' in all_text or 'счет' in all_text or 'инвойс' in all_text
+                    status = 'paid' if paid else ('invoiced' if invoiced else 'no_payment_info')
+                    return {
+                        'payment_status': {
+                            'lead': lead.get('name'), 'lead_id': lead_id, 'price': price,
+                            'status': status,
+                            'status_label': 'Оплачено' if paid else ('Счёт выставлен' if invoiced else 'Нет данных об оплате'),
+                        },
+                        'hint': 'Present payment status for the deal. If no info, suggest checking with accounting.',
+                    }
+                else:
+                    url = f'{self.kommo_base_url}/api/v4/leads'
+                    params = {'limit': 250, 'filter[statuses][0][status_id]': 142}
+                    async with session.get(url, headers=headers, params=params) as resp:
+                        won_leads = []
+                        if resp.status == 200:
+                            data = await resp.json()
+                            won_leads = data.get('_embedded', {}).get('leads', [])
+                    results = []
+                    for l in won_leads[:20]:
+                        price = l.get('price', 0) or 0
+                        results.append({
+                            'lead_id': l.get('id'), 'name': l.get('name'), 'price': price,
+                            'status': 'won_no_payment_check',
+                        })
+                    return {
+                        'won_deals_payment': results,
+                        'hint': 'Present won deals that may need payment verification. Suggest checking each with accounting.',
+                    }
+
+            elif action == 'audit_trail':
+                lead_id = args.get('lead_id')
+                if not lead_id:
+                    return {'error': 'lead_id required for audit_trail'}
+                lurl = f'{self.kommo_base_url}/api/v4/leads/{lead_id}'
+                async with session.get(lurl, headers=headers) as resp:
+                    if resp.status != 200:
+                        return {'error': f'Lead {lead_id} not found'}
+                    lead = await resp.json()
+                nurl = f'{self.kommo_base_url}/api/v4/leads/{lead_id}/notes'
+                async with session.get(nurl, headers=headers, params={'limit': 50}) as resp:
+                    notes = []
+                    if resp.status == 200:
+                        ndata = await resp.json()
+                        notes = ndata.get('_embedded', {}).get('notes', [])
+                events = []
+                events.append({
+                    'timestamp': lead.get('created_at'), 'type': 'created',
+                    'detail': f'Deal created: {lead.get("name")}',
+                })
+                for n in sorted(notes, key=lambda x: x.get('created_at', 0)):
+                    ntype = n.get('note_type', '')
+                    text = (n.get('params', {}).get('text', '') or '')[:150]
+                    events.append({
+                        'timestamp': n.get('created_at'), 'type': ntype,
+                        'detail': text or f'Note type: {ntype}',
+                        'created_by': n.get('created_by'),
+                    })
+                if lead.get('updated_at') != lead.get('created_at'):
+                    events.append({
+                        'timestamp': lead.get('updated_at'), 'type': 'last_update',
+                        'detail': f'Last updated (status_id: {lead.get("status_id")})',
+                    })
+                events.sort(key=lambda x: x.get('timestamp', 0))
+                return {
+                    'audit_trail': {
+                        'lead': lead.get('name'), 'lead_id': lead_id,
+                        'events': events, 'total_events': len(events),
+                    },
+                    'hint': 'Present audit trail chronologically. Show who did what and when. Useful for compliance and deal review.',
                 }
 
             return {'error': f'Unknown search action: {action}'}
@@ -6316,6 +6405,128 @@ class AIChat:
                 'hint': 'Present negotiation tips prioritized by importance. If deal context available, customize advice. Help user prepare for negotiation.',
             }
 
+        elif action == 'communication_style':
+            lead_id = args.get('lead_id')
+            if not lead_id:
+                return {'error': 'lead_id required for communication_style'}
+            nurl = f'{self.kommo_base_url}/api/v4/leads/{lead_id}/notes'
+            async with session.get(nurl, headers=headers, params={'limit': 30}) as resp:
+                notes = []
+                if resp.status == 200:
+                    ndata = await resp.json()
+                    notes = ndata.get('_embedded', {}).get('notes', [])
+            all_text = ' '.join((n.get('params', {}).get('text', '') or '') for n in notes).lower()
+            word_count = len(all_text.split())
+            formal_words = sum(1 for w in ['уважаемый', 'добрый день', 'с уважением', 'прошу', 'предоставить', 'рассмотреть'] if w in all_text)
+            informal_words = sum(1 for w in ['привет', 'ок', 'круто', 'супер', 'давай', 'норм'] if w in all_text)
+            style = 'formal' if formal_words > informal_words else ('informal' if informal_words > formal_words else 'neutral')
+            recommendations = []
+            if style == 'formal':
+                recommendations = [
+                    'Use professional tone and complete sentences',
+                    'Address by name and patronymic if known',
+                    'Provide detailed documentation and specifications',
+                    'Schedule formal meetings rather than quick calls',
+                ]
+            elif style == 'informal':
+                recommendations = [
+                    'Keep messages short and friendly',
+                    'Use first name, casual tone is OK',
+                    'Quick voice messages or calls work well',
+                    'Share visual content — screenshots, demos',
+                ]
+            else:
+                recommendations = [
+                    'Mirror the client\'s communication style',
+                    'Start professional, adjust based on response',
+                    'Mix formal proposals with friendly follow-ups',
+                    'Offer multiple communication channels',
+                ]
+            return {
+                'communication_style': {
+                    'detected_style': style,
+                    'formal_signals': formal_words, 'informal_signals': informal_words,
+                    'word_volume': word_count,
+                    'recommendations': recommendations,
+                },
+                'hint': 'Present detected communication style and recommendations. Help user adapt their approach to match client preferences.',
+            }
+
+        elif action == 'product_recommendations':
+            lead_id = args.get('lead_id')
+            if not lead_id:
+                return {'error': 'lead_id required for product_recommendations'}
+            lurl = f'{self.kommo_base_url}/api/v4/leads/{lead_id}'
+            async with session.get(lurl, headers=headers, params={'with': 'contacts'}) as resp:
+                if resp.status != 200:
+                    return {'error': f'Lead {lead_id} not found'}
+                lead = await resp.json()
+            nurl = f'{self.kommo_base_url}/api/v4/leads/{lead_id}/notes'
+            async with session.get(nurl, headers=headers, params={'limit': 20}) as resp:
+                notes = []
+                if resp.status == 200:
+                    ndata = await resp.json()
+                    notes = ndata.get('_embedded', {}).get('notes', [])
+            price = lead.get('price', 0) or 0
+            all_text = ' '.join((n.get('params', {}).get('text', '') or '') for n in notes).lower()
+            recs = []
+            if price > 100000:
+                recs.append({'type': 'upsell', 'suggestion': 'Premium package with extended support and SLA', 'reason': 'High-value client — premium positioning justified'})
+            if price > 0:
+                recs.append({'type': 'cross_sell', 'suggestion': 'Complementary services: training, consulting, implementation', 'reason': 'Active deal — good time to expand scope'})
+            if 'обучен' in all_text or 'тренинг' in all_text:
+                recs.append({'type': 'addon', 'suggestion': 'Training package', 'reason': 'Client mentioned training needs'})
+            if 'поддержк' in all_text or 'сопровожд' in all_text:
+                recs.append({'type': 'addon', 'suggestion': 'Extended support contract', 'reason': 'Client interested in ongoing support'})
+            if 'интеграц' in all_text or 'подключ' in all_text:
+                recs.append({'type': 'addon', 'suggestion': 'Integration services', 'reason': 'Client needs integration work'})
+            if not recs:
+                recs.append({'type': 'discovery', 'suggestion': 'Conduct needs assessment to identify product fit', 'reason': 'Not enough data for specific recommendations'})
+            return {
+                'product_recommendations': recs,
+                'deal_context': {'name': lead.get('name'), 'price': price},
+                'hint': 'Present product recommendations based on deal context. Help user identify upsell/cross-sell opportunities.',
+            }
+
+        elif action == 'talking_points':
+            lead_id = args.get('lead_id')
+            if not lead_id:
+                return {'error': 'lead_id required for talking_points'}
+            lurl = f'{self.kommo_base_url}/api/v4/leads/{lead_id}'
+            async with session.get(lurl, headers=headers, params={'with': 'contacts'}) as resp:
+                if resp.status != 200:
+                    return {'error': f'Lead {lead_id} not found'}
+                lead = await resp.json()
+            nurl = f'{self.kommo_base_url}/api/v4/leads/{lead_id}/notes'
+            async with session.get(nurl, headers=headers, params={'limit': 20}) as resp:
+                notes = []
+                if resp.status == 200:
+                    ndata = await resp.json()
+                    notes = ndata.get('_embedded', {}).get('notes', [])
+            price = lead.get('price', 0) or 0
+            age = (now - lead.get('created_at', now)) / 86400
+            all_text = ' '.join((n.get('params', {}).get('text', '') or '') for n in notes).lower()
+            points = []
+            points.append({'topic': 'Deal status', 'point': f'Deal "{lead.get("name")}" — {round(age)} days old, price {price}₽', 'priority': 'high'})
+            if notes:
+                last_note = notes[0]
+                last_text = (last_note.get('params', {}).get('text', '') or '')[:100]
+                points.append({'topic': 'Last interaction', 'point': f'Last note: {last_text}', 'priority': 'high'})
+            if 'цена' in all_text or 'бюджет' in all_text:
+                points.append({'topic': 'Pricing discussed', 'point': 'Client has raised pricing — be prepared with value justification', 'priority': 'high'})
+            if 'конкурент' in all_text:
+                points.append({'topic': 'Competition', 'point': 'Competitor mentioned — prepare differentiation points', 'priority': 'high'})
+            if 'срок' in all_text or 'дедлайн' in all_text:
+                points.append({'topic': 'Timeline', 'point': 'Client has timeline pressure — use urgency in closing', 'priority': 'medium'})
+            if age > 30:
+                points.append({'topic': 'Deal aging', 'point': f'Deal is {round(age)} days old — address any blockers directly', 'priority': 'medium'})
+            points.append({'topic': 'Next step', 'point': 'Confirm next action and timeline before ending conversation', 'priority': 'medium'})
+            return {
+                'talking_points': points,
+                'deal': lead.get('name'),
+                'hint': 'Present talking points before a call or meeting. High-priority items first. Help user stay focused and prepared.',
+            }
+
         return {'error': f'Unknown advisor action: {action}'}
 
     async def _handle_pipeline_health(self, session, headers, args: dict) -> dict:
@@ -7632,6 +7843,53 @@ class AIChat:
                 'win_rate': f'{win_rate:.0%}',
                 'by_user': sorted(by_user.values(), key=lambda x: x['revenue'], reverse=True),
                 'hint': 'Present plan vs fact with completion %. Show gap and daily target needed. Break down by user. Suggest actions to close the gap.',
+            }
+
+        elif action == 'closing_forecast':
+            url = f'{self.kommo_base_url}/api/v4/leads'
+            params = {'limit': 250}
+            if pipeline_id:
+                params['filter[pipeline_id]'] = pipeline_id
+            async with session.get(url, headers=headers, params=params) as resp:
+                all_leads = []
+                if resp.status == 200:
+                    data = await resp.json()
+                    all_leads = data.get('_embedded', {}).get('leads', [])
+            purl = f'{self.kommo_base_url}/api/v4/leads/pipelines'
+            async with session.get(purl, headers=headers) as resp:
+                stages = {}
+                if resp.status == 200:
+                    pdata = await resp.json()
+                    for p in pdata.get('_embedded', {}).get('pipelines', []):
+                        total = len(p.get('_embedded', {}).get('statuses', []))
+                        for i, s in enumerate(p.get('_embedded', {}).get('statuses', [])):
+                            stages[s.get('id')] = {'name': s.get('name'), 'position': i, 'total': total}
+            active = [l for l in all_leads if l.get('status_id') not in (142, 143)]
+            candidates = []
+            for l in active:
+                sid = l.get('status_id')
+                info = stages.get(sid, {'position': 0, 'total': 5})
+                progress = info['position'] / max(info['total'] - 1, 1)
+                price = l.get('price', 0) or 0
+                activity = (now - (l.get('updated_at') or now)) / 86400
+                prob = min(95, int(progress * 60 + (20 if activity < 7 else (10 if activity < 14 else 0)) + (15 if price > 0 else 0)))
+                if prob >= 30:
+                    candidates.append({
+                        'id': l.get('id'), 'name': l.get('name'), 'price': price,
+                        'stage': info.get('name', f'Stage {sid}'), 'probability': prob,
+                        'expected_value': int(price * prob / 100),
+                        'days_inactive': round(activity),
+                    })
+            candidates.sort(key=lambda x: x['expected_value'], reverse=True)
+            total_expected = sum(c['expected_value'] for c in candidates)
+            return {
+                'closing_forecast': {
+                    'candidates': candidates[:20],
+                    'total_expected_revenue': total_expected,
+                    'total_candidates': len(candidates),
+                    'forecast_period': f'{days} days',
+                },
+                'hint': 'Present closing forecast ranked by expected value. Show probability and stage. Help user focus on highest-probability deals.',
             }
 
         return {'error': f'Unknown forecast action: {action}'}
@@ -11004,6 +11262,97 @@ class AIChat:
                 'hint': 'Present contacts segmented by deal value. Premium contacts need VIP treatment. No-deals contacts need activation campaigns.',
             }
 
+        elif action == 'company_scoring':
+            curl = f'{self.kommo_base_url}/api/v4/companies'
+            async with session.get(curl, headers=headers, params={'limit': 50}) as resp:
+                companies = []
+                if resp.status == 200:
+                    cdata = await resp.json()
+                    companies = cdata.get('_embedded', {}).get('companies', [])
+            results = []
+            for c in companies[:30]:
+                cid = c.get('id')
+                lurl = f'{self.kommo_base_url}/api/v4/leads'
+                async with session.get(lurl, headers=headers, params={'filter[company_id]': cid, 'limit': 50}) as resp:
+                    leads = []
+                    if resp.status == 200:
+                        ldata = await resp.json()
+                        leads = ldata.get('_embedded', {}).get('leads', [])
+                won = [l for l in leads if l.get('status_id') == 142]
+                revenue = sum(l.get('price', 0) or 0 for l in won)
+                active = [l for l in leads if l.get('status_id') not in (142, 143)]
+                score = min(100, len(won) * 20 + len(active) * 10 + (30 if revenue > 100000 else (15 if revenue > 30000 else 0)))
+                results.append({
+                    'company': c.get('name'), 'company_id': cid,
+                    'score': score, 'total_deals': len(leads), 'won': len(won),
+                    'revenue': revenue, 'active_deals': len(active),
+                    'tier': 'Enterprise' if score >= 70 else ('Growth' if score >= 40 else 'SMB'),
+                })
+            results.sort(key=lambda x: x['score'], reverse=True)
+            return {
+                'company_scores': results[:20],
+                'hint': 'Present company scores ranked by tier. Enterprise companies need dedicated account management.',
+            }
+
+        elif action == 'relationship_strength':
+            url = f'{self.kommo_base_url}/api/v4/contacts'
+            async with session.get(url, headers=headers, params={'limit': limit, 'with': 'leads'}) as resp:
+                contacts = []
+                if resp.status == 200:
+                    data = await resp.json()
+                    contacts = data.get('_embedded', {}).get('contacts', [])
+            results = []
+            for c in contacts:
+                leads = c.get('_embedded', {}).get('leads', [])
+                won_count = 0
+                total_value = 0
+                for lid in [l.get('id') for l in leads[:5]]:
+                    lurl = f'{self.kommo_base_url}/api/v4/leads/{lid}'
+                    async with session.get(lurl, headers=headers) as resp:
+                        if resp.status == 200:
+                            lead = await resp.json()
+                            if lead.get('status_id') == 142:
+                                won_count += 1
+                                total_value += lead.get('price', 0) or 0
+                deal_count = len(leads)
+                strength = min(100, deal_count * 15 + won_count * 25 + (20 if total_value > 50000 else 0))
+                level = 'Strong' if strength >= 70 else ('Moderate' if strength >= 40 else ('Weak' if strength >= 15 else 'New'))
+                results.append({
+                    'contact': c.get('name'), 'contact_id': c.get('id'),
+                    'strength_score': strength, 'level': level,
+                    'deals': deal_count, 'won': won_count, 'total_value': total_value,
+                })
+            results.sort(key=lambda x: x['strength_score'], reverse=True)
+            return {
+                'relationships': results[:20],
+                'hint': 'Present relationship strength. Strong relationships are assets. Weak ones need nurturing. New contacts need engagement.',
+            }
+
+        elif action == 'account_scoring':
+            curl = f'{self.kommo_base_url}/api/v4/companies'
+            async with session.get(curl, headers=headers, params={'limit': 50, 'with': 'leads,contacts'}) as resp:
+                companies = []
+                if resp.status == 200:
+                    cdata = await resp.json()
+                    companies = cdata.get('_embedded', {}).get('companies', [])
+            results = []
+            for c in companies[:20]:
+                leads = c.get('_embedded', {}).get('leads', [])
+                contacts = c.get('_embedded', {}).get('contacts', [])
+                won = sum(1 for l in leads if l.get('status_id') == 142) if isinstance(leads, list) and leads and isinstance(leads[0], dict) else 0
+                engagement = len(contacts) * 10 + len(leads) * 15 + won * 25
+                score = min(100, engagement)
+                results.append({
+                    'company': c.get('name'), 'company_id': c.get('id'),
+                    'account_score': score, 'contacts': len(contacts), 'deals': len(leads),
+                    'priority': 'Tier 1' if score >= 70 else ('Tier 2' if score >= 40 else 'Tier 3'),
+                })
+            results.sort(key=lambda x: x['account_score'], reverse=True)
+            return {
+                'account_scores': results,
+                'hint': 'Present account scores by tier. Tier 1 accounts need strategic focus. Tier 3 may need re-evaluation.',
+            }
+
         return {'error': f'Unknown contact_scoring action: {action}'}
 
     async def _handle_ai_coach(self, session, headers, args: dict) -> dict:
@@ -12118,6 +12467,81 @@ class AIChat:
                     'causes': causes,
                 },
                 'hint': 'Present root cause analysis. Focus on the most likely causes. Suggest specific corrective actions for each.',
+            }
+
+        elif action == 'stale_analysis':
+            stale_buckets = {'14-30d': [], '30-60d': [], '60d+': []}
+            for l in active:
+                age = (now - (l.get('updated_at') or now)) / 86400
+                if age > 60:
+                    stale_buckets['60d+'].append(l)
+                elif age > 30:
+                    stale_buckets['30-60d'].append(l)
+                elif age > 14:
+                    stale_buckets['14-30d'].append(l)
+            total_stale = sum(len(v) for v in stale_buckets.values())
+            value_at_risk = sum(l.get('price', 0) or 0 for bucket in stale_buckets.values() for l in bucket)
+            breakdown = []
+            for bucket, leads in stale_buckets.items():
+                if leads:
+                    breakdown.append({
+                        'period': bucket, 'count': len(leads),
+                        'value': sum(l.get('price', 0) or 0 for l in leads),
+                        'top_deals': [{'id': l.get('id'), 'name': l.get('name'), 'price': l.get('price', 0)} for l in sorted(leads, key=lambda x: x.get('price', 0) or 0, reverse=True)[:3]],
+                    })
+            return {
+                'stale_analysis': {
+                    'total_stale': total_stale, 'value_at_risk': value_at_risk,
+                    'stale_rate': f'{total_stale / max(len(active), 1):.0%}',
+                    'breakdown': breakdown,
+                },
+                'hint': 'Present stale deal analysis by aging bucket. 60d+ are critical. Show value at risk. Recommend cleanup actions.',
+            }
+
+        elif action == 'campaign_roi':
+            surl = f'{self.kommo_base_url}/api/v4/leads'
+            params = {'limit': 250}
+            if pipeline_id:
+                params['filter[pipeline_id]'] = pipeline_id
+            async with session.get(surl, headers=headers, params=params) as resp:
+                leads = []
+                if resp.status == 200:
+                    sdata = await resp.json()
+                    leads = sdata.get('_embedded', {}).get('leads', [])
+            src_url = f'{self.kommo_base_url}/api/v4/leads/sources'
+            sources = {}
+            try:
+                async with session.get(src_url, headers=headers) as resp:
+                    if resp.status == 200:
+                        src_data = await resp.json()
+                        for s in src_data.get('_embedded', {}).get('sources', []):
+                            sources[s.get('id')] = s.get('name', f'Source {s.get("id")}')
+            except Exception:
+                pass
+            by_source = {}
+            for l in leads:
+                src = l.get('source_id') or 'unknown'
+                if src not in by_source:
+                    by_source[src] = {'source': sources.get(src, f'Source {src}'), 'leads': 0, 'won': 0, 'revenue': 0, 'pipeline_value': 0}
+                by_source[src]['leads'] += 1
+                if l.get('status_id') == 142:
+                    by_source[src]['won'] += 1
+                    by_source[src]['revenue'] += l.get('price', 0) or 0
+                elif l.get('status_id') not in (142, 143):
+                    by_source[src]['pipeline_value'] += l.get('price', 0) or 0
+            results = []
+            for src_id, s in by_source.items():
+                wr = s['won'] / max(s['leads'], 1)
+                results.append({
+                    'source': s['source'], 'leads': s['leads'], 'won': s['won'],
+                    'revenue': s['revenue'], 'pipeline_value': s['pipeline_value'],
+                    'win_rate': f'{wr:.0%}',
+                    'efficiency': 'high' if wr > 0.3 else ('medium' if wr > 0.15 else 'low'),
+                })
+            results.sort(key=lambda x: x['revenue'], reverse=True)
+            return {
+                'campaign_roi': results[:15],
+                'hint': 'Present campaign/source ROI. Rank by revenue. Highlight high-efficiency sources. Suggest reallocating budget from low to high performers.',
             }
 
         return {'message': f'Insights action {action} not implemented — use actionable or root_cause'}

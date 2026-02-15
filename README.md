@@ -240,6 +240,9 @@ Use MCP Client node with HTTP transport:
   - `qualification` - BANT qualification analysis for a deal (lead_id): budget, authority, need, timeline
   - `qualification_checklist` - Interactive BANT checklist with questions, red/green flags
   - `negotiation` - Negotiation tips customized for deal size and context
+  - `communication_style` - Detect client communication style (formal/informal/neutral) from notes and recommend approach
+  - `product_recommendations` - Upsell/cross-sell/addon recommendations based on deal context and notes
+  - `talking_points` - Pre-call/meeting talking points: deal status, last interaction, pricing, competition
 
 ### Pipeline Health
 - `kommo_pipeline_health` - **Deep pipeline analysis** with actions:
@@ -258,6 +261,7 @@ Use MCP Client node with HTTP transport:
   - `plan_fact` - Plan vs fact analysis: completion %, gap, daily target, by user
   - `cashflow` - Cash flow forecast based on pipeline
   - `scenarios` - Best/base/worst revenue scenarios with growth levers
+  - `closing_forecast` - Closing forecast: deal candidates ranked by probability and expected value
 
 ### Proactive Alerts
 - `kommo_alerts` - **CRM health alerts** with actions:
@@ -380,6 +384,9 @@ Use MCP Client node with HTTP transport:
   - `score` - Score contacts by activity, data completeness, recency
   - `value_segments` - VIP / Regular / Occasional segmentation by LTV
   - `by_value` - Segment contacts by total deal value (premium/standard/basic)
+  - `company_scoring` - Company scoring by deal history, revenue, and tier (Enterprise/Growth/SMB)
+  - `relationship_strength` - Contact relationship strength scoring (Strong/Moderate/Weak/New)
+  - `account_scoring` - Account-level scoring by engagement, contacts, and deals (Tier 1/2/3)
 
 ### AI Sales Coach
 - `kommo_ai_coach` - **AI-powered sales coaching** with actions:
@@ -419,6 +426,8 @@ Use MCP Client node with HTTP transport:
 - `kommo_insights` - **Actionable business insights** with actions:
   - `actionable` - Priority insights: risks, conversion issues, data quality, pipeline coverage
   - `root_cause` - Root cause analysis of lost deals: patterns, by manager, by price range
+  - `stale_analysis` - Stale deal analysis by aging bucket (14-30d, 30-60d, 60d+) with value at risk
+  - `campaign_roi` - Campaign/source ROI: leads, won, revenue, win rate, efficiency ranking
 
 ### Activity Analytics
 - `kommo_activity` - **Team activity analytics** with actions:
@@ -441,6 +450,8 @@ Use MCP Client node with HTTP transport:
   - `problems` - Find problem deals: stale, no price, no responsible user
   - `bottlenecks` - Pipeline bottleneck detection by stage congestion and age
   - `rejection_reasons` - Lost deal rejection reason analysis from notes
+  - `payment_status` - Payment status check from deal notes (paid/invoiced/no info)
+  - `audit_trail` - Chronological audit trail of all deal events and changes
 
 ### Extended Tasks
 - `kommo_tasks_ext` - **Extended task management** (new actions):
