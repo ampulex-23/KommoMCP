@@ -276,6 +276,37 @@ Use MCP Client node with HTTP transport:
 - `kommo_my` - **Personal CRM dashboard** with actions:
   - `pipeline` - My active deals by stage with top deals
   - `workload` - My task/deal load with workload score
+  - `team` - Team overview: deals, value, stale per user
+  - `insights` - Pipeline insights: health, win rate, cycle time
+
+### Gamification
+- `kommo_gamification` - **Team gamification** with actions:
+  - `leaderboard` - Ranked team leaderboard by metric (deals, revenue, conversion)
+  - `achievements` - Badge system: Deal Machine, Whale Hunter, Speed Closer, etc.
+  - `challenges` - Sales competitions: Deal Sprint, Revenue Race
+  - `points` - Points breakdown: deals, revenue bonus, big deals, fast closes
+
+### Loss Analysis
+- `kommo_loss_analysis` - **Deep lost deals analysis** with actions:
+  - `reasons` - Loss reasons from notes, price range breakdown
+  - `patterns` - Timing patterns: by month, day, deal age at loss
+  - `by_manager` - Manager comparison: loss rate, value, avg loss age
+
+### Smart Timing
+- `kommo_smart_time` - **Timing intelligence** with actions:
+  - `best_call_time` - Optimal hours/days for calls based on won deals
+  - `customer_journey` - Touch-to-purchase path: cycle times, fast vs slow deals
+
+### Team Planning
+- `kommo_team_planner` - **Capacity planning** with actions:
+  - `capacity` - Team workload forecast: load score, available slots, status
+
+### Customer Segments
+- `kommo_segments` - **Customer segmentation** with actions:
+  - `by_volume` - Purchase tier segmentation with win rates
+  - `lookalike` - Find deals similar to best performers
+  - `best_manager` - Manager-client fit by deal size segment
+  - `basket` - Product mix analysis (catalogs or tag-based)
 
 ### Extended Search
 - `kommo_search` - **Enhanced search** with filters:

@@ -995,8 +995,8 @@ MCP_TOOLS = [
                 'properties': {
                     'action': {
                         'type': 'string',
-                        'enum': ['pipeline', 'revenue', 'deal_probability', 'trends'],
-                        'description': 'Forecast type: pipeline (weighted forecast), revenue (monthly prediction), deal_probability (per-deal scoring), trends (historical trends)',
+                        'enum': ['pipeline', 'revenue', 'deal_probability', 'trends', 'cashflow', 'whatif'],
+                        'description': 'Forecast type: pipeline, revenue, deal_probability, trends, cashflow (expected payments), whatif (scenario modeling)',
                     },
                     'pipeline_id': {'type': 'integer', 'description': 'Pipeline ID (optional)'},
                     'days': {'type': 'integer', 'description': 'Forecast horizon in days (default 30)', 'default': 30},
@@ -1016,8 +1016,8 @@ MCP_TOOLS = [
                 'properties': {
                     'action': {
                         'type': 'string',
-                        'enum': ['check', 'risks', 'performance', 'opportunities'],
-                        'description': 'Alert type: check (all alerts), risks (deal/pipeline risks), performance (team KPIs), opportunities (upsell/reactivation)',
+                        'enum': ['check', 'risks', 'performance', 'opportunities', 'trends'],
+                        'description': 'Alert type: check (all), risks, performance, opportunities, trends (metric direction alerts)',
                     },
                     'days': {'type': 'integer', 'description': 'Analysis period in days (default 7)', 'default': 7},
                     'user_id': {'type': 'integer', 'description': 'Filter by user ID'},
@@ -1092,10 +1092,114 @@ MCP_TOOLS = [
                 'properties': {
                     'action': {
                         'type': 'string',
-                        'enum': ['pipeline', 'workload'],
-                        'description': 'View type: pipeline (my active deals), workload (my task/deal load)',
+                        'enum': ['pipeline', 'workload', 'team', 'insights'],
+                        'description': 'View type: pipeline (my deals), workload (my load), team (team overview), insights (pipeline insights)',
                     },
                     'days': {'type': 'integer', 'description': 'Period in days (default 7)', 'default': 7},
+                },
+                'required': ['action'],
+            },
+        },
+    },
+    {
+        'type': 'function',
+        'function': {
+            'name': 'kommo_gamification',
+            'description': 'Team gamification: leaderboards, achievements, challenges, points tracking',
+            'parameters': {
+                'type': 'object',
+                'properties': {
+                    'action': {
+                        'type': 'string',
+                        'enum': ['leaderboard', 'achievements', 'challenges', 'points'],
+                        'description': 'Gamification type: leaderboard (team ranking), achievements (badges), challenges (competitions), points (score breakdown)',
+                    },
+                    'days': {'type': 'integer', 'description': 'Period in days (default 30)', 'default': 30},
+                    'metric': {
+                        'type': 'string',
+                        'enum': ['deals_won', 'revenue', 'tasks_completed', 'calls', 'conversion'],
+                        'description': 'Metric for leaderboard (default deals_won)',
+                    },
+                },
+                'required': ['action'],
+            },
+        },
+    },
+    {
+        'type': 'function',
+        'function': {
+            'name': 'kommo_loss_analysis',
+            'description': 'Deep analysis of lost deals: reasons, patterns, manager comparison',
+            'parameters': {
+                'type': 'object',
+                'properties': {
+                    'action': {
+                        'type': 'string',
+                        'enum': ['reasons', 'patterns', 'by_manager'],
+                        'description': 'Analysis type: reasons (why deals lost), patterns (timing/stage patterns), by_manager (loss comparison)',
+                    },
+                    'pipeline_id': {'type': 'integer', 'description': 'Pipeline ID (optional)'},
+                    'days': {'type': 'integer', 'description': 'Period in days (default 90)', 'default': 90},
+                },
+                'required': ['action'],
+            },
+        },
+    },
+    {
+        'type': 'function',
+        'function': {
+            'name': 'kommo_smart_time',
+            'description': 'Smart timing analysis: best time to call, customer journey mapping',
+            'parameters': {
+                'type': 'object',
+                'properties': {
+                    'action': {
+                        'type': 'string',
+                        'enum': ['best_call_time', 'customer_journey'],
+                        'description': 'Analysis type: best_call_time (optimal contact hours), customer_journey (touch-to-purchase path)',
+                    },
+                    'pipeline_id': {'type': 'integer', 'description': 'Pipeline ID (optional)'},
+                    'days': {'type': 'integer', 'description': 'Period in days (default 90)', 'default': 90},
+                },
+                'required': ['action'],
+            },
+        },
+    },
+    {
+        'type': 'function',
+        'function': {
+            'name': 'kommo_team_planner',
+            'description': 'Team capacity planning and workload forecasting',
+            'parameters': {
+                'type': 'object',
+                'properties': {
+                    'action': {
+                        'type': 'string',
+                        'enum': ['capacity'],
+                        'description': 'Planning type: capacity (team workload forecast)',
+                    },
+                    'days': {'type': 'integer', 'description': 'Planning horizon in days (default 14)', 'default': 14},
+                },
+                'required': ['action'],
+            },
+        },
+    },
+    {
+        'type': 'function',
+        'function': {
+            'name': 'kommo_segments',
+            'description': 'Customer segmentation: by volume, lookalike, best manager match, basket analysis',
+            'parameters': {
+                'type': 'object',
+                'properties': {
+                    'action': {
+                        'type': 'string',
+                        'enum': ['by_volume', 'lookalike', 'best_manager', 'basket'],
+                        'description': 'Segment type: by_volume (purchase tiers), lookalike (similar to best), best_manager (manager-client fit), basket (product mix)',
+                    },
+                    'pipeline_id': {'type': 'integer', 'description': 'Pipeline ID (optional)'},
+                    'lead_id': {'type': 'integer', 'description': 'Lead ID for lookalike'},
+                    'days': {'type': 'integer', 'description': 'Period in days (default 90)', 'default': 90},
                 },
                 'required': ['action'],
             },
@@ -1641,6 +1745,21 @@ class AIChat:
         
         elif name == 'kommo_my':
             return await self._handle_my(session, headers, args)
+        
+        elif name == 'kommo_gamification':
+            return await self._handle_gamification(session, headers, args)
+        
+        elif name == 'kommo_loss_analysis':
+            return await self._handle_loss_analysis(session, headers, args)
+        
+        elif name == 'kommo_smart_time':
+            return await self._handle_smart_time(session, headers, args)
+        
+        elif name == 'kommo_team_planner':
+            return await self._handle_team_planner(session, headers, args)
+        
+        elif name == 'kommo_segments':
+            return await self._handle_segments(session, headers, args)
         
         # Default - return info about available tools
         return {'message': f'Tool {name} not fully implemented yet', 'args': args}
@@ -6227,6 +6346,102 @@ class AIChat:
                 'hint': f'Trend is {trend_direction}. Visualize weekly data. Highlight any anomalies or significant changes.',
             }
 
+        elif action == 'cashflow':
+            url = f'{self.kommo_base_url}/api/v4/leads'
+            params = {'limit': 250, 'order[created_at]': 'desc'}
+            all_leads = []
+            async with session.get(url, headers=headers, params=params) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    all_leads = data.get('_embedded', {}).get('leads', [])
+
+            active = [l for l in all_leads if l.get('status_id') not in (142, 143)]
+
+            purl = f'{self.kommo_base_url}/api/v4/leads/pipelines'
+            async with session.get(purl, headers=headers) as resp:
+                pipelines_data = {}
+                if resp.status == 200:
+                    pdata = await resp.json()
+                    for p in pdata.get('_embedded', {}).get('pipelines', []):
+                        statuses = [s for s in p.get('_embedded', {}).get('statuses', []) if s.get('id') not in (142, 143)]
+                        pipelines_data[p.get('id')] = {'name': p.get('name'), 'stages': len(statuses), 'statuses': {s['id']: i for i, s in enumerate(statuses)}}
+
+            weekly_forecast = {}
+            for lead in active:
+                price = lead.get('price', 0) or 0
+                if price == 0:
+                    continue
+                pid = lead.get('pipeline_id')
+                sid = lead.get('status_id')
+                pinfo = pipelines_data.get(pid, {})
+                stage_idx = pinfo.get('statuses', {}).get(sid, 0)
+                total_stages = pinfo.get('stages', 5)
+                progress = (stage_idx + 1) / max(total_stages, 1)
+                est_weeks = max(1, round((1 - progress) * 4))
+                week_key = f'week_{est_weeks}'
+                if week_key not in weekly_forecast:
+                    weekly_forecast[week_key] = {'expected': 0, 'deals': 0}
+                weekly_forecast[week_key]['expected'] += round(price * progress)
+                weekly_forecast[week_key]['deals'] += 1
+
+            total_expected = sum(w['expected'] for w in weekly_forecast.values())
+            return {
+                'cashflow_forecast': weekly_forecast,
+                'total_expected': total_expected,
+                'active_deals_with_price': len([l for l in active if (l.get('price') or 0) > 0]),
+                'hint': 'Present as expected cash inflow by week. Explain that closer deals have higher confidence. Total is weighted by stage progress.',
+            }
+
+        elif action == 'whatif':
+            url = f'{self.kommo_base_url}/api/v4/leads'
+            params = {'limit': 250}
+            async with session.get(url, headers=headers, params=params) as resp:
+                all_leads = []
+                if resp.status == 200:
+                    data = await resp.json()
+                    all_leads = data.get('_embedded', {}).get('leads', [])
+
+            active = [l for l in all_leads if l.get('status_id') not in (142, 143)]
+            won = [l for l in all_leads if l.get('status_id') == 142]
+            total_active_value = sum(l.get('price', 0) or 0 for l in active)
+            current_won_value = sum(l.get('price', 0) or 0 for l in won)
+            current_conversion = len(won) / max(len(all_leads), 1)
+
+            scenarios = []
+            for conv_boost in [0.05, 0.10, 0.20]:
+                new_conv = current_conversion + conv_boost
+                additional_deals = round(len(active) * conv_boost)
+                avg_deal = total_active_value / max(len(active), 1)
+                additional_revenue = round(additional_deals * avg_deal)
+                scenarios.append({
+                    'scenario': f'+{conv_boost:.0%} conversion',
+                    'new_conversion': f'{new_conv:.1%}',
+                    'additional_deals_won': additional_deals,
+                    'additional_revenue': additional_revenue,
+                })
+
+            for check_boost in [1.1, 1.25, 1.5]:
+                avg_deal = total_active_value / max(len(active), 1)
+                new_avg = round(avg_deal * check_boost)
+                scenarios.append({
+                    'scenario': f'Avg check x{check_boost}',
+                    'new_avg_check': new_avg,
+                    'revenue_impact': round((new_avg - avg_deal) * len(won)),
+                })
+
+            return {
+                'current': {
+                    'active_deals': len(active),
+                    'pipeline_value': total_active_value,
+                    'won_deals': len(won),
+                    'won_value': current_won_value,
+                    'conversion': f'{current_conversion:.1%}',
+                    'avg_check': round(total_active_value / max(len(active), 1)),
+                },
+                'scenarios': scenarios,
+                'hint': 'Present what-if scenarios as potential impact. Show current baseline vs each scenario. Help user understand which lever has most impact.',
+            }
+
         return {'error': f'Unknown forecast action: {action}'}
 
     async def _handle_alerts(self, session, headers, args: dict) -> dict:
@@ -6411,6 +6626,69 @@ class AIChat:
                 'opportunities': opps,
                 'total_opportunities': len(opps),
                 'hint': 'Present opportunities by potential value. Suggest specific actions for each opportunity type.',
+            }
+
+        elif action == 'trends':
+            from datetime import datetime, timedelta
+            url = f'{self.kommo_base_url}/api/v4/leads'
+            params = {'limit': 250, 'order[created_at]': 'desc'}
+            page = 1
+            all_hist = []
+            while page <= 4:
+                params['page'] = page
+                async with session.get(url, headers=headers, params=params) as resp:
+                    if resp.status == 200:
+                        data = await resp.json()
+                        leads = data.get('_embedded', {}).get('leads', [])
+                        all_hist.extend(leads)
+                        if len(leads) < 250:
+                            break
+                        page += 1
+                    else:
+                        break
+
+            current_start = now - days * 86400
+            prev_start = current_start - days * 86400
+            current = [l for l in all_hist if l.get('created_at', 0) >= current_start]
+            prev = [l for l in all_hist if prev_start <= l.get('created_at', 0) < current_start]
+
+            trend_alerts = []
+            curr_count = len(current)
+            prev_count = len(prev)
+            if prev_count > 0:
+                deal_change = (curr_count - prev_count) / prev_count * 100
+                if deal_change < -20:
+                    trend_alerts.append({'type': 'warning', 'metric': 'new_deals', 'message': f'New deals down {deal_change:.0f}% vs previous period', 'change': f'{deal_change:+.0f}%'})
+                elif deal_change > 30:
+                    trend_alerts.append({'type': 'positive', 'metric': 'new_deals', 'message': f'New deals up {deal_change:.0f}% vs previous period', 'change': f'{deal_change:+.0f}%'})
+
+            curr_won = len([l for l in current if l.get('status_id') == 142])
+            prev_won = len([l for l in prev if l.get('status_id') == 142])
+            if prev_won > 0:
+                won_change = (curr_won - prev_won) / prev_won * 100
+                if won_change < -20:
+                    trend_alerts.append({'type': 'warning', 'metric': 'won_deals', 'message': f'Won deals down {won_change:.0f}%', 'change': f'{won_change:+.0f}%'})
+                elif won_change > 30:
+                    trend_alerts.append({'type': 'positive', 'metric': 'won_deals', 'message': f'Won deals up {won_change:.0f}%', 'change': f'{won_change:+.0f}%'})
+
+            curr_rev = sum(l.get('price', 0) or 0 for l in current if l.get('status_id') == 142)
+            prev_rev = sum(l.get('price', 0) or 0 for l in prev if l.get('status_id') == 142)
+            if prev_rev > 0:
+                rev_change = (curr_rev - prev_rev) / prev_rev * 100
+                if rev_change < -20:
+                    trend_alerts.append({'type': 'critical', 'metric': 'revenue', 'message': f'Revenue down {rev_change:.0f}%', 'change': f'{rev_change:+.0f}%'})
+                elif rev_change > 30:
+                    trend_alerts.append({'type': 'positive', 'metric': 'revenue', 'message': f'Revenue up {rev_change:.0f}%', 'change': f'{rev_change:+.0f}%'})
+
+            if not trend_alerts:
+                trend_alerts.append({'type': 'info', 'metric': 'all', 'message': 'All metrics stable — no significant changes detected'})
+
+            return {
+                'period_days': days,
+                'trend_alerts': trend_alerts,
+                'current': {'deals': curr_count, 'won': curr_won, 'revenue': curr_rev},
+                'previous': {'deals': prev_count, 'won': prev_won, 'revenue': prev_rev},
+                'hint': 'Present trend alerts with direction arrows. Critical/warning first. Suggest investigation for declining metrics.',
             }
 
         return {'error': f'Unknown alerts action: {action}'}
@@ -6890,4 +7168,695 @@ class AIChat:
                 'hint': 'Present as workload summary. If workload_score > 70, suggest delegation. Show overdue tasks as priority.',
             }
 
+        elif action == 'team':
+            uurl = f'{self.kommo_base_url}/api/v4/users'
+            async with session.get(uurl, headers=headers) as resp:
+                users = []
+                if resp.status == 200:
+                    udata = await resp.json()
+                    users = udata.get('_embedded', {}).get('users', [])
+
+            url = f'{self.kommo_base_url}/api/v4/leads'
+            params = {'limit': 250}
+            async with session.get(url, headers=headers, params=params) as resp:
+                all_leads = []
+                if resp.status == 200:
+                    data = await resp.json()
+                    all_leads = data.get('_embedded', {}).get('leads', [])
+
+            active = [l for l in all_leads if l.get('status_id') not in (142, 143)]
+            team = []
+            for user in users:
+                uid = user.get('id')
+                u_leads = [l for l in active if l.get('responsible_user_id') == uid]
+                u_stale = [l for l in u_leads if (now - (l.get('updated_at') or now)) > 7 * 86400]
+                team.append({
+                    'user': user.get('name'),
+                    'user_id': uid,
+                    'active_deals': len(u_leads),
+                    'pipeline_value': sum(l.get('price', 0) or 0 for l in u_leads),
+                    'stale_deals': len(u_stale),
+                })
+            team.sort(key=lambda x: x['active_deals'], reverse=True)
+
+            return {
+                'team': team,
+                'total_active': len(active),
+                'total_value': sum(l.get('price', 0) or 0 for l in active),
+                'hint': 'Present as team overview table. Highlight unbalanced workloads and users with many stale deals.',
+            }
+
+        elif action == 'insights':
+            url = f'{self.kommo_base_url}/api/v4/leads'
+            params = {'limit': 250}
+            async with session.get(url, headers=headers, params=params) as resp:
+                all_leads = []
+                if resp.status == 200:
+                    data = await resp.json()
+                    all_leads = data.get('_embedded', {}).get('leads', [])
+
+            active = [l for l in all_leads if l.get('status_id') not in (142, 143)]
+            won = [l for l in all_leads if l.get('status_id') == 142]
+            lost = [l for l in all_leads if l.get('status_id') == 143]
+
+            insights = []
+            if active:
+                avg_age = sum((now - l.get('created_at', now)) / 86400 for l in active) / len(active)
+                if avg_age > 30:
+                    insights.append(f'Average deal age is {avg_age:.0f} days — consider cleaning up old deals')
+                stale_pct = len([l for l in active if (now - (l.get('updated_at') or now)) > 7 * 86400]) / len(active) * 100
+                if stale_pct > 30:
+                    insights.append(f'{stale_pct:.0f}% of deals are stale (7+ days) — needs attention')
+                no_price = len([l for l in active if not (l.get('price') or 0)]) / len(active) * 100
+                if no_price > 20:
+                    insights.append(f'{no_price:.0f}% of deals have no price — pipeline value is underestimated')
+
+            if won and lost:
+                win_rate = len(won) / (len(won) + len(lost)) * 100
+                insights.append(f'Win rate: {win_rate:.0f}% ({len(won)} won / {len(lost)} lost)')
+                avg_won_cycle = sum((l.get('updated_at', now) - l.get('created_at', now)) / 86400 for l in won) / len(won)
+                insights.append(f'Average sales cycle: {avg_won_cycle:.0f} days')
+
+            if not insights:
+                insights.append('Pipeline looks healthy — no immediate concerns')
+
+            return {
+                'active_deals': len(active),
+                'pipeline_value': sum(l.get('price', 0) or 0 for l in active),
+                'insights': insights,
+                'hint': 'Present insights as actionable recommendations. Prioritize by business impact.',
+            }
+
         return {'error': f'Unknown my action: {action}'}
+
+    async def _handle_gamification(self, session, headers, args: dict) -> dict:
+        """Team gamification: leaderboards, achievements, challenges, points."""
+        import time
+        action = args.get('action')
+        days = args.get('days', 30)
+        metric = args.get('metric', 'deals_won')
+        now = int(time.time())
+        cutoff = now - days * 86400
+
+        uurl = f'{self.kommo_base_url}/api/v4/users'
+        async with session.get(uurl, headers=headers) as resp:
+            users = []
+            if resp.status == 200:
+                udata = await resp.json()
+                users = udata.get('_embedded', {}).get('users', [])
+        user_map = {u.get('id'): u.get('name', f'User #{u.get("id")}') for u in users}
+
+        url = f'{self.kommo_base_url}/api/v4/leads'
+        params = {'limit': 250, 'order[created_at]': 'desc'}
+        all_leads = []
+        page = 1
+        while page <= 4:
+            params['page'] = page
+            async with session.get(url, headers=headers, params=params) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    leads = data.get('_embedded', {}).get('leads', [])
+                    all_leads.extend(leads)
+                    if len(leads) < 250:
+                        break
+                    page += 1
+                else:
+                    break
+
+        if action == 'leaderboard':
+            scores = {}
+            for lead in all_leads:
+                uid = lead.get('responsible_user_id')
+                if not uid or uid not in user_map:
+                    continue
+                if uid not in scores:
+                    scores[uid] = {'deals_won': 0, 'revenue': 0, 'total_deals': 0, 'conversion': 0}
+                if lead.get('created_at', 0) >= cutoff:
+                    scores[uid]['total_deals'] += 1
+                if lead.get('status_id') == 142 and lead.get('updated_at', 0) >= cutoff:
+                    scores[uid]['deals_won'] += 1
+                    scores[uid]['revenue'] += lead.get('price', 0) or 0
+
+            for uid in scores:
+                total = scores[uid]['total_deals']
+                scores[uid]['conversion'] = round(scores[uid]['deals_won'] / max(total, 1) * 100, 1)
+
+            leaderboard = sorted(
+                [{'rank': 0, 'user': user_map.get(uid, '?'), 'user_id': uid, **s} for uid, s in scores.items()],
+                key=lambda x: x.get(metric, 0), reverse=True
+            )
+            for i, entry in enumerate(leaderboard):
+                entry['rank'] = i + 1
+
+            return {
+                'metric': metric,
+                'period_days': days,
+                'leaderboard': leaderboard,
+                'hint': 'Present as a ranked leaderboard with medals: 🥇🥈🥉. Highlight the leader and any close competitions.',
+            }
+
+        elif action == 'achievements':
+            achievements = []
+            for uid, name in user_map.items():
+                user_leads = [l for l in all_leads if l.get('responsible_user_id') == uid]
+                won = [l for l in user_leads if l.get('status_id') == 142 and l.get('updated_at', 0) >= cutoff]
+                badges = []
+                if len(won) >= 10:
+                    badges.append('🏆 Deal Machine (10+ deals)')
+                elif len(won) >= 5:
+                    badges.append('⭐ Rising Star (5+ deals)')
+                total_rev = sum(l.get('price', 0) or 0 for l in won)
+                if total_rev >= 1000000:
+                    badges.append('💎 Million Maker')
+                elif total_rev >= 500000:
+                    badges.append('💰 Big Closer (500K+)')
+                big_deals = [l for l in won if (l.get('price') or 0) >= 100000]
+                if big_deals:
+                    badges.append(f'🎯 Whale Hunter ({len(big_deals)} big deals)')
+                fast_deals = [l for l in won if (l.get('updated_at', now) - l.get('created_at', now)) < 7 * 86400]
+                if fast_deals:
+                    badges.append(f'⚡ Speed Closer ({len(fast_deals)} fast wins)')
+                if badges:
+                    achievements.append({'user': name, 'user_id': uid, 'badges': badges, 'deals_won': len(won), 'revenue': total_rev})
+
+            return {
+                'period_days': days,
+                'achievements': achievements,
+                'hint': 'Present achievements with emoji badges. Celebrate top performers. Encourage others with "almost there" messages.',
+            }
+
+        elif action == 'challenges':
+            user_stats = {}
+            for uid, name in user_map.items():
+                user_leads = [l for l in all_leads if l.get('responsible_user_id') == uid]
+                won = [l for l in user_leads if l.get('status_id') == 142 and l.get('updated_at', 0) >= cutoff]
+                user_stats[uid] = {'name': name, 'won': len(won), 'revenue': sum(l.get('price', 0) or 0 for l in won)}
+
+            challenges = [
+                {
+                    'name': '🏁 Deal Sprint',
+                    'description': f'Close the most deals in {days} days',
+                    'metric': 'deals_won',
+                    'standings': sorted([{'user': s['name'], 'score': s['won']} for s in user_stats.values()], key=lambda x: x['score'], reverse=True)[:5],
+                },
+                {
+                    'name': '💰 Revenue Race',
+                    'description': f'Highest revenue in {days} days',
+                    'metric': 'revenue',
+                    'standings': sorted([{'user': s['name'], 'score': s['revenue']} for s in user_stats.values()], key=lambda x: x['score'], reverse=True)[:5],
+                },
+            ]
+
+            return {
+                'period_days': days,
+                'challenges': challenges,
+                'hint': 'Present as active challenges with current standings. Show progress bars. Encourage competition.',
+            }
+
+        elif action == 'points':
+            points = {}
+            for uid, name in user_map.items():
+                user_leads = [l for l in all_leads if l.get('responsible_user_id') == uid]
+                won = [l for l in user_leads if l.get('status_id') == 142 and l.get('updated_at', 0) >= cutoff]
+                score = 0
+                breakdown = {}
+                deal_pts = len(won) * 10
+                score += deal_pts
+                breakdown['deals_closed'] = f'{len(won)} x 10 = {deal_pts}'
+                rev = sum(l.get('price', 0) or 0 for l in won)
+                rev_pts = round(rev / 10000)
+                score += rev_pts
+                breakdown['revenue_bonus'] = f'{rev} / 10K = {rev_pts}'
+                big = len([l for l in won if (l.get('price') or 0) >= 100000])
+                big_pts = big * 25
+                score += big_pts
+                breakdown['big_deals'] = f'{big} x 25 = {big_pts}'
+                fast = len([l for l in won if (l.get('updated_at', now) - l.get('created_at', now)) < 7 * 86400])
+                fast_pts = fast * 15
+                score += fast_pts
+                breakdown['fast_closes'] = f'{fast} x 15 = {fast_pts}'
+                if score > 0:
+                    points[uid] = {'user': name, 'total_points': score, 'breakdown': breakdown}
+
+            ranked = sorted(points.values(), key=lambda x: x['total_points'], reverse=True)
+            return {
+                'period_days': days,
+                'points': ranked,
+                'hint': 'Present as points breakdown per user. Show total and how points were earned. Gamify with levels.',
+            }
+
+        return {'error': f'Unknown gamification action: {action}'}
+
+    async def _handle_loss_analysis(self, session, headers, args: dict) -> dict:
+        """Deep analysis of lost deals."""
+        import time
+        from datetime import datetime
+        action = args.get('action')
+        pipeline_id = args.get('pipeline_id')
+        days = args.get('days', 90)
+        now = int(time.time())
+        cutoff = now - days * 86400
+
+        url = f'{self.kommo_base_url}/api/v4/leads'
+        params = {'filter[statuses][0][status_id]': 143, 'limit': 250, 'order[updated_at]': 'desc'}
+        if pipeline_id:
+            params['filter[pipeline_id]'] = pipeline_id
+        lost_leads = []
+        async with session.get(url, headers=headers, params=params) as resp:
+            if resp.status == 200:
+                data = await resp.json()
+                lost_leads = data.get('_embedded', {}).get('leads', [])
+        recent_lost = [l for l in lost_leads if l.get('updated_at', 0) >= cutoff]
+
+        if action == 'reasons':
+            loss_notes = []
+            for lead in recent_lost[:20]:
+                nurl = f'{self.kommo_base_url}/api/v4/leads/{lead["id"]}/notes'
+                async with session.get(nurl, headers=headers, params={'limit': 5}) as resp:
+                    if resp.status == 200:
+                        ndata = await resp.json()
+                        for n in ndata.get('_embedded', {}).get('notes', []):
+                            text = n.get('params', {}).get('text', '') if isinstance(n.get('params'), dict) else ''
+                            if text:
+                                loss_notes.append({'lead': lead.get('name'), 'lead_id': lead.get('id'), 'note': text[:200], 'price': lead.get('price', 0)})
+
+            price_ranges = {'no_price': 0, 'small (<50K)': 0, 'medium (50-200K)': 0, 'large (>200K)': 0}
+            for l in recent_lost:
+                p = l.get('price', 0) or 0
+                if p == 0: price_ranges['no_price'] += 1
+                elif p < 50000: price_ranges['small (<50K)'] += 1
+                elif p < 200000: price_ranges['medium (50-200K)'] += 1
+                else: price_ranges['large (>200K)'] += 1
+
+            return {
+                'total_lost': len(recent_lost),
+                'total_lost_value': sum(l.get('price', 0) or 0 for l in recent_lost),
+                'by_price_range': price_ranges,
+                'loss_notes_sample': loss_notes[:10],
+                'hint': 'Analyze loss notes for common themes. Group by reason category. Suggest preventive actions for top reasons.',
+            }
+
+        elif action == 'patterns':
+            by_month = {}
+            by_dow = {}
+            by_age = {'<7d': 0, '7-30d': 0, '30-60d': 0, '60-90d': 0, '>90d': 0}
+            for l in recent_lost:
+                dt = datetime.fromtimestamp(l.get('updated_at', now))
+                month = dt.strftime('%Y-%m')
+                dow = dt.strftime('%A')
+                by_month[month] = by_month.get(month, 0) + 1
+                by_dow[dow] = by_dow.get(dow, 0) + 1
+                age = (l.get('updated_at', now) - l.get('created_at', now)) / 86400
+                if age < 7: by_age['<7d'] += 1
+                elif age < 30: by_age['7-30d'] += 1
+                elif age < 60: by_age['30-60d'] += 1
+                elif age < 90: by_age['60-90d'] += 1
+                else: by_age['>90d'] += 1
+
+            purl = f'{self.kommo_base_url}/api/v4/leads/pipelines'
+            async with session.get(purl, headers=headers) as resp:
+                stage_map = {}
+                if resp.status == 200:
+                    pdata = await resp.json()
+                    for p in pdata.get('_embedded', {}).get('pipelines', []):
+                        for s in p.get('_embedded', {}).get('statuses', []):
+                            stage_map[s.get('id')] = s.get('name')
+
+            return {
+                'total_lost': len(recent_lost),
+                'by_month': dict(sorted(by_month.items())),
+                'by_day_of_week': by_dow,
+                'by_deal_age': by_age,
+                'avg_loss_age_days': round(sum((l.get('updated_at', now) - l.get('created_at', now)) / 86400 for l in recent_lost) / max(len(recent_lost), 1), 1),
+                'hint': 'Identify patterns: when deals are lost most, at what age. Suggest process improvements based on patterns.',
+            }
+
+        elif action == 'by_manager':
+            uurl = f'{self.kommo_base_url}/api/v4/users'
+            async with session.get(uurl, headers=headers) as resp:
+                users = {}
+                if resp.status == 200:
+                    udata = await resp.json()
+                    users = {u.get('id'): u.get('name') for u in udata.get('_embedded', {}).get('users', [])}
+
+            url2 = f'{self.kommo_base_url}/api/v4/leads'
+            params2 = {'filter[statuses][0][status_id]': 142, 'limit': 250}
+            won_leads = []
+            async with session.get(url2, headers=headers, params=params2) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    won_leads = data.get('_embedded', {}).get('leads', [])
+
+            manager_stats = {}
+            for uid, name in users.items():
+                u_lost = [l for l in recent_lost if l.get('responsible_user_id') == uid]
+                u_won = [l for l in won_leads if l.get('responsible_user_id') == uid]
+                if not u_lost and not u_won:
+                    continue
+                total = len(u_lost) + len(u_won)
+                manager_stats[uid] = {
+                    'manager': name,
+                    'lost': len(u_lost),
+                    'won': len(u_won),
+                    'loss_rate': f'{len(u_lost) / max(total, 1) * 100:.0f}%',
+                    'lost_value': sum(l.get('price', 0) or 0 for l in u_lost),
+                    'avg_loss_age': round(sum((l.get('updated_at', now) - l.get('created_at', now)) / 86400 for l in u_lost) / max(len(u_lost), 1), 1) if u_lost else 0,
+                }
+
+            ranked = sorted(manager_stats.values(), key=lambda x: x['lost'], reverse=True)
+            return {
+                'period_days': days,
+                'by_manager': ranked,
+                'hint': 'Compare managers by loss rate, not just count. Identify who needs coaching. Look at avg loss age for early warning patterns.',
+            }
+
+        return {'error': f'Unknown loss_analysis action: {action}'}
+
+    async def _handle_smart_time(self, session, headers, args: dict) -> dict:
+        """Smart timing analysis: best call time, customer journey."""
+        import time
+        from datetime import datetime
+        from collections import Counter
+        action = args.get('action')
+        days = args.get('days', 90)
+        now = int(time.time())
+        cutoff = now - days * 86400
+
+        if action == 'best_call_time':
+            url = f'{self.kommo_base_url}/api/v4/leads'
+            params = {'filter[statuses][0][status_id]': 142, 'limit': 250}
+            won_leads = []
+            async with session.get(url, headers=headers, params=params) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    won_leads = data.get('_embedded', {}).get('leads', [])
+
+            hour_success = Counter()
+            dow_success = Counter()
+            for lead in won_leads:
+                created = lead.get('created_at', now)
+                dt = datetime.fromtimestamp(created)
+                hour_success[dt.hour] += 1
+                dow_success[dt.strftime('%A')] += 1
+
+            best_hours = hour_success.most_common(5)
+            best_days = dow_success.most_common(7)
+            peak_hour = best_hours[0] if best_hours else (12, 0)
+
+            return {
+                'best_hours': [{'hour': f'{h}:00-{h+1}:00', 'won_deals': c} for h, c in best_hours],
+                'best_days': [{'day': d, 'won_deals': c} for d, c in best_days],
+                'peak_hour': f'{peak_hour[0]}:00',
+                'total_analyzed': len(won_leads),
+                'hint': 'Present as optimal contact schedule. Recommend specific time slots for calls. Note that this is based on deal creation times of won deals.',
+            }
+
+        elif action == 'customer_journey':
+            url = f'{self.kommo_base_url}/api/v4/leads'
+            params = {'filter[statuses][0][status_id]': 142, 'limit': 250}
+            won_leads = []
+            async with session.get(url, headers=headers, params=params) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    won_leads = data.get('_embedded', {}).get('leads', [])
+
+            purl = f'{self.kommo_base_url}/api/v4/leads/pipelines'
+            async with session.get(purl, headers=headers) as resp:
+                pipelines = {}
+                if resp.status == 200:
+                    pdata = await resp.json()
+                    for p in pdata.get('_embedded', {}).get('pipelines', []):
+                        stages = [s.get('name') for s in p.get('_embedded', {}).get('statuses', []) if s.get('id') not in (142, 143)]
+                        pipelines[p.get('id')] = {'name': p.get('name'), 'stages': stages, 'stage_count': len(stages)}
+
+            cycles = [(l.get('updated_at', now) - l.get('created_at', now)) / 86400 for l in won_leads]
+            prices = [l.get('price', 0) or 0 for l in won_leads if (l.get('price') or 0) > 0]
+
+            fast_deals = [l for l in won_leads if (l.get('updated_at', now) - l.get('created_at', now)) < 14 * 86400]
+            slow_deals = [l for l in won_leads if (l.get('updated_at', now) - l.get('created_at', now)) > 60 * 86400]
+
+            return {
+                'total_won_analyzed': len(won_leads),
+                'avg_cycle_days': round(sum(cycles) / max(len(cycles), 1), 1),
+                'median_cycle_days': round(sorted(cycles)[len(cycles)//2], 1) if cycles else 0,
+                'fastest_deal_days': round(min(cycles), 1) if cycles else 0,
+                'slowest_deal_days': round(max(cycles), 1) if cycles else 0,
+                'avg_deal_value': round(sum(prices) / max(len(prices), 1)),
+                'fast_deals_count': len(fast_deals),
+                'slow_deals_count': len(slow_deals),
+                'pipelines': {pid: {'name': p['name'], 'stages': p['stages']} for pid, p in pipelines.items()},
+                'hint': 'Present as customer journey map: stages → avg time → close. Compare fast vs slow deals. Suggest where to accelerate.',
+            }
+
+        return {'error': f'Unknown smart_time action: {action}'}
+
+    async def _handle_team_planner(self, session, headers, args: dict) -> dict:
+        """Team capacity planning."""
+        import time
+        action = args.get('action')
+        days = args.get('days', 14)
+        now = int(time.time())
+
+        if action == 'capacity':
+            uurl = f'{self.kommo_base_url}/api/v4/users'
+            async with session.get(uurl, headers=headers) as resp:
+                users = []
+                if resp.status == 200:
+                    udata = await resp.json()
+                    users = udata.get('_embedded', {}).get('users', [])
+
+            url = f'{self.kommo_base_url}/api/v4/leads'
+            params = {'limit': 250}
+            async with session.get(url, headers=headers, params=params) as resp:
+                all_leads = []
+                if resp.status == 200:
+                    data = await resp.json()
+                    all_leads = data.get('_embedded', {}).get('leads', [])
+            active = [l for l in all_leads if l.get('status_id') not in (142, 143)]
+
+            turl = f'{self.kommo_base_url}/api/v4/tasks'
+            tparams = {'filter[is_completed]': 0, 'limit': 250}
+            async with session.get(turl, headers=headers, params=tparams) as resp:
+                all_tasks = []
+                if resp.status == 200:
+                    tdata = await resp.json()
+                    all_tasks = tdata.get('_embedded', {}).get('tasks', [])
+
+            capacity = []
+            for user in users:
+                uid = user.get('id')
+                u_deals = len([l for l in active if l.get('responsible_user_id') == uid])
+                u_tasks = len([t for t in all_tasks if t.get('responsible_user_id') == uid])
+                u_overdue = len([t for t in all_tasks if t.get('responsible_user_id') == uid and (t.get('complete_till') or now) < now])
+                load_score = u_deals * 3 + u_tasks * 2 + u_overdue * 5
+                max_capacity = 100
+                available = max(0, max_capacity - load_score)
+                est_new_deals = available // 3
+
+                capacity.append({
+                    'user': user.get('name'),
+                    'user_id': uid,
+                    'current_deals': u_deals,
+                    'open_tasks': u_tasks,
+                    'overdue_tasks': u_overdue,
+                    'load_score': min(load_score, 100),
+                    'available_capacity': f'{available}%',
+                    'can_take_new_deals': est_new_deals,
+                    'status': 'overloaded' if load_score > 80 else ('busy' if load_score > 50 else 'available'),
+                })
+
+            capacity.sort(key=lambda x: x['load_score'])
+            return {
+                'planning_horizon_days': days,
+                'team_capacity': capacity,
+                'total_available_slots': sum(c['can_take_new_deals'] for c in capacity),
+                'overloaded_count': len([c for c in capacity if c['status'] == 'overloaded']),
+                'hint': 'Present as capacity planning table. Color-code by status. Recommend rebalancing if some are overloaded while others are available.',
+            }
+
+        return {'error': f'Unknown team_planner action: {action}'}
+
+    async def _handle_segments(self, session, headers, args: dict) -> dict:
+        """Customer segmentation: by volume, lookalike, best manager, basket."""
+        import time
+        action = args.get('action')
+        pipeline_id = args.get('pipeline_id')
+        days = args.get('days', 90)
+        now = int(time.time())
+
+        url = f'{self.kommo_base_url}/api/v4/leads'
+        params = {'limit': 250, 'order[created_at]': 'desc', 'with': 'contacts'}
+        if pipeline_id:
+            params['filter[pipeline_id]'] = pipeline_id
+        all_leads = []
+        page = 1
+        while page <= 4:
+            params['page'] = page
+            async with session.get(url, headers=headers, params=params) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    leads = data.get('_embedded', {}).get('leads', [])
+                    all_leads.extend(leads)
+                    if len(leads) < 250:
+                        break
+                    page += 1
+                else:
+                    break
+
+        if action == 'by_volume':
+            segments = {
+                'enterprise (>500K)': {'count': 0, 'value': 0, 'won': 0},
+                'mid-market (100-500K)': {'count': 0, 'value': 0, 'won': 0},
+                'smb (10-100K)': {'count': 0, 'value': 0, 'won': 0},
+                'micro (<10K)': {'count': 0, 'value': 0, 'won': 0},
+                'no_price': {'count': 0, 'value': 0, 'won': 0},
+            }
+            for l in all_leads:
+                p = l.get('price', 0) or 0
+                if p >= 500000: seg = 'enterprise (>500K)'
+                elif p >= 100000: seg = 'mid-market (100-500K)'
+                elif p >= 10000: seg = 'smb (10-100K)'
+                elif p > 0: seg = 'micro (<10K)'
+                else: seg = 'no_price'
+                segments[seg]['count'] += 1
+                segments[seg]['value'] += p
+                if l.get('status_id') == 142:
+                    segments[seg]['won'] += 1
+
+            for seg in segments:
+                total = segments[seg]['count']
+                segments[seg]['win_rate'] = f'{segments[seg]["won"] / max(total, 1) * 100:.0f}%'
+                segments[seg]['avg_check'] = round(segments[seg]['value'] / max(total, 1))
+
+            return {
+                'segments': segments,
+                'total_leads': len(all_leads),
+                'hint': 'Present as segment breakdown. Highlight which segment has best win rate and highest value. Suggest focus areas.',
+            }
+
+        elif action == 'lookalike':
+            lead_id = args.get('lead_id')
+            if not lead_id:
+                won = [l for l in all_leads if l.get('status_id') == 142]
+                if won:
+                    won.sort(key=lambda x: x.get('price', 0) or 0, reverse=True)
+                    lead_id = won[0].get('id')
+                else:
+                    return {'error': 'No lead_id provided and no won deals to use as reference'}
+
+            ref = next((l for l in all_leads if l.get('id') == lead_id), None)
+            if not ref:
+                lurl = f'{self.kommo_base_url}/api/v4/leads/{lead_id}'
+                async with session.get(lurl, headers=headers) as resp:
+                    if resp.status == 200:
+                        ref = await resp.json()
+                    else:
+                        return {'error': f'Lead {lead_id} not found'}
+
+            ref_price = ref.get('price', 0) or 0
+            ref_pipeline = ref.get('pipeline_id')
+            active = [l for l in all_leads if l.get('status_id') not in (142, 143) and l.get('id') != lead_id]
+
+            scored = []
+            for l in active:
+                similarity = 0
+                if l.get('pipeline_id') == ref_pipeline:
+                    similarity += 30
+                price = l.get('price', 0) or 0
+                if ref_price > 0 and price > 0:
+                    ratio = min(price, ref_price) / max(price, ref_price)
+                    similarity += round(ratio * 40)
+                if l.get('_embedded', {}).get('contacts') and ref.get('_embedded', {}).get('contacts'):
+                    similarity += 10
+                if similarity >= 30:
+                    scored.append({'lead_id': l.get('id'), 'name': l.get('name'), 'price': price, 'similarity': f'{similarity}%'})
+
+            scored.sort(key=lambda x: int(x['similarity'].rstrip('%')), reverse=True)
+            return {
+                'reference_deal': {'id': lead_id, 'name': ref.get('name'), 'price': ref_price},
+                'similar_deals': scored[:10],
+                'total_found': len(scored),
+                'hint': 'Present as lookalike deals ranked by similarity. Suggest applying same strategy as the reference deal.',
+            }
+
+        elif action == 'best_manager':
+            uurl = f'{self.kommo_base_url}/api/v4/users'
+            async with session.get(uurl, headers=headers) as resp:
+                users = {}
+                if resp.status == 200:
+                    udata = await resp.json()
+                    users = {u.get('id'): u.get('name') for u in udata.get('_embedded', {}).get('users', [])}
+
+            segments = {'small': (0, 50000), 'medium': (50000, 200000), 'large': (200000, float('inf'))}
+            results = {}
+            for seg_name, (low, high) in segments.items():
+                seg_leads = [l for l in all_leads if low <= (l.get('price') or 0) < high]
+                manager_perf = {}
+                for uid, name in users.items():
+                    u_leads = [l for l in seg_leads if l.get('responsible_user_id') == uid]
+                    u_won = [l for l in u_leads if l.get('status_id') == 142]
+                    if len(u_leads) >= 3:
+                        manager_perf[name] = {
+                            'total': len(u_leads),
+                            'won': len(u_won),
+                            'win_rate': f'{len(u_won) / len(u_leads) * 100:.0f}%',
+                            'revenue': sum(l.get('price', 0) or 0 for l in u_won),
+                        }
+                if manager_perf:
+                    best = max(manager_perf.items(), key=lambda x: int(x[1]['win_rate'].rstrip('%')))
+                    results[seg_name] = {'best_manager': best[0], **best[1], 'all_managers': manager_perf}
+
+            return {
+                'segment_champions': results,
+                'hint': 'Present which manager is best for each deal size segment. Suggest routing rules based on strengths.',
+            }
+
+        elif action == 'basket':
+            catalog_url = f'{self.kommo_base_url}/api/v4/catalogs'
+            async with session.get(catalog_url, headers=headers) as resp:
+                catalogs = []
+                if resp.status == 200:
+                    cdata = await resp.json()
+                    catalogs = cdata.get('_embedded', {}).get('catalogs', [])
+
+            if not catalogs:
+                price_segments = {}
+                for l in all_leads:
+                    p = l.get('price', 0) or 0
+                    if p == 0: continue
+                    tags = [t.get('name') for t in (l.get('_embedded', {}).get('tags') or [])]
+                    tag_key = ', '.join(tags) if tags else 'no_tags'
+                    if tag_key not in price_segments:
+                        price_segments[tag_key] = {'count': 0, 'total_value': 0, 'avg_value': 0}
+                    price_segments[tag_key]['count'] += 1
+                    price_segments[tag_key]['total_value'] += p
+
+                for k in price_segments:
+                    price_segments[k]['avg_value'] = round(price_segments[k]['total_value'] / max(price_segments[k]['count'], 1))
+
+                return {
+                    'note': 'No product catalogs found. Showing deal analysis by tags instead.',
+                    'by_tags': dict(sorted(price_segments.items(), key=lambda x: x[1]['total_value'], reverse=True)[:10]),
+                    'hint': 'Present tag-based analysis as product mix proxy. Suggest creating product catalogs for better basket analysis.',
+                }
+
+            results = {}
+            for cat in catalogs[:3]:
+                cid = cat.get('id')
+                eurl = f'{self.kommo_base_url}/api/v4/catalogs/{cid}/elements'
+                async with session.get(eurl, headers=headers, params={'limit': 50}) as resp:
+                    elements = []
+                    if resp.status == 200:
+                        edata = await resp.json()
+                        elements = edata.get('_embedded', {}).get('elements', [])
+                results[cat.get('name')] = {
+                    'total_products': len(elements),
+                    'products': [{'name': e.get('name'), 'id': e.get('id')} for e in elements[:10]],
+                }
+
+            return {
+                'catalogs': results,
+                'hint': 'Present product catalog overview. For deeper basket analysis, link products to deals via catalog elements.',
+            }
+
+        return {'error': f'Unknown segments action: {action}'}
