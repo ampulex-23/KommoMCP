@@ -251,6 +251,9 @@ Use MCP Client node with HTTP transport:
   - `revenue` - Monthly revenue prediction with growth trend
   - `deal_probability` - Per-deal win probability scoring (lead_id)
   - `trends` - Weekly trend analysis: new deals, value, won/lost
+  - `plan_fact` - Plan vs fact analysis: completion %, gap, daily target, by user
+  - `cashflow` - Cash flow forecast based on pipeline
+  - `scenarios` - Best/base/worst revenue scenarios with growth levers
 
 ### Proactive Alerts
 - `kommo_alerts` - **CRM health alerts** with actions:
@@ -296,6 +299,8 @@ Use MCP Client node with HTTP transport:
 - `kommo_smart_time` - **Timing intelligence** with actions:
   - `best_call_time` - Optimal hours/days for calls based on won deals
   - `customer_journey` - Touch-to-purchase path: cycle times, fast vs slow deals
+  - `time_to_purchase` - Time-to-purchase analysis: avg/median days, fast vs slow deals
+  - `lead_response` - Lead response time by manager with ratings
 
 ### Team Planning
 - `kommo_team_planner` - **Capacity planning** with actions:
@@ -315,12 +320,16 @@ Use MCP Client node with HTTP transport:
   - `check` - Find deals needing escalation by priority
   - `notify` - Critical/high-value deal notifications
   - `sla` - SLA violation detection with breach severity
+  - `support` - Complex case identification for support escalation
+  - `auto_escalate` - Auto-escalate deals based on risk score and stage
 
 ### Reactivation
 - `kommo_reactivation` - **Client reactivation** with actions:
   - `sleeping` - Inactive clients sorted by value at risk
   - `lost_nurture` - Lost deals worth retrying with strategies
-  - `churn_prevention` - At-risk active deals with risk scoring
+  - `churn_prevention` - At-risk deal detection with risk scoring
+  - `prevent` - Preventive actions for at-risk active deals
+  - `win_back` - Win-back strategies for recently lost deals with scripts
 
 ### Contact Enrichment
 - `kommo_contact_enrichment` - **Contact data quality** with actions:
@@ -345,17 +354,20 @@ Use MCP Client node with HTTP transport:
   - `handle` - Get response scripts for specific objections
   - `library` - Browse objection categories with examples
   - `predict` - Anticipate objections for a deal based on context
+  - `best_practices` - Top performer practices and win patterns
 
 ### Deal Intelligence
 - `kommo_deal_intelligence` - **Complex deal analysis** with actions:
   - `enterprise` - High-value deal tracking with risk levels
   - `stakeholders` - Contact role mapping (Decision Maker, Influencer, User)
   - `review` - Deal health scoring with issues and strengths
+  - `pipeline_review` - Pipeline health review: issues, strengths, action items
 
 ### Contact Scoring
 - `kommo_contact_scoring` - **Contact engagement scoring** with actions:
   - `score` - Score contacts by activity, data completeness, recency
   - `value_segments` - VIP / Regular / Occasional segmentation by LTV
+  - `by_value` - Segment contacts by total deal value (premium/standard/basic)
 
 ### AI Sales Coach
 - `kommo_ai_coach` - **AI-powered sales coaching** with actions:
@@ -364,12 +376,32 @@ Use MCP Client node with HTTP transport:
   - `skill_gaps` - Team-wide gap analysis with training recommendations
   - `roleplay` - Sales role-play scenarios for practice
 
+### Smart Reply
+- `kommo_smart_reply` - **Contextual reply suggestions** with actions:
+  - `suggest` - Smart reply suggestions based on deal context and history
+  - `objection_response` - Generate responses to client objections (price, timing, competitors)
+  - `context` - Communication history context for a deal
+
+### Communication Analytics
+- `kommo_communication_analytics` - **Communication quality monitoring** with actions:
+  - `summary` - Conversation summary for a deal: stats, timeline, key topics
+  - `quality` - Communication quality metrics by manager: note rate, win rate, score
+
+### Document Generator
+- `kommo_doc_generator` - **Document generation from CRM data** with actions:
+  - `presentation` - Client presentation outline (personalized with lead_id)
+  - `proposal` - Commercial proposal structure with deal context
+  - `case_study` - Case study templates from won deals
+
 ### Extended Search
 - `kommo_search` - **Enhanced search** with filters:
   - `min_price` / `max_price` - Price range filtering
   - `created_from` / `created_to` - Date range filtering
   - `sort_by` / `sort_order` - Sort by price, created_at, updated_at
   - `top_deals` - Top N deals by amount
+  - `deal_context` - Full deal context: contacts, notes, tasks
+  - `timeline` - Chronological event timeline for a deal
+  - `graph` - Relationship graph: leads ↔ contacts ↔ companies
 
 ### Extended Tasks
 - `kommo_tasks_ext` - **Extended task management** (new actions):
