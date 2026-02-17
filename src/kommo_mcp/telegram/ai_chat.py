@@ -2478,6 +2478,18 @@ class AIChat:
         elif name == 'kommo_insights':
             return await self._handle_insights(session, headers, args)
         
+        elif name == 'kommo_manager_stats':
+            return await self._handle_manager_stats(session, headers, args)
+        
+        elif name == 'kommo_deals_ext':
+            return await self._handle_deals_ext(session, headers, args)
+        
+        elif name == 'kommo_communications':
+            return await self._handle_communications(session, headers, args)
+        
+        elif name == 'kommo_ltv':
+            return await self._handle_ltv(session, headers, args)
+        
         # Default - return info about available tools
         return {'message': f'Tool {name} not fully implemented yet', 'args': args}
     
@@ -12596,7 +12608,242 @@ class AIChat:
                 'hint': 'Present campaign/source ROI. Rank by revenue. Highlight high-efficiency sources. Suggest reallocating budget from low to high performers.',
             }
 
-        return {'message': f'Insights action {action} not implemented — use actionable or root_cause'}
+        elif action == 'top_clients':
+            # Top clients by revenue
+            limit = args.get('limit', 10)
+            contacts_url = f'{self.kommo_base_url}/api/v4/contacts'
+            async with session.get(contacts_url, headers=headers, params={'limit': 250}) as resp:
+                contacts = []
+                if resp.status == 200:
+                    cdata = await resp.json()
+                    contacts = cdata.get('_embedded', {}).get('contacts', [])
+            contact_map = {c['id']: c.get('name', f'Contact {c["id"]}') for c in contacts}
+
+            # Aggregate revenue by contact from won deals
+            client_revenue = {}
+            for l in won:
+                embedded = l.get('_embedded', {})
+                lead_contacts = embedded.get('contacts', [])
+                price = l.get('price', 0) or 0
+                for c in lead_contacts:
+                    cid = c.get('id')
+                    if cid not in client_revenue:
+                        client_revenue[cid] = {'name': contact_map.get(cid, f'Contact {cid}'), 'deals': 0, 'revenue': 0}
+                    client_revenue[cid]['deals'] += 1
+                    client_revenue[cid]['revenue'] += price
+                if not lead_contacts:
+                    key = f'lead_{l.get("id")}'
+                    client_revenue[key] = {'name': l.get('name', 'Unknown')[:40], 'deals': 1, 'revenue': price}
+
+            top = sorted(client_revenue.values(), key=lambda x: x['revenue'], reverse=True)[:limit]
+            return {
+                'top_clients': top,
+                'total_clients': len(client_revenue),
+                'hint': 'Present top clients ranked by revenue. Highlight VIPs. Suggest retention strategies for top accounts.',
+            }
+
+        elif action == 'rfm':
+            # RFM analysis: Recency, Frequency, Monetary
+            contact_rfm = {}
+            for l in all_leads:
+                embedded = l.get('_embedded', {})
+                lead_contacts = embedded.get('contacts', [])
+                price = l.get('price', 0) or 0
+                updated = l.get('updated_at', 0)
+                is_won = l.get('status_id') == 142
+                for c in lead_contacts:
+                    cid = c.get('id')
+                    if cid not in contact_rfm:
+                        contact_rfm[cid] = {'recency': 0, 'frequency': 0, 'monetary': 0}
+                    contact_rfm[cid]['frequency'] += 1
+                    contact_rfm[cid]['monetary'] += price if is_won else 0
+                    contact_rfm[cid]['recency'] = max(contact_rfm[cid]['recency'], updated)
+
+            segments = {'champions': 0, 'loyal': 0, 'at_risk': 0, 'lost': 0, 'new': 0}
+            for cid, rfm in contact_rfm.items():
+                days_since = (now - rfm['recency']) / 86400 if rfm['recency'] else 999
+                if days_since < 30 and rfm['frequency'] >= 3 and rfm['monetary'] > 0:
+                    segments['champions'] += 1
+                elif rfm['frequency'] >= 2 and rfm['monetary'] > 0:
+                    segments['loyal'] += 1
+                elif days_since > 60 and rfm['monetary'] > 0:
+                    segments['at_risk'] += 1
+                elif days_since > 90:
+                    segments['lost'] += 1
+                else:
+                    segments['new'] += 1
+
+            return {
+                'rfm_segments': segments,
+                'total_contacts': len(contact_rfm),
+                'hint': 'Present RFM segments. Champions are top priority for upsell. At-risk need re-engagement. Lost need win-back campaigns.',
+            }
+
+        elif action == 'workload':
+            # Workload distribution across users
+            uurl = f'{self.kommo_base_url}/api/v4/users'
+            async with session.get(uurl, headers=headers) as resp:
+                users = {}
+                if resp.status == 200:
+                    udata = await resp.json()
+                    users = {u.get('id'): u.get('name') for u in udata.get('_embedded', {}).get('users', [])}
+
+            by_user = {}
+            for l in active:
+                uid = l.get('responsible_user_id')
+                uname = users.get(uid, f'User {uid}')
+                if uname not in by_user:
+                    by_user[uname] = {'active': 0, 'value': 0, 'stale': 0}
+                by_user[uname]['active'] += 1
+                by_user[uname]['value'] += l.get('price', 0) or 0
+                if (now - (l.get('updated_at') or now)) / 86400 > 14:
+                    by_user[uname]['stale'] += 1
+
+            workload = sorted([{'user': k, **v} for k, v in by_user.items()], key=lambda x: x['active'], reverse=True)
+            avg_load = len(active) / max(len(by_user), 1)
+            overloaded = [w for w in workload if w['active'] > avg_load * 1.5]
+            underloaded = [w for w in workload if w['active'] < avg_load * 0.5]
+
+            return {
+                'workload': workload,
+                'avg_deals_per_user': round(avg_load, 1),
+                'overloaded': [w['user'] for w in overloaded],
+                'underloaded': [w['user'] for w in underloaded],
+                'hint': 'Present workload balance. Flag overloaded managers. Suggest redistribution if imbalanced.',
+            }
+
+        elif action == 'opportunities':
+            # Find opportunities: high-value active deals, recently active
+            high_value = sorted(
+                [l for l in active if (l.get('price', 0) or 0) > 0],
+                key=lambda x: x.get('price', 0) or 0, reverse=True
+            )[:20]
+            return {
+                'opportunities': [
+                    {
+                        'id': l['id'], 'name': l.get('name', '')[:40],
+                        'price': l.get('price', 0),
+                        'days_in_pipeline': (now - l.get('created_at', now)) // 86400,
+                        'last_update_days': (now - l.get('updated_at', now)) // 86400,
+                    }
+                    for l in high_value
+                ],
+                'total_pipeline_value': sum(l.get('price', 0) or 0 for l in active),
+                'hint': 'Present top opportunities by value. Flag stale ones. Suggest next actions for each.',
+            }
+
+        elif action == 'big_deals':
+            # Big deals analysis
+            limit = args.get('limit', 10)
+            all_with_price = [l for l in all_leads if (l.get('price', 0) or 0) > 0]
+            big = sorted(all_with_price, key=lambda x: x.get('price', 0) or 0, reverse=True)[:limit]
+            return {
+                'big_deals': [
+                    {
+                        'id': l['id'], 'name': l.get('name', '')[:40],
+                        'price': l.get('price', 0),
+                        'status': 'won' if l.get('status_id') == 142 else ('lost' if l.get('status_id') == 143 else 'active'),
+                        'created_days_ago': (now - l.get('created_at', now)) // 86400,
+                    }
+                    for l in big
+                ],
+                'hint': 'Present biggest deals. Show status and age. Active big deals need special attention.',
+            }
+
+        elif action == 'ranking':
+            # Manager ranking by various metrics
+            uurl = f'{self.kommo_base_url}/api/v4/users'
+            async with session.get(uurl, headers=headers) as resp:
+                users = {}
+                if resp.status == 200:
+                    udata = await resp.json()
+                    users = {u.get('id'): u.get('name') for u in udata.get('_embedded', {}).get('users', [])}
+
+            ranking = {}
+            for l in all_leads:
+                uid = l.get('responsible_user_id')
+                uname = users.get(uid, f'User {uid}')
+                if uname not in ranking:
+                    ranking[uname] = {'won': 0, 'lost': 0, 'active': 0, 'revenue': 0}
+                if l.get('status_id') == 142:
+                    ranking[uname]['won'] += 1
+                    ranking[uname]['revenue'] += l.get('price', 0) or 0
+                elif l.get('status_id') == 143:
+                    ranking[uname]['lost'] += 1
+                else:
+                    ranking[uname]['active'] += 1
+
+            result = []
+            for uname, stats in ranking.items():
+                wr = stats['won'] / max(stats['won'] + stats['lost'], 1)
+                result.append({'user': uname, **stats, 'win_rate': f'{wr:.0%}'})
+            result.sort(key=lambda x: x['revenue'], reverse=True)
+
+            return {
+                'ranking': result,
+                'hint': 'Present manager ranking. Highlight top performers. Identify who needs coaching.',
+            }
+
+        elif action == 'compare':
+            # Compare current period vs previous
+            prev_cutoff = cutoff - days * 86400
+            current = [l for l in all_leads if l.get('created_at', 0) >= cutoff]
+            previous = [l for l in all_leads if prev_cutoff <= l.get('created_at', 0) < cutoff]
+
+            def period_stats(leads_list):
+                w = [l for l in leads_list if l.get('status_id') == 142]
+                lo = [l for l in leads_list if l.get('status_id') == 143]
+                return {
+                    'total': len(leads_list),
+                    'won': len(w),
+                    'lost': len(lo),
+                    'revenue': sum(l.get('price', 0) or 0 for l in w),
+                    'pipeline_value': sum(l.get('price', 0) or 0 for l in leads_list),
+                    'win_rate': f'{len(w) / max(len(w) + len(lo), 1):.0%}',
+                }
+
+            curr_stats = period_stats(current)
+            prev_stats = period_stats(previous)
+
+            def delta(curr, prev):
+                if prev == 0:
+                    return '+∞' if curr > 0 else '0%'
+                pct = ((curr - prev) / prev) * 100
+                return f'{pct:+.0f}%'
+
+            return {
+                'current_period': curr_stats,
+                'previous_period': prev_stats,
+                'changes': {
+                    'leads': delta(curr_stats['total'], prev_stats['total']),
+                    'won': delta(curr_stats['won'], prev_stats['won']),
+                    'revenue': delta(curr_stats['revenue'], prev_stats['revenue']),
+                },
+                'hint': 'Present period comparison. Highlight improvements and declines. Suggest actions for declining metrics.',
+            }
+
+        elif action == 'yoy':
+            # Year-over-year comparison
+            from datetime import datetime as dt
+            this_year = dt.now().year
+            by_year = {}
+            for l in all_leads:
+                created = l.get('created_at', 0)
+                if created:
+                    year = dt.fromtimestamp(created).year
+                    if year not in by_year:
+                        by_year[year] = {'total': 0, 'won': 0, 'revenue': 0}
+                    by_year[year]['total'] += 1
+                    if l.get('status_id') == 142:
+                        by_year[year]['won'] += 1
+                        by_year[year]['revenue'] += l.get('price', 0) or 0
+
+            return {
+                'yoy': dict(sorted(by_year.items())),
+                'hint': 'Present year-over-year trends. Show growth or decline in key metrics.',
+            }
+
+        return {'error': f'Unknown insights action: {action}'}
 
     async def _handle_activity(self, session, headers, args: dict) -> dict:
         """Activity analytics: feed, productivity, KPI, recommendations, correlations."""
@@ -12793,3 +13040,613 @@ class AIChat:
             }
 
         return {'error': f'Unknown activity action: {action}'}
+
+    async def _handle_manager_stats(self, session, headers, args: dict) -> dict:
+        """Manager performance statistics: deals, revenue, conversion, tasks."""
+        import time as _time
+        from datetime import datetime, timedelta
+
+        user_id = args.get('user_id')
+        date_from_str = args.get('date_from')
+        date_to_str = args.get('date_to')
+
+        # Parse dates
+        if date_from_str:
+            try:
+                date_from = int(datetime.strptime(date_from_str, '%Y-%m-%d').timestamp())
+            except Exception:
+                date_from = int((datetime.now() - timedelta(days=30)).timestamp())
+        else:
+            date_from = int((datetime.now() - timedelta(days=30)).timestamp())
+
+        if date_to_str:
+            try:
+                date_to = int(datetime.strptime(date_to_str, '%Y-%m-%d').timestamp())
+            except Exception:
+                date_to = int(_time.time())
+        else:
+            date_to = int(_time.time())
+
+        # Get users
+        users_url = f'{self.kommo_base_url}/api/v4/users'
+        async with session.get(users_url, headers=headers) as resp:
+            if resp.status != 200:
+                return {'error': f'Failed to get users: {resp.status}'}
+            users_data = await resp.json()
+            users = users_data.get('_embedded', {}).get('users', [])
+
+        if user_id:
+            users = [u for u in users if u.get('id') == user_id]
+
+        if not users:
+            return {'error': 'No users found'}
+
+        managers = []
+        for user in users[:15]:
+            uid = user.get('id')
+            uname = user.get('name', 'Unknown')
+
+            # Get leads for this user in date range
+            leads_url = f'{self.kommo_base_url}/api/v4/leads'
+            params = {
+                'filter[responsible_user_id]': uid,
+                'filter[created_at][from]': date_from,
+                'filter[created_at][to]': date_to,
+                'limit': 250,
+            }
+            async with session.get(leads_url, headers=headers, params=params) as resp:
+                if resp.status == 200:
+                    leads_data = await resp.json()
+                    leads = leads_data.get('_embedded', {}).get('leads', [])
+                elif resp.status == 204:
+                    leads = []
+                else:
+                    leads = []
+
+            won = [l for l in leads if l.get('status_id') == 142]
+            lost = [l for l in leads if l.get('status_id') == 143]
+            active = [l for l in leads if l.get('status_id') not in (142, 143)]
+            total_revenue = sum(l.get('price', 0) or 0 for l in leads)
+            won_revenue = sum(l.get('price', 0) or 0 for l in won)
+
+            # Get tasks for this user
+            tasks_url = f'{self.kommo_base_url}/api/v4/tasks'
+            tasks_params = {'filter[responsible_user_id]': uid, 'limit': 250}
+            async with session.get(tasks_url, headers=headers, params=tasks_params) as resp:
+                if resp.status == 200:
+                    tasks_data = await resp.json()
+                    tasks = tasks_data.get('_embedded', {}).get('tasks', [])
+                else:
+                    tasks = []
+
+            completed_tasks = [t for t in tasks if t.get('is_completed')]
+            overdue_tasks = [t for t in tasks if not t.get('is_completed') and t.get('complete_till', 0) < int(_time.time())]
+
+            conversion = len(won) / max(len(won) + len(lost), 1)
+
+            managers.append({
+                'user': uname,
+                'user_id': uid,
+                'total_leads': len(leads),
+                'active_leads': len(active),
+                'won': len(won),
+                'lost': len(lost),
+                'conversion_rate': f'{conversion:.1%}',
+                'total_revenue': total_revenue,
+                'won_revenue': won_revenue,
+                'avg_deal': won_revenue // max(len(won), 1),
+                'total_tasks': len(tasks),
+                'completed_tasks': len(completed_tasks),
+                'overdue_tasks': len(overdue_tasks),
+            })
+
+        managers.sort(key=lambda x: x['won_revenue'], reverse=True)
+
+        return {
+            'period': f'{date_from_str or "30d ago"} — {date_to_str or "today"}',
+            'managers': managers,
+            'total_managers': len(managers),
+            'summary': {
+                'total_leads': sum(m['total_leads'] for m in managers),
+                'total_won': sum(m['won'] for m in managers),
+                'total_revenue': sum(m['won_revenue'] for m in managers),
+            },
+        }
+
+    async def _handle_deals_ext(self, session, headers, args: dict) -> dict:
+        """Extended deal management: by_stage, health, velocity, at_risk, by_user."""
+        import time as _time
+
+        action = args.get('action', 'by_stage')
+        pipeline_id = args.get('pipeline_id')
+        days = args.get('days', 30)
+        limit = args.get('limit', 20)
+
+        # Get leads
+        leads_url = f'{self.kommo_base_url}/api/v4/leads'
+        params = {'limit': 250}
+        if pipeline_id:
+            params['filter[pipeline_id]'] = pipeline_id
+
+        async with session.get(leads_url, headers=headers, params=params) as resp:
+            if resp.status == 200:
+                leads_data = await resp.json()
+                leads = leads_data.get('_embedded', {}).get('leads', [])
+            elif resp.status == 204:
+                return {'deals': [], 'total': 0, 'message': 'No deals found'}
+            else:
+                return {'error': f'API error: {resp.status}'}
+
+        now = int(_time.time())
+
+        if action == 'by_stage':
+            # Get pipeline structure for stage names
+            pipelines_url = f'{self.kommo_base_url}/api/v4/leads/pipelines'
+            async with session.get(pipelines_url, headers=headers) as resp:
+                if resp.status == 200:
+                    p_data = await resp.json()
+                    all_pipelines = p_data.get('_embedded', {}).get('pipelines', [])
+                else:
+                    all_pipelines = []
+
+            status_map = {}
+            for p in all_pipelines:
+                for s in p.get('_embedded', {}).get('statuses', []):
+                    status_map[s['id']] = {'name': s['name'], 'pipeline': p['name']}
+
+            by_stage = {}
+            for lead in leads:
+                sid = lead.get('status_id')
+                info = status_map.get(sid, {'name': str(sid), 'pipeline': 'Unknown'})
+                key = f"{info['pipeline']} / {info['name']}"
+                if key not in by_stage:
+                    by_stage[key] = {'count': 0, 'revenue': 0, 'deals': []}
+                by_stage[key]['count'] += 1
+                by_stage[key]['revenue'] += lead.get('price', 0) or 0
+                if len(by_stage[key]['deals']) < 3:
+                    by_stage[key]['deals'].append({
+                        'id': lead.get('id'),
+                        'name': lead.get('name', '')[:40],
+                        'price': lead.get('price', 0),
+                    })
+
+            return {'by_stage': by_stage, 'total_deals': len(leads)}
+
+        elif action == 'health':
+            # Deal health: stale, no tasks, no contacts
+            stale_threshold = now - (days * 86400)
+            active = [l for l in leads if l.get('status_id') not in (142, 143)]
+            stale = [l for l in active if l.get('updated_at', 0) < stale_threshold]
+            no_price = [l for l in active if not l.get('price')]
+
+            return {
+                'total_active': len(active),
+                'stale_deals': len(stale),
+                'stale_threshold_days': days,
+                'no_price_deals': len(no_price),
+                'health_score': f'{max(0, 100 - len(stale) * 5 - len(no_price) * 3)}/100',
+                'stale_list': [
+                    {'id': l['id'], 'name': l.get('name', '')[:40], 'days_stale': (now - l.get('updated_at', now)) // 86400, 'price': l.get('price', 0)}
+                    for l in sorted(stale, key=lambda x: x.get('updated_at', 0))[:limit]
+                ],
+            }
+
+        elif action == 'velocity':
+            # Deal velocity: time from creation to close
+            won = [l for l in leads if l.get('status_id') == 142]
+            if not won:
+                return {'message': 'No won deals to calculate velocity', 'total_deals': len(leads)}
+
+            velocities = []
+            for l in won:
+                created = l.get('created_at', 0)
+                closed = l.get('closed_at') or l.get('updated_at', 0)
+                if created and closed:
+                    days_to_close = max(1, (closed - created) // 86400)
+                    velocities.append({
+                        'id': l['id'],
+                        'name': l.get('name', '')[:40],
+                        'price': l.get('price', 0),
+                        'days_to_close': days_to_close,
+                    })
+
+            if velocities:
+                avg_days = sum(v['days_to_close'] for v in velocities) / len(velocities)
+                fastest = sorted(velocities, key=lambda x: x['days_to_close'])[:5]
+                slowest = sorted(velocities, key=lambda x: -x['days_to_close'])[:5]
+            else:
+                avg_days = 0
+                fastest = []
+                slowest = []
+
+            return {
+                'avg_days_to_close': round(avg_days, 1),
+                'total_won': len(won),
+                'fastest': fastest,
+                'slowest': slowest,
+            }
+
+        elif action == 'at_risk':
+            # At-risk deals: stale, high value, no recent activity
+            active = [l for l in leads if l.get('status_id') not in (142, 143)]
+            risk_threshold = now - (days * 86400)
+
+            at_risk = []
+            for l in active:
+                risk_score = 0
+                reasons = []
+                if l.get('updated_at', 0) < risk_threshold:
+                    risk_score += 40
+                    reasons.append(f'No update for {(now - l.get("updated_at", now)) // 86400}d')
+                price = l.get('price', 0) or 0
+                if price > 100000:
+                    risk_score += 20
+                    reasons.append('High value deal')
+                if not l.get('responsible_user_id'):
+                    risk_score += 30
+                    reasons.append('No responsible user')
+
+                if risk_score >= 40:
+                    at_risk.append({
+                        'id': l['id'],
+                        'name': l.get('name', '')[:40],
+                        'price': price,
+                        'risk_score': risk_score,
+                        'reasons': reasons,
+                    })
+
+            at_risk.sort(key=lambda x: x['risk_score'], reverse=True)
+            return {'at_risk': at_risk[:limit], 'total_at_risk': len(at_risk), 'total_active': len(active)}
+
+        elif action == 'by_user':
+            # Deals grouped by responsible user
+            users_url = f'{self.kommo_base_url}/api/v4/users'
+            async with session.get(users_url, headers=headers) as resp:
+                if resp.status == 200:
+                    u_data = await resp.json()
+                    all_users = {u['id']: u['name'] for u in u_data.get('_embedded', {}).get('users', [])}
+                else:
+                    all_users = {}
+
+            by_user = {}
+            for l in leads:
+                uid = l.get('responsible_user_id')
+                uname = all_users.get(uid, f'User {uid}')
+                if uname not in by_user:
+                    by_user[uname] = {'count': 0, 'revenue': 0, 'won': 0, 'active': 0}
+                by_user[uname]['count'] += 1
+                by_user[uname]['revenue'] += l.get('price', 0) or 0
+                if l.get('status_id') == 142:
+                    by_user[uname]['won'] += 1
+                elif l.get('status_id') not in (142, 143):
+                    by_user[uname]['active'] += 1
+
+            return {'by_user': by_user, 'total_deals': len(leads)}
+
+        return {'error': f'Unknown deals_ext action: {action}'}
+
+    async def _handle_communications(self, session, headers, args: dict) -> dict:
+        """Communication history: history, calls, timeline, last_contact, by_user, summary, no_contact."""
+        import time as _time
+
+        action = args.get('action', 'history')
+        entity_type = args.get('entity_type', 'leads')
+        entity_id = args.get('entity_id')
+        days = args.get('days', 30)
+
+        if action == 'history' and entity_id:
+            # Get notes/events for entity
+            url = f'{self.kommo_base_url}/api/v4/{entity_type}/{entity_id}/notes'
+            async with session.get(url, headers=headers, params={'limit': 50}) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    notes = data.get('_embedded', {}).get('notes', [])
+                    return {
+                        'entity_id': entity_id,
+                        'entity_type': entity_type,
+                        'communications': [
+                            {
+                                'id': n.get('id'),
+                                'type': n.get('note_type'),
+                                'text': (n.get('params', {}).get('text', '') or '')[:200],
+                                'created_at': n.get('created_at'),
+                                'created_by': n.get('created_by'),
+                            }
+                            for n in notes
+                        ],
+                        'total': len(notes),
+                    }
+                elif resp.status == 204:
+                    return {'entity_id': entity_id, 'communications': [], 'total': 0}
+                return {'error': f'API error: {resp.status}'}
+
+        elif action == 'calls':
+            # Get call events
+            url = f'{self.kommo_base_url}/api/v4/events'
+            params = {'filter[type]': 'incoming_call,outgoing_call', 'limit': 50}
+            if entity_id:
+                params['filter[entity_id]'] = entity_id
+
+            async with session.get(url, headers=headers, params=params) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    events = data.get('_embedded', {}).get('events', [])
+                    return {
+                        'calls': [
+                            {
+                                'id': e.get('id'),
+                                'type': e.get('type'),
+                                'entity_id': e.get('entity_id'),
+                                'created_at': e.get('created_at'),
+                                'created_by': e.get('created_by'),
+                            }
+                            for e in events
+                        ],
+                        'total': len(events),
+                    }
+                elif resp.status == 204:
+                    return {'calls': [], 'total': 0}
+                return {'error': f'API error: {resp.status}'}
+
+        elif action == 'timeline' and entity_id:
+            # Get all events for entity
+            url = f'{self.kommo_base_url}/api/v4/events'
+            params = {'filter[entity_id]': entity_id, 'filter[entity][]': entity_type.rstrip('s'), 'limit': 50}
+
+            async with session.get(url, headers=headers, params=params) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    events = data.get('_embedded', {}).get('events', [])
+                    return {
+                        'entity_id': entity_id,
+                        'timeline': [
+                            {
+                                'type': e.get('type'),
+                                'created_at': e.get('created_at'),
+                                'created_by': e.get('created_by'),
+                                'value_after': str(e.get('value_after', ''))[:100],
+                            }
+                            for e in events
+                        ],
+                        'total': len(events),
+                    }
+                elif resp.status == 204:
+                    return {'entity_id': entity_id, 'timeline': [], 'total': 0}
+                return {'error': f'API error: {resp.status}'}
+
+        elif action == 'last_contact':
+            # Find entities with most recent communication
+            url = f'{self.kommo_base_url}/api/v4/leads'
+            params = {'limit': 250, 'order[updated_at]': 'desc'}
+            async with session.get(url, headers=headers, params=params) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    leads = data.get('_embedded', {}).get('leads', [])
+                    return {
+                        'recent_contacts': [
+                            {
+                                'id': l['id'],
+                                'name': l.get('name', '')[:40],
+                                'updated_at': l.get('updated_at'),
+                                'days_ago': (int(_time.time()) - l.get('updated_at', 0)) // 86400,
+                            }
+                            for l in leads[:20]
+                        ],
+                    }
+                return {'error': f'API error: {resp.status}'}
+
+        elif action == 'by_user':
+            # Communication stats by user
+            users_url = f'{self.kommo_base_url}/api/v4/users'
+            async with session.get(users_url, headers=headers) as resp:
+                if resp.status != 200:
+                    return {'error': f'Failed to get users: {resp.status}'}
+                users = (await resp.json()).get('_embedded', {}).get('users', [])
+
+            result = []
+            for u in users[:10]:
+                uid = u['id']
+                events_url = f'{self.kommo_base_url}/api/v4/events'
+                params = {'filter[created_by]': uid, 'limit': 1}
+                async with session.get(events_url, headers=headers, params=params) as resp:
+                    if resp.status == 200:
+                        ev_data = await resp.json()
+                        events = ev_data.get('_embedded', {}).get('events', [])
+                        last_event = events[0].get('created_at') if events else None
+                    else:
+                        last_event = None
+
+                result.append({
+                    'user': u.get('name'),
+                    'user_id': uid,
+                    'last_activity': last_event,
+                })
+            return {'by_user': result}
+
+        elif action == 'summary':
+            # Communication summary for entity
+            if not entity_id:
+                return {'error': 'entity_id required for summary'}
+            url = f'{self.kommo_base_url}/api/v4/{entity_type}/{entity_id}/notes'
+            async with session.get(url, headers=headers, params={'limit': 100}) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    notes = data.get('_embedded', {}).get('notes', [])
+                    by_type = {}
+                    for n in notes:
+                        ntype = n.get('note_type', 'unknown')
+                        by_type[ntype] = by_type.get(ntype, 0) + 1
+                    return {
+                        'entity_id': entity_id,
+                        'total_communications': len(notes),
+                        'by_type': by_type,
+                        'first_contact': notes[-1].get('created_at') if notes else None,
+                        'last_contact': notes[0].get('created_at') if notes else None,
+                    }
+                elif resp.status == 204:
+                    return {'entity_id': entity_id, 'total_communications': 0, 'by_type': {}}
+                return {'error': f'API error: {resp.status}'}
+
+        elif action == 'no_contact':
+            # Find leads with no recent communication
+            now = int(_time.time())
+            threshold = now - (days * 86400)
+            url = f'{self.kommo_base_url}/api/v4/leads'
+            params = {'limit': 250}
+            async with session.get(url, headers=headers, params=params) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    leads = data.get('_embedded', {}).get('leads', [])
+                    active = [l for l in leads if l.get('status_id') not in (142, 143)]
+                    no_contact = [l for l in active if l.get('updated_at', 0) < threshold]
+                    return {
+                        'no_contact_leads': [
+                            {
+                                'id': l['id'],
+                                'name': l.get('name', '')[:40],
+                                'price': l.get('price', 0),
+                                'days_since_update': (now - l.get('updated_at', now)) // 86400,
+                            }
+                            for l in sorted(no_contact, key=lambda x: x.get('updated_at', 0))[:20]
+                        ],
+                        'total_no_contact': len(no_contact),
+                        'threshold_days': days,
+                    }
+                return {'error': f'API error: {resp.status}'}
+
+        return {'error': f'Unknown communications action: {action}'}
+
+    async def _handle_ltv(self, session, headers, args: dict) -> dict:
+        """Customer LTV analytics: by_source, by_pipeline, cohorts, segments."""
+        import time as _time
+        from datetime import datetime, timedelta
+
+        action = args.get('action', 'by_pipeline')
+        days = args.get('days', 180)
+
+        # Get all leads
+        leads_url = f'{self.kommo_base_url}/api/v4/leads'
+        params = {'limit': 250}
+        all_leads = []
+
+        async with session.get(leads_url, headers=headers, params=params) as resp:
+            if resp.status == 200:
+                data = await resp.json()
+                all_leads = data.get('_embedded', {}).get('leads', [])
+            elif resp.status == 204:
+                return {'message': 'No leads found for LTV analysis'}
+            else:
+                return {'error': f'API error: {resp.status}'}
+
+        won_leads = [l for l in all_leads if l.get('status_id') == 142]
+
+        if action == 'by_pipeline':
+            # Get pipelines
+            pipelines_url = f'{self.kommo_base_url}/api/v4/leads/pipelines'
+            async with session.get(pipelines_url, headers=headers) as resp:
+                if resp.status == 200:
+                    p_data = await resp.json()
+                    pipeline_map = {p['id']: p['name'] for p in p_data.get('_embedded', {}).get('pipelines', [])}
+                else:
+                    pipeline_map = {}
+
+            by_pipeline = {}
+            for l in won_leads:
+                pid = l.get('pipeline_id')
+                pname = pipeline_map.get(pid, f'Pipeline {pid}')
+                if pname not in by_pipeline:
+                    by_pipeline[pname] = {'deals': 0, 'revenue': 0, 'prices': []}
+                by_pipeline[pname]['deals'] += 1
+                price = l.get('price', 0) or 0
+                by_pipeline[pname]['revenue'] += price
+                by_pipeline[pname]['prices'].append(price)
+
+            result = {}
+            for pname, data in by_pipeline.items():
+                prices = data['prices']
+                result[pname] = {
+                    'won_deals': data['deals'],
+                    'total_revenue': data['revenue'],
+                    'avg_deal': data['revenue'] // max(data['deals'], 1),
+                    'median_deal': sorted(prices)[len(prices) // 2] if prices else 0,
+                    'max_deal': max(prices) if prices else 0,
+                }
+
+            return {'ltv_by_pipeline': result, 'total_won': len(won_leads)}
+
+        elif action == 'by_source':
+            # Group won deals by source
+            by_source = {}
+            for l in won_leads:
+                source = None
+                # Try to get source from custom fields or tags
+                tags = l.get('_embedded', {}).get('tags', [])
+                source = tags[0].get('name') if tags else 'Unknown'
+                if source not in by_source:
+                    by_source[source] = {'deals': 0, 'revenue': 0}
+                by_source[source]['deals'] += 1
+                by_source[source]['revenue'] += l.get('price', 0) or 0
+
+            for src in by_source:
+                by_source[src]['avg_deal'] = by_source[src]['revenue'] // max(by_source[src]['deals'], 1)
+
+            return {'ltv_by_source': by_source, 'total_won': len(won_leads)}
+
+        elif action == 'cohorts':
+            # Group by creation month
+            cohorts = {}
+            for l in won_leads:
+                created = l.get('created_at', 0)
+                if created:
+                    month = datetime.fromtimestamp(created).strftime('%Y-%m')
+                else:
+                    month = 'Unknown'
+                if month not in cohorts:
+                    cohorts[month] = {'deals': 0, 'revenue': 0}
+                cohorts[month]['deals'] += 1
+                cohorts[month]['revenue'] += l.get('price', 0) or 0
+
+            for m in cohorts:
+                cohorts[m]['avg_deal'] = cohorts[m]['revenue'] // max(cohorts[m]['deals'], 1)
+
+            return {
+                'cohorts': dict(sorted(cohorts.items())),
+                'total_won': len(won_leads),
+                'total_revenue': sum(c['revenue'] for c in cohorts.values()),
+            }
+
+        elif action == 'segments':
+            # Segment by deal value
+            if not won_leads:
+                return {'message': 'No won deals for segmentation'}
+
+            prices = [l.get('price', 0) or 0 for l in won_leads]
+            prices.sort()
+            median = prices[len(prices) // 2]
+
+            segments = {
+                'high_value': {'threshold': median * 2, 'deals': 0, 'revenue': 0},
+                'medium_value': {'threshold': median, 'deals': 0, 'revenue': 0},
+                'low_value': {'threshold': 0, 'deals': 0, 'revenue': 0},
+            }
+
+            for l in won_leads:
+                price = l.get('price', 0) or 0
+                if price >= median * 2:
+                    segments['high_value']['deals'] += 1
+                    segments['high_value']['revenue'] += price
+                elif price >= median:
+                    segments['medium_value']['deals'] += 1
+                    segments['medium_value']['revenue'] += price
+                else:
+                    segments['low_value']['deals'] += 1
+                    segments['low_value']['revenue'] += price
+
+            return {
+                'segments': segments,
+                'total_won': len(won_leads),
+                'median_deal': median,
+                'total_revenue': sum(s['revenue'] for s in segments.values()),
+            }
+
+        return {'error': f'Unknown LTV action: {action}'}
