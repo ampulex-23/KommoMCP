@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KommoMCP — Возможности</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    background: linear-gradient(135deg, #0f0c29 0%, #302b63 50%, #24243e 100%);
+    color: #e8e6f0;
+    min-height: 100vh;
+    padding: 48px 32px;
+  }
+
+  .container {
+    max-width: 1200px;
+    margin: 0 auto;
+  }
+
+  .header {
+    text-align: center;
+    margin-bottom: 48px;
+  }
+
+  .header h1 {
+    font-size: 42px;
+    font-weight: 800;
+    color: #fff;
+    margin-bottom: 8px;
+    letter-spacing: -0.5px;
+  }
+
+  .header h1 span {
+    background: linear-gradient(90deg, #7c5cfc, #00d4ff);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  .header .subtitle {
+    font-size: 16px;
+    color: #9d97b8;
+    font-weight: 500;
+  }
+
+  .header .subtitle strong {
+    color: #b8b0d8;
+    font-weight: 700;
+  }
+
+  .badge-row {
+    display: flex;
+    justify-content: center;
+    gap: 12px;
+    margin-top: 16px;
+    flex-wrap: wrap;
+  }
+
+  .badge {
+    background: rgba(124, 92, 252, 0.15);
+    border: 1px solid rgba(124, 92, 252, 0.3);
+    border-radius: 20px;
+    padding: 6px 16px;
+    font-size: 13px;
+    font-weight: 600;
+    color: #b8a5ff;
+  }
+
+  .badge.green {
+    background: rgba(0, 212, 170, 0.12);
+    border-color: rgba(0, 212, 170, 0.3);
+    color: #6ee7c0;
+  }
+
+  .badge.blue {
+    background: rgba(0, 150, 255, 0.12);
+    border-color: rgba(0, 150, 255, 0.3);
+    color: #7cc4ff;
+  }
+
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 20px;
+  }
+
+  @media (max-width: 900px) {
+    .grid { grid-template-columns: repeat(2, 1fr); }
+  }
+
+  @media (max-width: 600px) {
+    .grid { grid-template-columns: 1fr; }
+    body { padding: 24px 16px; }
+    .header h1 { font-size: 28px; }
+  }
+
+  .card {
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 16px;
+    padding: 24px;
+    transition: transform 0.2s, border-color 0.2s, background 0.2s;
+  }
+
+  .card:hover {
+    transform: translateY(-2px);
+    border-color: rgba(124, 92, 252, 0.3);
+    background: rgba(255, 255, 255, 0.06);
+  }
+
+  .card-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 14px;
+  }
+
+  .card-icon {
+    font-size: 22px;
+    width: 36px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 10px;
+    flex-shrink: 0;
+  }
+
+  .card-title {
+    font-size: 15px;
+    font-weight: 700;
+    color: #fff;
+  }
+
+  .card ul {
+    list-style: none;
+    padding: 0;
+  }
+
+  .card li {
+    font-size: 13px;
+    color: #b0aac4;
+    padding: 3px 0;
+    padding-left: 16px;
+    position: relative;
+    line-height: 1.5;
+  }
+
+  .card li::before {
+    content: '—';
+    position: absolute;
+    left: 0;
+    color: #6c5ce7;
+  }
+
+  .footer {
+    text-align: center;
+    margin-top: 48px;
+    padding-top: 32px;
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+  }
+
+  .footer p {
+    font-size: 13px;
+    color: #6b6488;
+  }
+
+  .footer .highlight {
+    color: #9d8cff;
+    font-weight: 600;
+  }
+
+  /* Card accent colors */
+  .card[data-cat="pipeline"] .card-icon { background: rgba(88, 166, 255, 0.15); }
+  .card[data-cat="analytics"] .card-icon { background: rgba(255, 159, 67, 0.15); }
+  .card[data-cat="deals"] .card-icon { background: rgba(255, 71, 87, 0.15); }
+  .card[data-cat="contacts"] .card-icon { background: rgba(46, 213, 115, 0.15); }
+  .card[data-cat="ai"] .card-icon { background: rgba(190, 120, 255, 0.15); }
+  .card[data-cat="search"] .card-icon { background: rgba(255, 234, 100, 0.15); }
+  .card[data-cat="automation"] .card-icon { background: rgba(255, 130, 67, 0.15); }
+  .card[data-cat="team"] .card-icon { background: rgba(100, 149, 237, 0.15); }
+  .card[data-cat="setup"] .card-icon { background: rgba(200, 200, 210, 0.12); }
+  .card[data-cat="comms"] .card-icon { background: rgba(0, 210, 211, 0.15); }
+  .card[data-cat="templates"] .card-icon { background: rgba(0, 206, 209, 0.15); }
+  .card[data-cat="utility"] .card-icon { background: rgba(160, 160, 180, 0.12); }
+
+  .vs-banner {
+    margin-top: 32px;
+    background: rgba(124, 92, 252, 0.08);
+    border: 1px solid rgba(124, 92, 252, 0.2);
+    border-radius: 16px;
+    padding: 24px 32px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 16px;
+  }
+
+  .vs-banner .left {
+    font-size: 15px;
+    font-weight: 600;
+    color: #d4ccff;
+  }
+
+  .vs-banner .right {
+    display: flex;
+    gap: 32px;
+    flex-wrap: wrap;
+  }
+
+  .vs-stat {
+    text-align: center;
+  }
+
+  .vs-stat .num {
+    font-size: 28px;
+    font-weight: 800;
+    background: linear-gradient(90deg, #7c5cfc, #00d4ff);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  .vs-stat .label {
+    font-size: 11px;
+    color: #8b84a8;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-top: 2px;
+  }
+</style>
+</head>
+<body>
+
+<div class="container">
+
+  <div class="header">
+    <h1>Возможности <span>KommoMCP</span></h1>
+    <p class="subtitle">AI-ассистент для Kommo CRM — <strong>54 инструмента</strong>, <strong>261 действие</strong></p>
+    <div class="badge-row">
+      <span class="badge">🧠 AI-планировщик</span>
+      <span class="badge green">⚡ Ответ &lt;2ms</span>
+      <span class="badge blue">🔒 Multi-tenant SaaS</span>
+    </div>
+  </div>
+
+  <div class="grid">
+
+    <div class="card" data-cat="pipeline">
+      <div class="card-header">
+        <div class="card-icon">📊</div>
+        <div class="card-title">Воронки и аналитика</div>
+      </div>
+      <ul>
+        <li>Список воронок и этапов</li>
+        <li>Конверсия по этапам</li>
+        <li>Выручка по стадиям</li>
+        <li>Здоровье воронки</li>
+        <li>Покрытие pipeline (coverage)</li>
+        <li>Bottleneck-анализ</li>
+      </ul>
+    </div>
+
+    <div class="card" data-cat="analytics">
+      <div class="card-header">
+        <div class="card-icon">📈</div>
+        <div class="card-title">Бизнес-инсайты</div>
+      </div>
+      <ul>
+        <li>Топ-клиенты по выручке</li>
+        <li>RFM-сегментация</li>
+        <li>Нагрузка по менеджерам</li>
+        <li>Крупные сделки</li>
+        <li>Сравнение периодов (MoM/YoY)</li>
+        <li>ROI по источникам</li>
+      </ul>
+    </div>
+
+    <div class="card" data-cat="deals">
+      <div class="card-header">
+        <div class="card-icon">💼</div>
+        <div class="card-title">Управление сделками</div>
+      </div>
+      <ul>
+        <li>Сделки по этапам / менеджерам</li>
+        <li>Скорость закрытия (velocity)</li>
+        <li>Сделки в зоне риска</li>
+        <li>Здоровье сделок (health)</li>
+        <li>Перемещение, клонирование</li>
+        <li>Массовые операции</li>
+      </ul>
+    </div>
+
+    <div class="card" data-cat="contacts">
+      <div class="card-header">
+        <div class="card-icon">👥</div>
+        <div class="card-title">Контакты и компании</div>
+      </div>
+      <ul>
+        <li>Поиск и фильтрация</li>
+        <li>Контакты без сделок</li>
+        <li>Обогащение данных</li>
+        <li>Скоринг контактов</li>
+        <li>Поиск дубликатов</li>
+        <li>Связи между сущностями</li>
+      </ul>
+    </div>
+
+    <div class="card" data-cat="ai">
+      <div class="card-header">
+        <div class="card-icon">🧠</div>
+        <div class="card-title">AI-советник</div>
+      </div>
+      <ul>
+        <li>Следующее действие по сделке</li>
+        <li>Квалификация (BANT)</li>
+        <li>Стратегия закрытия</li>
+        <li>Работа с возражениями</li>
+        <li>Стиль коммуникации</li>
+        <li>Подготовка к встрече</li>
+      </ul>
+    </div>
+
+    <div class="card" data-cat="comms">
+      <div class="card-header">
+        <div class="card-icon">💬</div>
+        <div class="card-title">Коммуникации</div>
+      </div>
+      <ul>
+        <li>История общения по сделке</li>
+        <li>Звонки и таймлайн</li>
+        <li>Анализ тональности</li>
+        <li>Сделки без контакта</li>
+        <li>Smart Reply (AI-ответы)</li>
+        <li>Аналитика коммуникаций</li>
+      </ul>
+    </div>
+
+    <div class="card" data-cat="analytics">
+      <div class="card-header">
+        <div class="card-icon">👤</div>
+        <div class="card-title">Менеджеры</div>
+      </div>
+      <ul>
+        <li>Статистика по менеджерам</li>
+        <li>Конверсия и выручка</li>
+        <li>Рейтинг и сравнение</li>
+        <li>Геймификация (leaderboard)</li>
+        <li>AI-коучинг навыков</li>
+        <li>Планирование команды</li>
+      </ul>
+    </div>
+
+    <div class="card" data-cat="search">
+      <div class="card-header">
+        <div class="card-icon">🔍</div>
+        <div class="card-title">Умный поиск</div>
+      </div>
+      <ul>
+        <li>Поиск на естественном языке</li>
+        <li>Фильтры по цене / дате / воронке</li>
+        <li>Похожие сделки</li>
+        <li>Связанные сущности (граф)</li>
+        <li>Причины отказов</li>
+        <li>Аудит-трейл по сделке</li>
+      </ul>
+    </div>
+
+    <div class="card" data-cat="automation">
+      <div class="card-header">
+        <div class="card-icon">⚡</div>
+        <div class="card-title">Автоматизация</div>
+      </div>
+      <ul>
+        <li>Эскалация просроченных</li>
+        <li>Реактивация спящих сделок</li>
+        <li>Алерты и уведомления</li>
+        <li>Обнаружение аномалий</li>
+        <li>Умное время контакта</li>
+        <li>Утренний дайджест</li>
+      </ul>
+    </div>
+
+    <div class="card" data-cat="analytics">
+      <div class="card-header">
+        <div class="card-icon">🎯</div>
+        <div class="card-title">Прогнозирование</div>
+      </div>
+      <ul>
+        <li>Прогноз выручки</li>
+        <li>Вероятность закрытия</li>
+        <li>LTV по источникам</li>
+        <li>LTV по воронкам</li>
+        <li>Когортный анализ</li>
+        <li>Сегментация клиентов</li>
+      </ul>
+    </div>
+
+    <div class="card" data-cat="setup">
+      <div class="card-header">
+        <div class="card-icon">⚙️</div>
+        <div class="card-title">Настройка CRM</div>
+      </div>
+      <ul>
+        <li>Создание воронок и этапов</li>
+        <li>Управление полями</li>
+        <li>Шаблоны настроек</li>
+        <li>Вебхуки</li>
+        <li>Источники лидов</li>
+        <li>Каталоги продуктов</li>
+      </ul>
+    </div>
+
+    <div class="card" data-cat="templates">
+      <div class="card-header">
+        <div class="card-icon">📝</div>
+        <div class="card-title">Генерация контента</div>
+      </div>
+      <ul>
+        <li>Скрипты продаж</li>
+        <li>Коммерческие предложения</li>
+        <li>Шаблоны писем</li>
+        <li>Анализ потерь</li>
+        <li>Экспорт данных (CSV)</li>
+        <li>Генерация тестовых данных</li>
+      </ul>
+    </div>
+
+  </div>
+
+  <div class="vs-banner">
+    <div class="left">Всё управляется через Telegram-бот<br>на естественном языке 🇷🇺 🇬🇧</div>
+    <div class="right">
+      <div class="vs-stat">
+        <div class="num">54</div>
+        <div class="label">Инструмента</div>
+      </div>
+      <div class="vs-stat">
+        <div class="num">261</div>
+        <div class="label">Действие</div>
+      </div>
+      <div class="vs-stat">
+        <div class="num">15</div>
+        <div class="label">Категорий</div>
+      </div>
+      <div class="vs-stat">
+        <div class="num">&lt;2ms</div>
+        <div class="label">Планирование</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer">
+    <p>KommoMCP — <span class="highlight">AI-ассистент нового поколения</span> для Kommo CRM. Детерминистический планировщик, RAG, Multi-tenant SaaS.</p>
+  </div>
+
+</div>
+
+</body>
+</html>

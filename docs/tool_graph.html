@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>KommoMCP — Tool Graph</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #0d1117; color: #c9d1d9; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; overflow: hidden; }
+  
+  #header {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+    background: linear-gradient(180deg, #0d1117 60%, transparent);
+    padding: 16px 24px 32px;
+    text-align: center;
+  }
+  #header h1 { font-size: 22px; color: #f0f6fc; margin-bottom: 4px; }
+  #header .stats { font-size: 13px; color: #8b949e; }
+  #header .stats span { color: #58a6ff; font-weight: 600; }
+  
+  #legend {
+    position: fixed; top: 80px; left: 16px; z-index: 100;
+    background: #161b22; border: 1px solid #30363d; border-radius: 8px;
+    padding: 12px 16px; font-size: 12px; max-height: calc(100vh - 120px); overflow-y: auto;
+  }
+  #legend h3 { font-size: 13px; color: #f0f6fc; margin-bottom: 8px; }
+  .legend-item { display: flex; align-items: center; gap: 8px; margin-bottom: 5px; cursor: pointer; opacity: 0.9; }
+  .legend-item:hover { opacity: 1; }
+  .legend-dot { width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0; }
+  .legend-label { color: #c9d1d9; }
+  .legend-count { color: #8b949e; font-size: 11px; }
+  
+  #edge-legend {
+    position: fixed; top: 80px; right: 16px; z-index: 100;
+    background: #161b22; border: 1px solid #30363d; border-radius: 8px;
+    padding: 12px 16px; font-size: 12px;
+  }
+  #edge-legend h3 { font-size: 13px; color: #f0f6fc; margin-bottom: 8px; }
+  .edge-item { display: flex; align-items: center; gap: 8px; margin-bottom: 5px; }
+  .edge-line { width: 30px; height: 3px; flex-shrink: 0; }
+  
+  #tooltip {
+    position: fixed; z-index: 200; pointer-events: none;
+    background: #1c2128; border: 1px solid #30363d; border-radius: 8px;
+    padding: 12px 16px; font-size: 12px; display: none;
+    max-width: 320px; box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+  }
+  #tooltip .tt-name { font-size: 14px; font-weight: 700; color: #f0f6fc; margin-bottom: 4px; }
+  #tooltip .tt-cat { font-size: 11px; color: #8b949e; margin-bottom: 6px; }
+  #tooltip .tt-desc { color: #c9d1d9; margin-bottom: 6px; }
+  #tooltip .tt-caps { color: #8b949e; font-size: 11px; }
+  #tooltip .tt-caps span { background: #21262d; padding: 2px 6px; border-radius: 4px; margin-right: 4px; display: inline-block; margin-bottom: 2px; }
+  #tooltip .tt-actions { color: #58a6ff; font-size: 11px; margin-top: 4px; }
+  
+  #stats-box {
+    position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%); z-index: 100;
+    background: #161b22; border: 1px solid #30363d; border-radius: 8px;
+    padding: 8px 20px; font-size: 12px; color: #8b949e; text-align: center;
+  }
+  
+  svg { width: 100vw; height: 100vh; }
+</style>
+</head>
+<body>
+
+<div id="header">
+  <h1>KommoMCP — Tool Graph</h1>
+  <div class="stats">
+    <span id="s-tools">54</span> tools &middot;
+    <span id="s-actions">258</span> actions &middot;
+    <span id="s-edges">23</span> edges &middot;
+    <span id="s-cats">15</span> categories
+  </div>
+</div>
+
+<div id="legend"><h3>Categories</h3></div>
+<div id="edge-legend">
+  <h3>Edge Types</h3>
+  <div class="edge-item"><div class="edge-line" style="background:#e74c3c;"></div> REQUIRES</div>
+  <div class="edge-item"><div class="edge-line" style="background:#3498db; background:repeating-linear-gradient(90deg,#3498db 0,#3498db 6px,transparent 6px,transparent 10px);"></div> SEQUENCE</div>
+  <div class="edge-item"><div class="edge-line" style="background:#2ecc71; background:repeating-linear-gradient(90deg,#2ecc71 0,#2ecc71 3px,transparent 3px,transparent 7px);"></div> PARALLEL</div>
+</div>
+
+<div id="tooltip"></div>
+
+<div id="stats-box">
+  Planner latency: &lt;2ms &middot; LLM sees 2-6 tools (not 54) &middot; Zero-cost (no LLM calls) &middot; Scroll to zoom, drag to pan
+</div>
+
+<svg id="graph"></svg>
+
+<script src="https://d3js.org/d3.v7.min.js"></script>
+<script>
+// ── Data ──
+const CATEGORY_META = {
+  pipeline:       { color: '#4A90D9', label: 'Pipeline' },
+  analytics:      { color: '#E8913A', label: 'Analytics' },
+  deals:          { color: '#D94A4A', label: 'Deals' },
+  tasks:          { color: '#9B59B6', label: 'Tasks' },
+  contacts:       { color: '#27AE60', label: 'Contacts' },
+  communications: { color: '#1ABC9C', label: 'Comms' },
+  search:         { color: '#F1C40F', label: 'Search' },
+  forecasting:    { color: '#E74C3C', label: 'Forecast' },
+  advisor:        { color: '#8E44AD', label: 'AI Advisor' },
+  entity:         { color: '#C0392B', label: 'Entity Ops' },
+  setup:          { color: '#2C3E50', label: 'Setup' },
+  templates:      { color: '#16A085', label: 'Templates' },
+  automation:     { color: '#D35400', label: 'Automation' },
+  team:           { color: '#2980B9', label: 'Team' },
+  utility:        { color: '#7F8C8D', label: 'Utility' },
+};
+
+const EDGE_COLORS = { REQUIRES: '#e74c3c', SEQUENCE: '#3498db', PARALLEL: '#2ecc71' };
+
+const tools = [
+  { id: 'kommo_list_pipelines', cat: 'pipeline', desc: 'List all pipelines with stages', caps: ['list_pipelines','get_stages'], actions: 0 },
+  { id: 'kommo_pipeline_analytics', cat: 'analytics', desc: 'Pipeline conversion rates, deal counts, revenue by stage', caps: ['pipeline_analytics','conversion_rates','stage_stats'], actions: 0 },
+  { id: 'kommo_manager_stats', cat: 'analytics', desc: 'Manager performance statistics', caps: ['manager_stats','performance_metrics'], actions: 0 },
+  { id: 'kommo_deals_ext', cat: 'deals', desc: 'Extended deal management', caps: ['deal_analysis','deal_health','deal_velocity','at_risk_deals'], actions: 5 },
+  { id: 'kommo_deal_intelligence', cat: 'deals', desc: 'Deep deal analysis and intelligence', caps: ['enterprise_analysis','stakeholder_mapping','deal_review','closing_signals'], actions: 5 },
+  { id: 'kommo_tasks_ext', cat: 'tasks', desc: 'Task management and planning', caps: ['task_management','task_planning','meeting_prep'], actions: 12 },
+  { id: 'kommo_contacts_ext', cat: 'contacts', desc: 'Contact analysis and management', caps: ['contact_search','contact_analysis'], actions: 5 },
+  { id: 'kommo_companies', cat: 'contacts', desc: 'Company management', caps: ['company_crud','company_analysis'], actions: 7 },
+  { id: 'kommo_contact_scoring', cat: 'contacts', desc: 'Contact and company scoring', caps: ['contact_scoring','company_scoring','relationship_analysis'], actions: 6 },
+  { id: 'kommo_contact_enrichment', cat: 'contacts', desc: 'Contact data enrichment', caps: ['contact_enrichment','duplicate_merge','social_profile'], actions: 4 },
+  { id: 'kommo_duplicates', cat: 'contacts', desc: 'Duplicate detection and merge', caps: ['find_duplicates','merge_contacts'], actions: 3 },
+  { id: 'kommo_communications', cat: 'communications', desc: 'Communication history and analysis', caps: ['comm_history','call_log','comm_timeline'], actions: 5 },
+  { id: 'kommo_communication_analytics', cat: 'communications', desc: 'Communication quality and sentiment analysis', caps: ['sentiment_analysis','comm_patterns','comm_quality'], actions: 5 },
+  { id: 'kommo_smart_reply', cat: 'communications', desc: 'AI-powered reply suggestions', caps: ['reply_suggestion','objection_handling','auto_reply'], actions: 4 },
+  { id: 'kommo_search', cat: 'search', desc: 'Enhanced CRM search', caps: ['search','find_deals','find_contacts','deal_context','audit'], actions: 17 },
+  { id: 'kommo_insights', cat: 'analytics', desc: 'Business insights and root cause analysis', caps: ['business_insights','rfm_analysis','root_cause','stale_analysis'], actions: 9 },
+  { id: 'kommo_ltv', cat: 'analytics', desc: 'Customer LTV analytics', caps: ['ltv_analysis','cohort_analysis'], actions: 4 },
+  { id: 'kommo_activity', cat: 'analytics', desc: 'Team activity analytics', caps: ['activity_feed','productivity_metrics','kpi_tracking'], actions: 5 },
+  { id: 'kommo_forecast', cat: 'forecasting', desc: 'Sales forecasting', caps: ['pipeline_forecast','revenue_forecast','deal_probability','closing_forecast'], actions: 7 },
+  { id: 'kommo_advisor', cat: 'advisor', desc: 'AI-powered sales recommendations', caps: ['next_action','closing_tips','objection_handling','qualification','negotiation'], actions: 12 },
+  { id: 'kommo_ai_coach', cat: 'advisor', desc: 'AI sales coaching', caps: ['deal_coaching','skill_assessment','best_practices'], actions: 6 },
+  { id: 'kommo_objections', cat: 'advisor', desc: 'Objection handling library', caps: ['objection_library','objection_prediction'], actions: 4 },
+  { id: 'kommo_pipeline_health', cat: 'pipeline', desc: 'Deep pipeline health analysis', caps: ['pipeline_health','velocity_analysis','bottleneck_detection'], actions: 5 },
+  { id: 'kommo_alerts', cat: 'pipeline', desc: 'Proactive CRM alerts', caps: ['risk_alerts','performance_alerts','opportunity_alerts'], actions: 4 },
+  { id: 'kommo_entity_actions', cat: 'entity', desc: 'CRUD operations on leads, contacts, companies', caps: ['add_note','create_task','update_lead','move_lead','link_contact','clone_lead'], actions: 14 },
+  { id: 'kommo_bulk_actions', cat: 'entity', desc: 'Bulk operations on multiple entities', caps: ['mass_update','mass_move','mass_tag','mass_assign','mass_delete'], actions: 5 },
+  { id: 'kommo_setup', cat: 'setup', desc: 'CRM structure management', caps: ['pipeline_crud','stage_crud','field_crud','templates'], actions: 9 },
+  { id: 'kommo_templates', cat: 'templates', desc: 'Message and document templates', caps: ['template_generation','personalization','sales_scripts'], actions: 6 },
+  { id: 'kommo_doc_generator', cat: 'templates', desc: 'Document generation', caps: ['presentation_gen','proposal_gen','report_gen'], actions: 7 },
+  { id: 'kommo_automation', cat: 'automation', desc: 'Process automation', caps: ['auto_assign','auto_followup','auto_archive'], actions: 4 },
+  { id: 'kommo_escalation', cat: 'automation', desc: 'Escalation management', caps: ['escalation_check','sla_monitoring'], actions: 4 },
+  { id: 'kommo_reactivation', cat: 'automation', desc: 'Client reactivation campaigns', caps: ['sleeping_clients','lost_nurture','churn_prevention'], actions: 4 },
+  { id: 'kommo_compare', cat: 'analytics', desc: 'Data comparison and trend analysis', caps: ['period_comparison','trend_analysis','pattern_detection'], actions: 4 },
+  { id: 'kommo_anomaly', cat: 'analytics', desc: 'Anomaly detection', caps: ['anomaly_detection','sales_anomalies'], actions: 2 },
+  { id: 'kommo_segments', cat: 'analytics', desc: 'Customer segmentation', caps: ['volume_segments','lookalike','behavior_segments','retention'], actions: 4 },
+  { id: 'kommo_loss_analysis', cat: 'analytics', desc: 'Lost deal analysis', caps: ['loss_reasons','loss_patterns'], actions: 3 },
+  { id: 'kommo_smart_time', cat: 'analytics', desc: 'Timing optimization', caps: ['best_call_time','customer_journey_timing'], actions: 3 },
+  { id: 'kommo_gamification', cat: 'team', desc: 'Sales gamification', caps: ['leaderboard','achievements','challenges'], actions: 4 },
+  { id: 'kommo_team_planner', cat: 'team', desc: 'Team capacity planning', caps: ['capacity_planning','team_forecast'], actions: 2 },
+  { id: 'kommo_users', cat: 'utility', desc: 'CRM user management', caps: ['user_list','user_workload'], actions: 3 },
+  { id: 'kommo_reports', cat: 'utility', desc: 'Pre-built reports', caps: ['sales_report','pipeline_report','manager_report'], actions: 5 },
+  { id: 'kommo_digest', cat: 'utility', desc: 'Automated digests', caps: ['morning_digest','weekly_digest'], actions: 3 },
+  { id: 'kommo_my', cat: 'utility', desc: 'Personal dashboard', caps: ['my_pipeline','my_workload','my_insights'], actions: 4 },
+  { id: 'kommo_webhooks', cat: 'utility', desc: 'Webhook management', caps: ['webhook_crud'], actions: 3 },
+  { id: 'kommo_tags', cat: 'utility', desc: 'Tag management', caps: ['tag_crud','tag_search'], actions: 4 },
+  { id: 'kommo_custom_fields', cat: 'utility', desc: 'Custom fields management', caps: ['field_crud','field_values'], actions: 3 },
+  { id: 'kommo_sources', cat: 'utility', desc: 'Lead sources management', caps: ['source_management','source_analytics'], actions: 3 },
+  { id: 'kommo_links', cat: 'utility', desc: 'Entity relationship management', caps: ['entity_linking'], actions: 3 },
+  { id: 'kommo_catalogs', cat: 'utility', desc: 'Product catalogs', caps: ['catalog_management','product_linking'], actions: 4 },
+  { id: 'kommo_events', cat: 'utility', desc: 'CRM event log', caps: ['event_log','event_stats'], actions: 3 },
+  { id: 'kommo_calls', cat: 'utility', desc: 'Call records', caps: ['call_log','call_stats'], actions: 3 },
+  { id: 'kommo_export', cat: 'utility', desc: 'Data export', caps: ['csv_export','analytics_export'], actions: 3 },
+  { id: 'kommo_mock_data', cat: 'setup', desc: 'Test data generation', caps: ['mock_data_generation'], actions: 4 },
+  { id: 'kommo_cleanup', cat: 'setup', desc: 'Data cleanup and reset', caps: ['data_cleanup','crm_reset'], actions: 4 },
+];
+
+const edges = [
+  { from: 'kommo_list_pipelines', to: 'kommo_pipeline_analytics', type: 'SEQUENCE' },
+  { from: 'kommo_list_pipelines', to: 'kommo_setup', type: 'SEQUENCE' },
+  { from: 'kommo_search', to: 'kommo_entity_actions', type: 'SEQUENCE' },
+  { from: 'kommo_search', to: 'kommo_deal_intelligence', type: 'SEQUENCE' },
+  { from: 'kommo_search', to: 'kommo_advisor', type: 'SEQUENCE' },
+  { from: 'kommo_contacts_ext', to: 'kommo_contact_enrichment', type: 'SEQUENCE' },
+  { from: 'kommo_contacts_ext', to: 'kommo_contact_scoring', type: 'SEQUENCE' },
+  { from: 'kommo_entity_actions', to: 'kommo_entity_actions', type: 'SEQUENCE' },
+  { from: 'kommo_advisor', to: 'kommo_entity_actions', type: 'SEQUENCE' },
+  { from: 'kommo_forecast', to: 'kommo_advisor', type: 'SEQUENCE' },
+  { from: 'kommo_deal_intelligence', to: 'kommo_templates', type: 'SEQUENCE' },
+  { from: 'kommo_communication_analytics', to: 'kommo_advisor', type: 'SEQUENCE' },
+  { from: 'kommo_insights', to: 'kommo_reactivation', type: 'SEQUENCE' },
+  { from: 'kommo_loss_analysis', to: 'kommo_advisor', type: 'SEQUENCE' },
+  { from: 'kommo_pipeline_analytics', to: 'kommo_manager_stats', type: 'PARALLEL' },
+  { from: 'kommo_contact_scoring', to: 'kommo_communication_analytics', type: 'PARALLEL' },
+  { from: 'kommo_alerts', to: 'kommo_digest', type: 'PARALLEL' },
+  { from: 'kommo_forecast', to: 'kommo_pipeline_health', type: 'PARALLEL' },
+  { from: 'kommo_entity_actions', to: 'kommo_list_pipelines', type: 'REQUIRES' },
+  { from: 'kommo_setup', to: 'kommo_list_pipelines', type: 'REQUIRES' },
+  { from: 'kommo_bulk_actions', to: 'kommo_list_pipelines', type: 'REQUIRES' },
+  { from: 'kommo_mock_data', to: 'kommo_list_pipelines', type: 'REQUIRES' },
+  { from: 'kommo_catalogs', to: 'kommo_catalogs', type: 'REQUIRES' },
+];
+
+// ── Build ──
+const nodeMap = {};
+tools.forEach(t => { nodeMap[t.id] = t; });
+
+const totalActions = tools.reduce((s, t) => s + t.actions, 0);
+document.getElementById('s-tools').textContent = tools.length;
+document.getElementById('s-actions').textContent = totalActions;
+document.getElementById('s-edges').textContent = edges.length;
+
+// Category counts
+const catCounts = {};
+tools.forEach(t => { catCounts[t.cat] = (catCounts[t.cat] || 0) + 1; });
+document.getElementById('s-cats').textContent = Object.keys(catCounts).length;
+
+// Legend
+const legendEl = document.getElementById('legend');
+Object.entries(CATEGORY_META).forEach(([cat, meta]) => {
+  if (!catCounts[cat]) return;
+  const div = document.createElement('div');
+  div.className = 'legend-item';
+  div.innerHTML = `<div class="legend-dot" style="background:${meta.color}"></div>
+    <span class="legend-label">${meta.label}</span>
+    <span class="legend-count">(${catCounts[cat]})</span>`;
+  legendEl.appendChild(div);
+});
+
+// ── D3 Force Graph ──
+const W = window.innerWidth, H = window.innerHeight;
+const svg = d3.select('#graph').attr('width', W).attr('height', H);
+
+// Zoom
+const g = svg.append('g');
+const zoom = d3.zoom().scaleExtent([0.2, 4]).on('zoom', e => g.attr('transform', e.transform));
+svg.call(zoom);
+
+// Arrow markers
+['REQUIRES','SEQUENCE','PARALLEL'].forEach(type => {
+  svg.append('defs').append('marker')
+    .attr('id', `arrow-${type}`)
+    .attr('viewBox', '0 -5 10 10')
+    .attr('refX', 28).attr('refY', 0)
+    .attr('markerWidth', 8).attr('markerHeight', 8)
+    .attr('orient', 'auto')
+    .append('path')
+    .attr('d', 'M0,-5L10,0L0,5')
+    .attr('fill', EDGE_COLORS[type]);
+});
+
+// Links
+const linkData = edges.filter(e => e.from !== e.to).map(e => ({
+  source: e.from, target: e.to, type: e.type
+}));
+
+const link = g.append('g').selectAll('line')
+  .data(linkData).enter().append('line')
+  .attr('stroke', d => EDGE_COLORS[d.type])
+  .attr('stroke-width', d => d.type === 'REQUIRES' ? 2.5 : 1.8)
+  .attr('stroke-dasharray', d => d.type === 'SEQUENCE' ? '8,4' : d.type === 'PARALLEL' ? '3,4' : null)
+  .attr('stroke-opacity', 0.5)
+  .attr('marker-end', d => `url(#arrow-${d.type})`);
+
+// Category cluster forces
+const catAngle = {};
+const catList = ['pipeline','analytics','forecasting','deals','contacts','communications','search','entity','setup','automation','advisor','tasks','templates','team','utility'];
+catList.forEach((c, i) => { catAngle[c] = (2 * Math.PI * i / catList.length) - Math.PI / 2; });
+
+const clusterR = Math.min(W, H) * 0.32;
+tools.forEach(t => {
+  const a = catAngle[t.cat] || 0;
+  t.x = W/2 + clusterR * Math.cos(a) + (Math.random() - 0.5) * 60;
+  t.y = H/2 + clusterR * Math.sin(a) + (Math.random() - 0.5) * 60;
+});
+
+// Simulation
+const simulation = d3.forceSimulation(tools)
+  .force('link', d3.forceLink(linkData).id(d => d.id).distance(120).strength(0.3))
+  .force('charge', d3.forceManyBody().strength(-400))
+  .force('center', d3.forceCenter(W/2, H/2).strength(0.05))
+  .force('collision', d3.forceCollide().radius(d => 20 + d.actions * 1.5))
+  .force('cluster', alpha => {
+    tools.forEach(t => {
+      const a = catAngle[t.cat] || 0;
+      const cx = W/2 + clusterR * Math.cos(a);
+      const cy = H/2 + clusterR * Math.sin(a);
+      t.vx += (cx - t.x) * alpha * 0.08;
+      t.vy += (cy - t.y) * alpha * 0.08;
+    });
+  })
+  .on('tick', ticked);
+
+// Nodes
+const nodeRadius = d => 14 + d.actions * 1.2;
+
+const node = g.append('g').selectAll('g')
+  .data(tools).enter().append('g')
+  .call(d3.drag()
+    .on('start', (e, d) => { if (!e.active) simulation.alphaTarget(0.3).restart(); d.fx = d.x; d.fy = d.y; })
+    .on('drag', (e, d) => { d.fx = e.x; d.fy = e.y; })
+    .on('end', (e, d) => { if (!e.active) simulation.alphaTarget(0); d.fx = null; d.fy = null; })
+  );
+
+node.append('circle')
+  .attr('r', nodeRadius)
+  .attr('fill', d => CATEGORY_META[d.cat]?.color || '#555')
+  .attr('stroke', '#0d1117')
+  .attr('stroke-width', 2.5)
+  .attr('opacity', 0.92);
+
+// Glow on connected nodes
+node.append('circle')
+  .attr('r', d => nodeRadius(d) + 3)
+  .attr('fill', 'none')
+  .attr('stroke', d => CATEGORY_META[d.cat]?.color || '#555')
+  .attr('stroke-width', 1)
+  .attr('opacity', 0.3);
+
+// Labels
+node.append('text')
+  .text(d => d.id.replace('kommo_', '').replace(/_/g, ' '))
+  .attr('text-anchor', 'middle')
+  .attr('dy', d => nodeRadius(d) + 14)
+  .attr('fill', '#c9d1d9')
+  .attr('font-size', '10px')
+  .attr('font-weight', '600')
+  .attr('paint-order', 'stroke')
+  .attr('stroke', '#0d1117')
+  .attr('stroke-width', 3);
+
+// Action count badge
+node.filter(d => d.actions > 0).append('text')
+  .text(d => d.actions)
+  .attr('text-anchor', 'middle')
+  .attr('dy', 4)
+  .attr('fill', 'white')
+  .attr('font-size', '11px')
+  .attr('font-weight', '700');
+
+// Tooltip
+const tooltip = document.getElementById('tooltip');
+node.on('mouseenter', (e, d) => {
+  const meta = CATEGORY_META[d.cat] || {};
+  tooltip.style.display = 'block';
+  tooltip.innerHTML = `
+    <div class="tt-name" style="color:${meta.color}">${d.id}</div>
+    <div class="tt-cat">${meta.label || d.cat} &middot; ${d.actions} actions</div>
+    <div class="tt-desc">${d.desc}</div>
+    <div class="tt-caps">${d.caps.map(c => `<span>${c}</span>`).join('')}</div>
+    <div class="tt-actions">${d.actions > 0 ? d.actions + ' actions available' : 'Single action tool'}</div>
+  `;
+}).on('mousemove', e => {
+  tooltip.style.left = (e.clientX + 16) + 'px';
+  tooltip.style.top = (e.clientY - 10) + 'px';
+}).on('mouseleave', () => {
+  tooltip.style.display = 'none';
+});
+
+// Highlight on hover
+node.on('mouseenter.highlight', (e, d) => {
+  const connected = new Set();
+  connected.add(d.id);
+  edges.forEach(edge => {
+    if (edge.from === d.id) connected.add(edge.to);
+    if (edge.to === d.id) connected.add(edge.from);
+  });
+  node.selectAll('circle').attr('opacity', n => connected.has(n.id) ? 1 : 0.15);
+  node.selectAll('text').attr('opacity', n => connected.has(n.id) ? 1 : 0.15);
+  link.attr('stroke-opacity', l => (l.source.id === d.id || l.target.id === d.id) ? 0.9 : 0.05);
+}).on('mouseleave.highlight', () => {
+  node.selectAll('circle').attr('opacity', 0.92);
+  node.selectAll('text').attr('opacity', 1);
+  link.attr('stroke-opacity', 0.5);
+});
+
+function ticked() {
+  link
+    .attr('x1', d => d.source.x).attr('y1', d => d.source.y)
+    .attr('x2', d => d.target.x).attr('y2', d => d.target.y);
+  node.attr('transform', d => `translate(${d.x},${d.y})`);
+}
+
+// Initial zoom to fit
+setTimeout(() => {
+  svg.transition().duration(800).call(
+    zoom.transform,
+    d3.zoomIdentity.translate(W * 0.05, H * 0.05).scale(0.9)
+  );
+}, 2000);
+</script>
+</body>
+</html>
