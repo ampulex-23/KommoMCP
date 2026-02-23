@@ -1588,11 +1588,13 @@ class AIChat:
         kommo_domain: str,
         kommo_token: str,
         model: str = 'gpt-5-mini',
+        llm_base_url: str = None,
     ):
         self.openai_api_key = openai_api_key
         self.kommo_domain = kommo_domain
         self.kommo_token = kommo_token
         self.model = model
+        self.llm_base_url = llm_base_url or os.getenv('LLM_BASE_URL', 'https://api.polza.ai/v1')
         self.kommo_base_url = f'https://{kommo_domain}'
     
     def _get_history(self, user_id: str) -> List[Dict]:
@@ -1753,7 +1755,7 @@ class AIChat:
             }
             
             async with session.post(
-                'https://api.openai.com/v1/chat/completions',
+                f'{self.llm_base_url}/chat/completions',
                 json=payload,
                 headers=headers,
             ) as resp:

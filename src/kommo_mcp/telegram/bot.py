@@ -82,8 +82,8 @@ class KommoBot:
                     f'Я помогу вам работать с вашей CRM через AI.\n\n'
                     f'<b>Для начала работы:</b>\n'
                     f'1\ufe0f\u20e3 /connect - подключить Kommo CRM\n'
-                    f'2\ufe0f\u20e3 /openai - добавить OpenAI ключ\n'
-                    f'3\ufe0f\u20e3 /ask - задать вопрос по CRM\n\n'
+                    f'2\ufe0f\u20e3 /ask - задать вопрос по CRM\n\n'
+                    f'AI подключается автоматически \U0001f680\n'
                     f'/help - все команды'
                 )
             await message.answer(welcome)
@@ -98,8 +98,7 @@ class KommoBot:
                 '/crm_list - список всех CRM\n'
                 '/switch - переключить активную CRM\n'
                 '/remove_crm - отключить CRM\n'
-                '/openai - добавить OpenAI API ключ\n'
-                '/status - статус текущей CRM\n\n'
+                                '/status - статус текущей CRM\n\n'
                 '<b>Работа:</b>\n'
                 '/wizard - \U0001f9d9\u200d\u2642\ufe0f мастер настройки CRM\n'
                 '/ask <вопрос> - задать вопрос по CRM\n'
@@ -126,7 +125,7 @@ class KommoBot:
                 return
             
             if not tenant.has_openai_credentials():
-                await message.answer('❌ Сначала добавьте OpenAI ключ: /openai')
+                await message.answer('❌ AI не настроен. Попробуйте /connect заново.')
                 return
             
             wizard = get_wizard()
@@ -389,116 +388,48 @@ class KommoBot:
             
             await state.clear()
             
-            # Check if OpenAI is configured (try to copy from another tenant)
-            tenant = await self.tenant_manager.get_by_id(tenant.id)
-            other_tenants = await self.tenant_manager.get_tenants_for_user(message.from_user.id)
-            for ot in other_tenants:
-                if ot.id != tenant.id and ot.has_openai_credentials():
-                    await self.tenant_manager.set_openai_key(tenant.id, ot.openai_api_key)
-                    tenant = await self.tenant_manager.get_by_id(tenant.id)
-                    break
+            # Auto-set shared LLM API key from environment
+            shared_llm_key = os.getenv('LLM_API_KEY', '')
+            if shared_llm_key:
+                await self.tenant_manager.set_openai_key(tenant.id, shared_llm_key)
+            else:
+                # Fallback: try to copy from another tenant
+                tenant = await self.tenant_manager.get_by_id(tenant.id)
+                other_tenants = await self.tenant_manager.get_tenants_for_user(message.from_user.id)
+                for ot in other_tenants:
+                    if ot.id != tenant.id and ot.has_openai_credentials():
+                        await self.tenant_manager.set_openai_key(tenant.id, ot.openai_api_key)
+                        break
             
+            tenant = await self.tenant_manager.get_by_id(tenant.id)
             display_label = label or domain
             
-            if tenant.has_openai_credentials():
-                # Start provisioning
+            # Start provisioning
+            await message.answer(
+                f'✅ <b>CRM "{display_label}" подключена!</b>\n\n'
+                '⏳ Создаю инфраструктуру...'
+            )
+            success, msg = await self.orchestrator.provision(tenant.id)
+            
+            if success:
                 await message.answer(
-                    f'✅ <b>CRM "{display_label}" подключена!</b>\n\n'
-                    '⏳ Создаю инфраструктуру...'
+                    f'✅ <b>Готово!</b>\n\n'
+                    f'{msg}\n\n'
+                    f'CRM <b>{display_label}</b> теперь активная.\n'
+                    f'Используйте /ask для запросов.'
                 )
-                success, msg = await self.orchestrator.provision(tenant.id)
-                
-                if success:
-                    await message.answer(
-                        f'✅ <b>Готово!</b>\n\n'
-                        f'{msg}\n\n'
-                        f'CRM <b>{display_label}</b> теперь активная.\n'
-                        f'Используйте /ask для запросов.'
-                    )
-                else:
-                    await message.answer(f'❌ <b>Ошибка:</b> {msg}')
             else:
-                await message.answer(
-                    f'✅ <b>CRM "{display_label}" подключена!</b>\n\n'
-                    'Теперь добавьте OpenAI API ключ:\n'
-                    '/openai'
-                )
+                await message.answer(f'❌ <b>Ошибка:</b> {msg}')
         
         @self.router.message(Command('openai'))
         async def cmd_openai(message: Message, state: FSMContext):
-            """Start OpenAI key setup."""
+            """Inform user that AI is already provided."""
             await message.answer(
-                '<b>🤖 Настройка OpenAI</b>\n\n'
-                'Введите ваш OpenAI API ключ:\n'
-                '(начинается с <code>sk-</code>)\n\n'
-                '📖 <a href="https://platform.openai.com/api-keys">Получить ключ</a>'
+                '<b>🤖 AI уже подключен</b>\n\n'
+                'Доступ к AI предоставляется автоматически при подключении CRM.\n'
+                'Вам не нужно вводить API ключ — всё работает из коробки!\n\n'
+                'Просто используйте /ask для запросов.'
             )
-            await state.set_state(SetupStates.waiting_openai_key)
-        
-        @self.router.message(SetupStates.waiting_openai_key)
-        async def process_openai_key(message: Message, state: FSMContext):
-            """Process OpenAI API key — applies to ALL user's CRMs."""
-            api_key = message.text.strip()
-            
-            # Delete message with key for security
-            try:
-                await message.delete()
-            except Exception:
-                pass
-            
-            if not api_key.startswith('sk-'):
-                await message.answer(
-                    '❌ Неверный формат ключа.\n'
-                    'OpenAI ключ должен начинаться с <code>sk-</code>'
-                )
-                return
-            
-            # Validate key
-            is_valid = await self._validate_openai_key(api_key)
-            
-            if not is_valid:
-                await message.answer(
-                    '❌ <b>Ошибка валидации ключа</b>\n\n'
-                    'Проверьте правильность ключа.\n'
-                    'Используйте /openai чтобы попробовать снова.'
-                )
-                await state.clear()
-                return
-            
-            # Save key to ALL user's tenants
-            tenants = await self.tenant_manager.get_tenants_for_user(message.from_user.id)
-            for t in tenants:
-                await self.tenant_manager.set_openai_key(t.id, api_key)
-            
-            await state.clear()
-            
-            # Provision any tenants that were waiting for OpenAI key
-            provisioned = []
-            for t in tenants:
-                t = await self.tenant_manager.get_by_id(t.id)
-                if t.has_kommo_credentials() and t.status in (TenantStatus.PENDING, TenantStatus.ERROR):
-                    success, msg = await self.orchestrator.provision(t.id)
-                    if success:
-                        provisioned.append(t.label or t.kommo_domain)
-            
-            if provisioned:
-                names = ', '.join(provisioned)
-                await message.answer(
-                    f'✅ <b>OpenAI настроен для всех CRM!</b>\n\n'
-                    f'Активированы: {names}\n\n'
-                    f'Используйте /ask для запросов.'
-                )
-            elif tenants:
-                await message.answer(
-                    '✅ <b>OpenAI настроен для всех CRM!</b>\n\n'
-                    'Используйте /ask для запросов.'
-                )
-            else:
-                await message.answer(
-                    '✅ <b>OpenAI настроен!</b>\n\n'
-                    'Теперь подключите Kommo CRM:\n'
-                    '/connect'
-                )
         
         @self.router.message(Command('sync'))
         async def cmd_sync(message: Message):
@@ -506,7 +437,7 @@ class KommoBot:
             tenant = await self.tenant_manager.get_active_tenant(message.from_user.id)
             
             if not tenant or not tenant.is_ready():
-                await message.answer('❌ Сначала настройте подключение: /connect и /openai')
+                await message.answer('❌ Сначала подключите CRM: /connect')
                 return
             
             await message.answer('⏳ Синхронизирую данные...')
@@ -526,7 +457,7 @@ class KommoBot:
             
             tenant = await self.tenant_manager.get_active_tenant(message.from_user.id)
             if not tenant or not tenant.is_ready():
-                await message.answer('❌ Сначала настройте подключение: /connect и /openai')
+                await message.answer('❌ Сначала подключите CRM: /connect')
                 return
             
             await message.answer('📊 Собираю дайджест...')
@@ -598,7 +529,7 @@ class KommoBot:
             tenant = await self.tenant_manager.get_active_tenant(message.from_user.id)
             
             if not tenant or not tenant.is_ready():
-                await message.answer('❌ Сначала настройте подключение: /connect и /openai')
+                await message.answer('❌ Сначала подключите CRM: /connect')
                 return
             
             # Extract question from command
@@ -667,7 +598,7 @@ class KommoBot:
                 return
             
             if not tenant.is_ready():
-                await message.answer('❌ Сначала настройте подключение: /connect и /openai')
+                await message.answer('❌ Сначала подключите CRM: /connect')
                 return
             
             # Check rate limit
@@ -759,7 +690,7 @@ class KommoBot:
             BotCommand(command='crm_list', description='Список всех CRM'),
             BotCommand(command='switch', description='Переключить активную CRM'),
             BotCommand(command='status', description='Статус текущей CRM'),
-            BotCommand(command='openai', description='Настроить OpenAI ключ'),
+            BotCommand(command='openai', description='Статус AI'),
             BotCommand(command='sync', description='Синхронизировать данные CRM'),
             BotCommand(command='digest', description='Утренний дайджест по CRM'),
             BotCommand(command='wizard', description='Мастер настройки CRM'),
