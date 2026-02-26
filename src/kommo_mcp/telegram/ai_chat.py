@@ -3,8 +3,10 @@ AI Chat module - integrates OpenAI with MCP tools.
 Uses RAG-based tool retrieval for dynamic prompt generation.
 """
 
+import asyncio
 import json
 import logging
+import os
 import re
 from typing import Optional, List, Dict, Any
 
@@ -1475,6 +1477,69 @@ MCP_TOOLS = [
             },
         },
     },
+    {
+        'type': 'function',
+        'function': {
+            'name': 'kommo_lead_gen',
+            'description': 'B2B lead generation: search companies by OKVED/region via DaData, search HoReCa via 2GIS, enrich contacts, import into CRM as leads/contacts/companies',
+            'parameters': {
+                'type': 'object',
+                'properties': {
+                    'action': {
+                        'type': 'string',
+                        'enum': ['search_companies', 'search_horeca', 'preview', 'import_to_crm', 'enrich'],
+                        'description': 'Action: search_companies (by OKVED/region via DaData), search_horeca (restaurants/hotels via 2GIS), preview (show what will be found), import_to_crm (create leads in AmoCRM), enrich (get full details by INN)',
+                    },
+                    'okved': {
+                        'type': 'string',
+                        'description': 'OKVED code to search (e.g. 46.37 for tea/coffee wholesale, 56.10 for restaurants, 47.29.3 for tea shops)',
+                    },
+                    'query': {
+                        'type': 'string',
+                        'description': 'Search query for companies (e.g. "чай", "кофе оптом")',
+                    },
+                    'region': {
+                        'type': 'string',
+                        'description': 'Region filter (e.g. "Москва", "Краснодарский край", "Санкт-Петербург")',
+                    },
+                    'city': {
+                        'type': 'string',
+                        'description': 'City for HoReCa search via 2GIS (e.g. "Сочи", "Москва")',
+                    },
+                    'rubric': {
+                        'type': 'string',
+                        'description': 'Rubric for 2GIS search (e.g. "рестораны", "кафе", "гостиницы", "санатории")',
+                    },
+                    'inn': {
+                        'type': 'string',
+                        'description': 'INN for enrich action - get full company details',
+                    },
+                    'pipeline_id': {
+                        'type': 'integer',
+                        'description': 'Pipeline ID for import_to_crm',
+                    },
+                    'status_id': {
+                        'type': 'integer',
+                        'description': 'Status/stage ID for import_to_crm',
+                    },
+                    'tag': {
+                        'type': 'string',
+                        'description': 'Tag to assign to imported leads (e.g. "оптовики_чай", "horeca_сочи")',
+                    },
+                    'responsible_user_id': {
+                        'type': 'integer',
+                        'description': 'Responsible user ID for imported leads',
+                    },
+                    'limit': {
+                        'type': 'integer',
+                        'description': 'Max results to return/import (default 20, max 100)',
+                        'default': 20,
+                    },
+                },
+                'required': ['action'],
+            },
+        },
+    },
 ]
 
 # Index MCP_TOOLS by function name for fast filtering
@@ -2491,6 +2556,9 @@ class AIChat:
         
         elif name == 'kommo_ltv':
             return await self._handle_ltv(session, headers, args)
+        
+        elif name == 'kommo_lead_gen':
+            return await self._handle_lead_gen(session, headers, args)
         
         # Default - return info about available tools
         return {'message': f'Tool {name} not fully implemented yet', 'args': args}
@@ -13652,3 +13720,514 @@ class AIChat:
             }
 
         return {'error': f'Unknown LTV action: {action}'}
+
+    # --- Region KLADR mapping for DaData ---
+    REGION_KLADR = {
+        'москва': '77',
+        'московская область': '50',
+        'санкт-петербург': '78',
+        'ленинградская область': '47',
+        'краснодарский край': '23',
+        'ростовская область': '61',
+        'свердловская область': '66',
+        'новосибирская область': '54',
+        'нижегородская область': '52',
+        'самарская область': '63',
+        'татарстан': '16',
+        'челябинская область': '74',
+        'башкортостан': '02',
+        'пермский край': '59',
+        'воронежская область': '36',
+        'волгоградская область': '34',
+        'красноярский край': '24',
+        'саратовская область': '64',
+        'тюменская область': '72',
+        'омская область': '55',
+        'ставропольский край': '26',
+        'кабардино-балкария': '07',
+        'дагестан': '05',
+        'приморский край': '25',
+        'хабаровский край': '27',
+        'иркутская область': '38',
+        'калининградская область': '39',
+        'крым': '91',
+        'севастополь': '92',
+        'сочи': '23',
+        'адыгея': '01',
+    }
+
+    # --- 2GIS region IDs ---
+    TWOGIS_REGIONS = {
+        'сочи': 11,
+        'москва': 32,
+        'санкт-петербург': 38,
+        'краснодар': 10,
+        'новосибирск': 1,
+        'екатеринбург': 7,
+        'нижний новгород': 18,
+        'казань': 12,
+        'ростов-на-дону': 3,
+        'самара': 8,
+        'воронеж': 4,
+        'волгоград': 5,
+        'красноярск': 19,
+        'саратов': 9,
+        'тюмень': 6,
+        'омск': 2,
+        'челябинск': 13,
+        'пермь': 14,
+        'уфа': 15,
+    }
+
+    async def _handle_lead_gen(self, session, headers, args: dict) -> dict:
+        """Handle kommo_lead_gen tool - B2B lead generation via DaData/2GIS + import to CRM."""
+        action = args.get('action')
+
+        if action == 'search_companies':
+            return await self._lead_gen_search_dadata(args)
+
+        elif action == 'search_horeca':
+            return await self._lead_gen_search_2gis(args)
+
+        elif action == 'preview':
+            # Preview is same as search but with explicit preview flag
+            okved = args.get('okved')
+            if okved:
+                result = await self._lead_gen_search_dadata(args)
+            else:
+                result = await self._lead_gen_search_2gis(args)
+            result['preview'] = True
+            result['message'] = f'Найдено {result.get("total", 0)} компаний. Для импорта используйте action=import_to_crm.'
+            return result
+
+        elif action == 'enrich':
+            return await self._lead_gen_enrich(args)
+
+        elif action == 'import_to_crm':
+            return await self._lead_gen_import(session, headers, args)
+
+        return {'error': f'Unknown lead_gen action: {action}'}
+
+    async def _lead_gen_search_dadata(self, args: dict) -> dict:
+        """Search companies via DaData suggest/party API."""
+        dadata_token = os.getenv('DADATA_API_TOKEN', '')
+        if not dadata_token:
+            return {'error': 'DADATA_API_TOKEN not configured. Set it in environment variables.'}
+
+        okved = args.get('okved', '')
+        query = args.get('query', '*')
+        region = args.get('region', '')
+        limit = min(args.get('limit', 20), 100)
+
+        url = 'https://suggestions.dadata.ru/suggestions/api/4_1/rs/suggest/party'
+        req_headers = {
+            'Authorization': f'Token {dadata_token}',
+            'Content-Type': 'application/json',
+        }
+
+        payload = {
+            'query': query if query else '*',
+            'count': limit,
+            'status': ['ACTIVE'],
+        }
+
+        # Add OKVED filter
+        if okved:
+            payload['okved'] = [okved]
+
+        # Add region filter
+        if region:
+            region_lower = region.lower().strip()
+            kladr = self.REGION_KLADR.get(region_lower, '')
+            if kladr:
+                payload['locations'] = [{'kladr_id': kladr}]
+            else:
+                # Try as-is, DaData might understand
+                payload['locations'] = [{'region': region}]
+
+        try:
+            async with aiohttp.ClientSession() as dadata_session:
+                async with dadata_session.post(url, json=payload, headers=req_headers, timeout=aiohttp.ClientTimeout(total=30)) as resp:
+                    if resp.status != 200:
+                        error_text = await resp.text()
+                        return {'error': f'DaData API error {resp.status}', 'details': error_text[:300]}
+
+                    data = await resp.json()
+                    suggestions = data.get('suggestions', [])
+
+                    companies = []
+                    for s in suggestions:
+                        d = s.get('data', {})
+                        address = d.get('address', {})
+                        management = d.get('management', {})
+                        name_info = d.get('name', {})
+
+                        company = {
+                            'name': name_info.get('short_with_opf') or name_info.get('full_with_opf') or s.get('value', ''),
+                            'inn': d.get('inn', ''),
+                            'ogrn': d.get('ogrn', ''),
+                            'okved': d.get('okved', ''),
+                            'okved_type': d.get('okved_type', ''),
+                            'address': address.get('unrestricted_value', '') if isinstance(address, dict) else str(address),
+                            'region': address.get('data', {}).get('region_with_type', '') if isinstance(address, dict) else '',
+                            'city': address.get('data', {}).get('city', '') if isinstance(address, dict) else '',
+                            'director': management.get('name', ''),
+                            'director_post': management.get('post', ''),
+                            'type': d.get('type', ''),  # LEGAL / INDIVIDUAL
+                            'status': d.get('state', {}).get('status', ''),
+                            'employees': d.get('employee_count'),
+                        }
+                        companies.append(company)
+
+                    # Store in instance for subsequent import
+                    self._lead_gen_cache = companies
+
+                    return {
+                        'total': len(companies),
+                        'companies': companies,
+                        'filters': {
+                            'okved': okved,
+                            'region': region,
+                            'query': query,
+                        },
+                        'message': f'Найдено {len(companies)} компаний. Для импорта в CRM используйте action=import_to_crm.',
+                    }
+
+        except asyncio.TimeoutError:
+            return {'error': 'DaData API timeout'}
+        except Exception as e:
+            logger.error(f'DaData search error: {e}')
+            return {'error': f'DaData search error: {str(e)}'}
+
+    async def _lead_gen_search_2gis(self, args: dict) -> dict:
+        """Search HoReCa via 2GIS API."""
+        twogis_key = os.getenv('TWOGIS_API_KEY', '')
+        if not twogis_key:
+            return {'error': 'TWOGIS_API_KEY not configured. Set it in environment variables.'}
+
+        city = args.get('city', 'Сочи')
+        rubric = args.get('rubric', 'рестораны')
+        limit = min(args.get('limit', 20), 50)
+
+        city_lower = city.lower().strip()
+        region_id = self.TWOGIS_REGIONS.get(city_lower)
+
+        url = 'https://catalog.api.2gis.com/3.0/items'
+        params = {
+            'q': rubric,
+            'type': 'branch',
+            'fields': 'items.contact_groups,items.org,items.address',
+            'key': twogis_key,
+            'page_size': limit,
+        }
+        if region_id:
+            params['region_id'] = region_id
+        else:
+            params['q'] = f'{rubric} {city}'
+
+        try:
+            async with aiohttp.ClientSession() as gis_session:
+                async with gis_session.get(url, params=params, timeout=aiohttp.ClientTimeout(total=30)) as resp:
+                    if resp.status != 200:
+                        error_text = await resp.text()
+                        return {'error': f'2GIS API error {resp.status}', 'details': error_text[:300]}
+
+                    data = await resp.json()
+                    items = data.get('result', {}).get('items', [])
+
+                    companies = []
+                    for item in items:
+                        # Extract phones
+                        phones = []
+                        contact_groups = item.get('contact_groups', [])
+                        for group in contact_groups:
+                            for contact in group.get('contacts', []):
+                                if contact.get('type') == 'phone':
+                                    phones.append(contact.get('text', ''))
+
+                        # Extract address
+                        addr = item.get('address_name', '')
+                        full_addr = item.get('full_address_name', '')
+
+                        org = item.get('org', {})
+
+                        company = {
+                            'name': item.get('name', ''),
+                            'full_name': org.get('name', ''),
+                            'address': full_addr or addr,
+                            'city': city,
+                            'phones': phones[:3],  # max 3 phones
+                            'rubrics': [r.get('name', '') for r in item.get('rubrics', [])[:3]],
+                            'source': '2gis',
+                        }
+                        companies.append(company)
+
+                    self._lead_gen_cache = companies
+
+                    return {
+                        'total': len(companies),
+                        'companies': companies,
+                        'filters': {
+                            'city': city,
+                            'rubric': rubric,
+                        },
+                        'with_phones': sum(1 for c in companies if c.get('phones')),
+                        'message': f'Найдено {len(companies)} заведений в {city}. С телефонами: {sum(1 for c in companies if c.get("phones"))}.',
+                    }
+
+        except asyncio.TimeoutError:
+            return {'error': '2GIS API timeout'}
+        except Exception as e:
+            logger.error(f'2GIS search error: {e}')
+            return {'error': f'2GIS search error: {str(e)}'}
+
+    async def _lead_gen_enrich(self, args: dict) -> dict:
+        """Enrich company by INN via DaData find-party API."""
+        dadata_token = os.getenv('DADATA_API_TOKEN', '')
+        if not dadata_token:
+            return {'error': 'DADATA_API_TOKEN not configured'}
+
+        inn = args.get('inn', '')
+        if not inn:
+            return {'error': 'INN is required for enrich action'}
+
+        url = 'https://suggestions.dadata.ru/suggestions/api/4_1/rs/findById/party'
+        req_headers = {
+            'Authorization': f'Token {dadata_token}',
+            'Content-Type': 'application/json',
+        }
+
+        try:
+            async with aiohttp.ClientSession() as dadata_session:
+                async with dadata_session.post(url, json={'query': inn}, headers=req_headers, timeout=aiohttp.ClientTimeout(total=15)) as resp:
+                    if resp.status != 200:
+                        return {'error': f'DaData API error {resp.status}'}
+
+                    data = await resp.json()
+                    suggestions = data.get('suggestions', [])
+
+                    if not suggestions:
+                        return {'error': f'Company not found by INN {inn}'}
+
+                    s = suggestions[0]
+                    d = s.get('data', {})
+                    address = d.get('address', {})
+                    management = d.get('management', {})
+                    name_info = d.get('name', {})
+                    state = d.get('state', {})
+                    finance = d.get('finance', {})
+                    phones = d.get('phones', [])
+                    emails = d.get('emails', [])
+
+                    return {
+                        'name': name_info.get('short_with_opf') or s.get('value', ''),
+                        'full_name': name_info.get('full_with_opf', ''),
+                        'inn': d.get('inn', ''),
+                        'kpp': d.get('kpp', ''),
+                        'ogrn': d.get('ogrn', ''),
+                        'okved': d.get('okved', ''),
+                        'address': address.get('unrestricted_value', '') if isinstance(address, dict) else '',
+                        'director': management.get('name', ''),
+                        'director_post': management.get('post', ''),
+                        'status': state.get('status', ''),
+                        'registration_date': state.get('registration_date'),
+                        'employees': d.get('employee_count'),
+                        'phones': [p.get('data', p) if isinstance(p, dict) else p for p in (phones or [])],
+                        'emails': [e.get('data', e) if isinstance(e, dict) else e for e in (emails or [])],
+                        'revenue': finance.get('revenue'),
+                        'tax_system': finance.get('tax_system'),
+                    }
+
+        except Exception as e:
+            logger.error(f'DaData enrich error: {e}')
+            return {'error': f'Enrich error: {str(e)}'}
+
+    async def _lead_gen_import(self, session, headers, args: dict) -> dict:
+        """Import found companies into AmoCRM as companies + contacts + leads."""
+        pipeline_id = args.get('pipeline_id')
+        status_id = args.get('status_id')
+        tag = args.get('tag', 'lead_gen')
+        responsible_user_id = args.get('responsible_user_id')
+        limit = min(args.get('limit', 20), 100)
+
+        # Use cached results from previous search or do a new search
+        companies = getattr(self, '_lead_gen_cache', None)
+
+        if not companies:
+            # Try to search first
+            okved = args.get('okved')
+            if okved:
+                search_result = await self._lead_gen_search_dadata(args)
+            else:
+                search_result = await self._lead_gen_search_2gis(args)
+
+            if 'error' in search_result:
+                return search_result
+
+            companies = search_result.get('companies', [])
+
+        if not companies:
+            return {'error': 'No companies to import. Run search_companies or search_horeca first.'}
+
+        companies = companies[:limit]
+
+        # If no pipeline_id, get the first pipeline
+        if not pipeline_id:
+            pipelines_url = f'{self.kommo_base_url}/api/v4/leads/pipelines'
+            async with session.get(pipelines_url, headers=headers) as resp:
+                if resp.status == 200:
+                    p_data = await resp.json()
+                    pipelines = p_data.get('_embedded', {}).get('pipelines', [])
+                    if pipelines:
+                        pipeline_id = pipelines[0].get('id')
+                        if not status_id:
+                            statuses = pipelines[0].get('_embedded', {}).get('statuses', [])
+                            if statuses:
+                                status_id = statuses[0].get('id')
+
+        imported = 0
+        errors = 0
+        duplicates = 0
+        results = []
+
+        for comp in companies:
+            try:
+                comp_name = comp.get('name', '') or comp.get('full_name', '')
+                if not comp_name:
+                    errors += 1
+                    continue
+
+                # Check for duplicate by name
+                search_url = f'{self.kommo_base_url}/api/v4/companies'
+                search_params = {'query': comp_name[:50], 'limit': 1}
+                async with session.get(search_url, headers=headers, params=search_params) as resp:
+                    if resp.status == 200:
+                        existing = await resp.json()
+                        if existing.get('_embedded', {}).get('companies', []):
+                            duplicates += 1
+                            continue
+
+                # 1. Create company
+                company_payload = [
+                    {
+                        'name': comp_name,
+                        'custom_fields_values': [],
+                    }
+                ]
+
+                # Add tags
+                if tag:
+                    company_payload[0]['_embedded'] = {
+                        'tags': [{'name': tag}]
+                    }
+
+                if responsible_user_id:
+                    company_payload[0]['responsible_user_id'] = responsible_user_id
+
+                company_url = f'{self.kommo_base_url}/api/v4/companies'
+                async with session.post(company_url, json=company_payload, headers=headers) as resp:
+                    if resp.status not in (200, 201):
+                        errors += 1
+                        continue
+                    company_data = await resp.json()
+                    created_companies = company_data.get('_embedded', {}).get('companies', [])
+                    if not created_companies:
+                        errors += 1
+                        continue
+                    company_id = created_companies[0].get('id')
+
+                # 2. Create contact (director)
+                contact_id = None
+                director = comp.get('director', '')
+                if director:
+                    contact_payload = [
+                        {
+                            'name': director,
+                            'company_id': company_id,
+                            'custom_fields_values': [],
+                        }
+                    ]
+
+                    # Add phone if available
+                    phones = comp.get('phones', [])
+                    if phones:
+                        phone_val = phones[0] if isinstance(phones[0], str) else str(phones[0])
+                        contact_payload[0]['custom_fields_values'].append({
+                            'field_code': 'PHONE',
+                            'values': [{'value': phone_val, 'enum_code': 'WORK'}],
+                        })
+
+                    if tag:
+                        contact_payload[0]['_embedded'] = {
+                            'tags': [{'name': tag}]
+                        }
+
+                    if responsible_user_id:
+                        contact_payload[0]['responsible_user_id'] = responsible_user_id
+
+                    contact_url = f'{self.kommo_base_url}/api/v4/contacts'
+                    async with session.post(contact_url, json=contact_payload, headers=headers) as resp:
+                        if resp.status in (200, 201):
+                            contact_data = await resp.json()
+                            contacts = contact_data.get('_embedded', {}).get('contacts', [])
+                            if contacts:
+                                contact_id = contacts[0].get('id')
+
+                # 3. Create lead
+                lead_name = f'B2B: {comp_name}'
+                lead_payload = [
+                    {
+                        'name': lead_name[:255],
+                        '_embedded': {
+                            'tags': [{'name': tag}] if tag else [],
+                            'companies': [{'id': company_id}],
+                        },
+                    }
+                ]
+
+                if contact_id:
+                    lead_payload[0]['_embedded']['contacts'] = [{'id': contact_id}]
+
+                if pipeline_id:
+                    lead_payload[0]['pipeline_id'] = pipeline_id
+                if status_id:
+                    lead_payload[0]['status_id'] = status_id
+                if responsible_user_id:
+                    lead_payload[0]['responsible_user_id'] = responsible_user_id
+
+                leads_url = f'{self.kommo_base_url}/api/v4/leads'
+                async with session.post(leads_url, json=lead_payload, headers=headers) as resp:
+                    if resp.status in (200, 201):
+                        lead_data = await resp.json()
+                        created_leads = lead_data.get('_embedded', {}).get('leads', [])
+                        if created_leads:
+                            imported += 1
+                            results.append({
+                                'company': comp_name,
+                                'company_id': company_id,
+                                'contact_id': contact_id,
+                                'lead_id': created_leads[0].get('id'),
+                            })
+                    else:
+                        errors += 1
+
+                # Rate limiting - AmoCRM has 7 requests/sec limit
+                await asyncio.sleep(0.5)
+
+            except Exception as e:
+                logger.error(f'Import error for {comp.get("name", "?")}: {e}')
+                errors += 1
+
+        # Clear cache after import
+        self._lead_gen_cache = None
+
+        return {
+            'imported': imported,
+            'duplicates': duplicates,
+            'errors': errors,
+            'total_processed': len(companies),
+            'tag': tag,
+            'pipeline_id': pipeline_id,
+            'results': results[:10],  # first 10 for display
+            'message': f'Импортировано {imported} лидов (дубликатов: {duplicates}, ошибок: {errors}). Тег: #{tag}',
+        }

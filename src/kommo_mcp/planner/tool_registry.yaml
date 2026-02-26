@@ -1053,6 +1053,34 @@ tools:
     cost: 0.2
 
   # ============================================================
+  # CATEGORY: Lead Generation
+  # ============================================================
+  - id: kommo_lead_gen
+    name: kommo_lead_gen
+    category: lead_generation
+    description: B2B lead generation via DaData/2GIS + import to CRM
+    capabilities: [search_companies, search_horeca, enrich_company, import_leads]
+    actions:
+      - id: search_companies
+        inputs: ["okved?", "query?", "region?", "limit?"]
+        outputs: [companies, company_count]
+      - id: search_horeca
+        inputs: ["city?", "rubric?", "limit?"]
+        outputs: [companies, company_count, phones]
+      - id: preview
+        inputs: ["okved?", "query?", "region?", "city?", "rubric?"]
+        outputs: [companies, company_count]
+      - id: enrich
+        inputs: [inn]
+        outputs: [company_details, director, phones, emails]
+      - id: import_to_crm
+        inputs: ["pipeline_id?", "status_id?", "tag?", "responsible_user_id?", "limit?"]
+        outputs: [imported_count, lead_ids, company_ids]
+        effects: [companies_created, contacts_created, leads_created]
+    preconditions: []
+    cost: 0.5
+
+  # ============================================================
   # CATEGORY: Gamification & Team
   # ============================================================
   - id: kommo_gamification
@@ -1647,3 +1675,7 @@ capability_map:
   - intent: problem_solving
     keywords: [проблема, проблемн, bottleneck, узкое место, застряли, стагнация, отказ, решение, предложи]
     capabilities: [bottleneck_detection, stale_analysis, root_cause, loss_reasons]
+
+  - intent: lead_generation
+    keywords: [собрать базу, найти компании, лидогенерация, сбор лидов, оптовики, HoReCa, ОКВЭД, поиск клиентов, b2b база, холодные продажи, пробить компанию, обогащение, enrich, ИНН, DaData, 2GIS, рестораны, кафе, гостиницы, импорт лидов]
+    capabilities: [search_companies, search_horeca, enrich_company, import_leads]
