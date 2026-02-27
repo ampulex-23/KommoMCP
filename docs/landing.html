@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KommoMCP — AI-ассистент для Kommo CRM</title>
+<meta name="description" content="44 инструмента, 280+ действий — управляйте CRM через Telegram.">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="landing.css">
+</head>
+<body>
+
+<nav id="nav"><div class="ni">
+  <a href="#" class="nl">Kommo<span>MCP</span></a>
+  <div class="nk" id="navLinks">
+    <a href="#problem">Зачем</a><a href="#features">Возможности</a><a href="#how">Архитектура</a><a href="#cases">Кейсы</a><a href="#tech">Технологии</a>
+    <a href="https://t.me/kommo_wizard_bot" target="_blank" class="nc">Попробовать</a>
+  </div>
+  <button class="nm" id="navToggle" aria-label="Menu">☰</button>
+</div></nav>
+
+<section class="hero">
+<div class="ctr"><div class="hc">
+  <div class="hb rv"><span class="pulse"></span> AI-ассистент для Kommo CRM</div>
+  <h1 class="rv d1"><span class="ln">Управляйте CRM</span><span class="ln"><span class="gt">голосом разума</span></span></h1>
+  <p class="hsb rv d2">44 инструмента. 280+ действий. 24 связи в графе планировщика. Всё через Telegram на естественном языке — вместо десятков кликов одно сообщение.</p>
+  <div class="hctas rv d3">
+    <a href="https://t.me/kommo_wizard_bot" target="_blank" class="bp">🤖 Запустить бота</a>
+    <a href="#how" class="bs">Как это работает →</a>
+  </div>
+  <div class="demo rv d4" id="heroDemo">
+    <div class="dbar"><div class="dd"></div><div class="dd"></div><div class="dd"></div><div class="dt">@kommo_wizard_bot</div></div>
+    <div class="db" id="demoBody"></div>
+  </div>
+</div></div>
+</section>
+
+<section class="stb">
+<div class="ctr"><div class="sg">
+  <div class="rv"><div class="sn" data-t="44">0</div><div class="sl">Инструментов</div></div>
+  <div class="rv d1"><div class="sn" data-t="280" data-s="+">0</div><div class="sl">Действий</div></div>
+  <div class="rv d2"><div class="sn" data-t="24">0</div><div class="sl">Связей в графе</div></div>
+  <div class="rv d3"><div class="sn" data-t="17">0</div><div class="sl">Capability Intents</div></div>
+  <div class="rv d4"><div class="sn" data-t="95" data-s="%+">0</div><div class="sl">Точность выбора</div></div>
+</div></div>
+</section>
+
+<section class="sec" id="problem" style="background:radial-gradient(ellipse at 20% 0%,rgba(124,92,252,.06) 0%,transparent 50%)">
+<div class="ctr">
+  <div class="sh rv"><div class="she">Проблема и решение</div><h2 class="sht">70% времени менеджера уходит на <span class="gt">рутину в CRM</span></h2><p class="shs">KommoMCP возвращает это время продажам</p></div>
+  <table class="cmp rv d1">
+    <thead><tr><th>Задача</th><th>❌ Сейчас</th><th>✅ С KommoMCP</th></tr></thead>
+    <tbody>
+      <tr><td>Аналитика по воронке</td><td>20-30 мин (Excel)</td><td>10 секунд</td></tr>
+      <tr><td>Переместить сделку</td><td>5 кликов</td><td>Одно сообщение</td></tr>
+      <tr><td>Прогноз выручки</td><td>Нет / Excel</td><td>AI-прогноз + cashflow</td></tr>
+      <tr><td>Массовые операции</td><td>Вручную</td><td>Команда на 100+ записей</td></tr>
+      <tr><td>Квалификация лида</td><td>Интуиция</td><td>BANT за 5 секунд</td></tr>
+      <tr><td>Подготовка к звонку</td><td>15 мин</td><td>AI-брифинг + talking points</td></tr>
+      <tr><td>Сбор B2B базы</td><td>2 дня</td><td>DaData+2GIS за 5 мин</td></tr>
+      <tr><td>Обучение сотрудника</td><td>1-2 недели</td><td>AI-коуч подсказывает</td></tr>
+      <tr><td>Дедупликация</td><td>Ручной поиск</td><td>Авто-поиск + merge</td></tr>
+    </tbody>
+  </table>
+</div>
+</section>
+
+<div id="features">
+
+<section class="cs"><div class="ctr">
+  <div class="ch rv"><div class="ci" style="background:rgba(88,166,255,.12)">📊</div><div><h2>Воронки и аналитика <span class="tc"><b>4</b> инстр. · <b>17</b> действий</span></h2><p>Конверсии, здоровье воронки, bottleneck-анализ, проактивные алерты</p></div></div>
+  <div class="cg">
+    <div class="fc rv"><h4>📋 Воронки и этапы <span class="fid">kommo_list_pipelines</span></h4><p>Список всех воронок с этапами. Базовый инструмент — от него зависят 8 других через graph edges.</p><div class="tgs"><span class="tg c">list_pipelines</span><span class="tg c">get_stages</span></div></div>
+    <div class="fc rv d1"><h4>📈 Аналитика воронок <span class="fid">kommo_pipeline_analytics</span></h4><p>Конверсия по этапам, количество сделок, выручка по стадиям.</p><div class="tgs"><span class="tg">conversion_rates</span><span class="tg g">revenue_by_stage</span><span class="tg c">stage_stats</span></div></div>
+    <div class="fc rv d2"><h4>🏥 Здоровье воронки <span class="fid">kommo_pipeline_health</span></h4><p>Health-score, velocity, bottleneck, win/loss ratio, рекомендации оптимизации.</p><div class="tgs"><span class="tg">health</span><span class="tg o">bottleneck</span><span class="tg g">velocity</span><span class="tg c">win_loss</span><span class="tg">optimize</span></div></div>
+    <div class="fc rv d3"><h4>🚨 Проактивные алерты <span class="fid">kommo_alerts</span></h4><p>Сделки в зоне риска, падение эффективности, новые возможности.</p><div class="tgs"><span class="tg r">risk</span><span class="tg o">performance</span><span class="tg g">opportunities</span></div></div>
+  </div>
+</div></section>
+
+<section class="cs"><div class="ctr">
+  <div class="ch rv"><div class="ci" style="background:rgba(255,71,87,.12)">💼</div><div><h2>Управление сделками <span class="tc"><b>2</b> инстр. · <b>10</b> действий</span></h2><p>Health, velocity, risk scoring, stakeholder mapping, closing signals</p></div></div>
+  <div class="cg">
+    <div class="fc rv"><h4>📂 Расширенное управление <span class="fid">kommo_deals_ext</span></h4><p>Сделки по этапам/менеджерам, health-score, velocity, at-risk scoring.</p><div class="tgs"><span class="tg">by_stage</span><span class="tg">by_user</span><span class="tg o">at_risk</span><span class="tg c">velocity</span><span class="tg g">health</span></div></div>
+    <div class="fc rv d1"><h4>🔬 Deal Intelligence <span class="fid">kommo_deal_intelligence</span></h4><p>Enterprise-анализ, карта стейкхолдеров и ЛПР, pipeline review, сигналы к закрытию.</p><div class="tgs"><span class="tg r">enterprise</span><span class="tg">stakeholders</span><span class="tg o">closing_signals</span><span class="tg c">pipeline_review</span></div></div>
+  </div>
+</div></section>
+
+<section class="cs"><div class="ctr">
+  <div class="ch rv"><div class="ci" style="background:rgba(0,212,170,.12)">✅</div><div><h2>Задачи и планирование <span class="tc"><b>1</b> инстр. · <b>12</b> действий</span></h2><p>Просроченные, приоритизация, AI-план дня, встречи, массовое создание</p></div></div>
+  <div class="cg">
+    <div class="fc rv"><h4>⏰ Просроченные и сегодня</h4><p>Список просроченных, задачи на сегодня, статистика, задачи по сущностям.</p><div class="tgs"><span class="tg r">overdue</span><span class="tg">today</span><span class="tg c">stats</span><span class="tg">by_entity</span></div></div>
+    <div class="fc rv d1"><h4>🎯 AI-приоритизация</h4><p>Умная приоритизация, планирование дня, smart-напоминания.</p><div class="tgs"><span class="tg g">prioritize</span><span class="tg">plan_day</span><span class="tg c">smart_reminders</span></div></div>
+    <div class="fc rv d2"><h4>🤝 Подготовка к встречам</h4><p>Брифинг: история, контакты, вопросы. Повестка + чек-лист.</p><div class="tgs"><span class="tg">briefing</span><span class="tg g">meeting_prep</span></div></div>
+    <div class="fc rv d3"><h4>📦 Массовые задачи</h4><p>Создание для нескольких менеджеров, переназначение, откладывание.</p><div class="tgs"><span class="tg o">mass_create</span><span class="tg">reassign</span><span class="tg">postpone</span></div></div>
+  </div>
+</div></section>
+
+<section class="cs"><div class="ctr">
+  <div class="ch rv"><div class="ci" style="background:rgba(46,213,115,.12)">👥</div><div><h2>Контакты и компании <span class="tc"><b>5</b> инстр. · <b>24</b> действия</span></h2><p>Поиск, скоринг, обогащение, дедупликация, анализ связей</p></div></div>
+  <div class="cg">
+    <div class="fc rv"><h4>🔍 Контакты <span class="fid">kommo_contacts_ext</span></h4><p>Поиск, orphan-контакты, неактивные, привязанные, по менеджеру.</p><div class="tgs"><span class="tg">search</span><span class="tg o">orphan</span><span class="tg r">inactive</span><span class="tg c">linked</span><span class="tg">by_responsible</span></div></div>
+    <div class="fc rv d1"><h4>🏢 Компании <span class="fid">kommo_companies</span></h4><p>CRUD, контакты/сделки компании, привязка контактов.</p><div class="tgs"><span class="tg g">CRUD</span><span class="tg">get_contacts</span><span class="tg">get_leads</span><span class="tg c">link</span></div></div>
+    <div class="fc rv d2"><h4>⭐ Скоринг <span class="fid">kommo_contact_scoring</span></h4><p>Скоринг контактов/компаний, value-сегменты, relationship, account scoring.</p><div class="tgs"><span class="tg g">score</span><span class="tg">value_segments</span><span class="tg c">company</span><span class="tg">relationship</span><span class="tg o">account</span></div></div>
+    <div class="fc rv d1"><h4>✨ Обогащение <span class="fid">kommo_contact_enrichment</span></h4><p>AI-анализ, обогащение, профиль клиента, соцсети.</p><div class="tgs"><span class="tg">analyze</span><span class="tg g">enrich</span><span class="tg c">profile</span><span class="tg r">social</span></div></div>
+    <div class="fc rv d2"><h4>🔄 Дедупликация <span class="fid">kommo_duplicates</span></h4><p>Поиск дубликатов контактов/компаний, слияние.</p><div class="tgs"><span class="tg o">find_contacts</span><span class="tg o">find_companies</span><span class="tg g">merge</span></div></div>
+  </div>
+</div></section>
+
+<section class="cs"><div class="ctr">
+  <div class="ch rv"><div class="ci" style="background:rgba(0,210,211,.12)">💬</div><div><h2>Коммуникации <span class="tc"><b>3</b> инстр. · <b>14</b> действий</span></h2><p>История, тональность, паттерны, AI-ответы, возражения</p></div></div>
+  <div class="cg">
+    <div class="fc rv"><h4>📝 История и таймлайн <span class="fid">kommo_communications</span></h4><p>Переписка, звонки, хронология, саммари, без контакта.</p><div class="tgs"><span class="tg">history</span><span class="tg c">calls</span><span class="tg">timeline</span><span class="tg g">summary</span><span class="tg r">no_contact</span></div></div>
+    <div class="fc rv d1"><h4>🎭 Аналитика <span class="fid">kommo_communication_analytics</span></h4><p>Sentiment, quality score, паттерны, инсайты.</p><div class="tgs"><span class="tg o">sentiment</span><span class="tg">quality</span><span class="tg c">patterns</span><span class="tg g">insights</span></div></div>
+    <div class="fc rv d2"><h4>🤖 Smart Reply <span class="fid">kommo_smart_reply</span></h4><p>AI-подсказки, обработка возражений, контекст, авто-ответ.</p><div class="tgs"><span class="tg g">suggest</span><span class="tg r">objection</span><span class="tg">context</span><span class="tg c">auto_reply</span></div></div>
+  </div>
+</div></section>
+
+<section class="cs"><div class="ctr">
+  <div class="ch rv"><div class="ci" style="background:rgba(255,234,100,.12)">🔍</div><div><h2>Умный поиск <span class="tc"><b>1</b> инстр. · <b>16</b> действий</span></h2><p>NL-запросы, граф связей, аудит, диагностика</p></div></div>
+  <div class="cg">
+    <div class="fc rv"><h4>🌐 Полнотекстовый и NL-поиск</h4><p>По всем сущностям, фильтры цена/воронка, NL-запросы на русском.</p><div class="tgs"><span class="tg c">all</span><span class="tg">leads</span><span class="tg">contacts</span><span class="tg g">nl_query</span><span class="tg">top_deals</span></div></div>
+    <div class="fc rv d1"><h4>🔗 Граф связей</h4><p>Deal context, relationship graph, связанные/похожие сделки, timeline.</p><div class="tgs"><span class="tg">deal_context</span><span class="tg c">graph</span><span class="tg">related</span><span class="tg g">similar</span><span class="tg">timeline</span></div></div>
+    <div class="fc rv d2"><h4>🔎 Диагностика</h4><p>Проблемные сделки, bottleneck, отказы, оплата, audit trail.</p><div class="tgs"><span class="tg o">problems</span><span class="tg r">bottlenecks</span><span class="tg">rejection</span><span class="tg">payment</span><span class="tg c">audit</span></div></div>
+  </div>
+</div></section>
+
+<section class="cs"><div class="ctr">
+  <div class="ch rv"><div class="ci" style="background:rgba(255,159,67,.12)">🎯</div><div><h2>Инсайты и прогнозирование <span class="tc"><b>7</b> инстр. · <b>38</b> действий</span></h2><p>RFM, LTV, когорты, forecast, cashflow, план/факт, аномалии, сегменты</p></div></div>
+  <div class="cg">
+    <div class="fc rv"><h4>💡 Бизнес-инсайты <span class="fid">kommo_insights</span></h4><p>Топ-клиенты, RFM, нагрузка, big deals, root-cause, stale, campaign ROI.</p><div class="tgs"><span class="tg g">top_clients</span><span class="tg o">rfm</span><span class="tg">big_deals</span><span class="tg r">root_cause</span><span class="tg c">stale</span><span class="tg">roi</span></div></div>
+    <div class="fc rv d1"><h4>📉 Прогнозирование <span class="fid">kommo_forecast</span></h4><p>Pipeline/revenue forecast, win probability, cashflow, план/факт, closing.</p><div class="tgs"><span class="tg">pipeline</span><span class="tg g">revenue</span><span class="tg c">probability</span><span class="tg o">cashflow</span><span class="tg">plan_fact</span><span class="tg r">closing</span></div></div>
+    <div class="fc rv d2"><h4>💎 LTV <span class="fid">kommo_ltv</span></h4><p>LTV по источникам/воронкам, когортный анализ, сегментация.</p><div class="tgs"><span class="tg">by_source</span><span class="tg">by_pipeline</span><span class="tg g">cohorts</span><span class="tg c">segments</span></div></div>
+    <div class="fc rv d3"><h4>📊 Сравнение <span class="fid">kommo_compare</span></h4><p>Периоды MoM/YoY, тренды, паттерны, корреляции.</p><div class="tgs"><span class="tg c">periods</span><span class="tg">trends</span><span class="tg g">patterns</span><span class="tg o">correlations</span></div></div>
+    <div class="fc rv"><h4>⚡ Аномалии <span class="fid">kommo_anomaly</span></h4><p>Автоматическое обнаружение аномалий.</p><div class="tgs"><span class="tg r">detect</span><span class="tg o">sales</span></div></div>
+    <div class="fc rv d1"><h4>📐 Сегментация <span class="fid">kommo_segments</span></h4><p>По объёму, lookalike, best manager, retention.</p><div class="tgs"><span class="tg">volume</span><span class="tg g">lookalike</span><span class="tg c">best_manager</span><span class="tg">retention</span></div></div>
+    <div class="fc rv d2"><h4>❌ Потери <span class="fid">kommo_loss_analysis</span></h4><p>Причины отказов, паттерны, по менеджерам.</p><div class="tgs"><span class="tg r">reasons</span><span class="tg o">patterns</span><span class="tg">by_manager</span></div></div>
+  </div>
+</div></section>
+
+<section class="cs"><div class="ctr">
+  <div class="ch rv"><div class="ci" style="background:rgba(190,120,255,.12)">🧠</div><div><h2>AI-советник и коучинг <span class="tc"><b>3</b> инстр. · <b>22</b> действия</span></h2><p>Next action, квалификация, переговоры, возражения, обучение</p></div></div>
+  <div class="cg">
+    <div class="fc rv"><h4>🎯 Советник <span class="fid">kommo_advisor</span></h4><p>Next action, closing tips, стратегия, BANT, стиль, переговоры, talking points, product recs.</p><div class="tgs"><span class="tg g">next_action</span><span class="tg o">closing</span><span class="tg">qualification</span><span class="tg c">negotiation</span><span class="tg r">objections</span><span class="tg">products</span></div></div>
+    <div class="fc rv d1"><h4>🎓 AI-коуч <span class="fid">kommo_ai_coach</span></h4><p>Ревью сделок, skill radar, пробелы, roleplay, best practices, микро-обучение.</p><div class="tgs"><span class="tg">review</span><span class="tg c">skills</span><span class="tg o">gaps</span><span class="tg g">roleplay</span><span class="tg">micro_learning</span></div></div>
+    <div class="fc rv d2"><h4>🛡️ Возражения <span class="fid">kommo_objections</span></h4><p>Обработка, каталог, предсказание, best practices.</p><div class="tgs"><span class="tg r">handle</span><span class="tg">library</span><span class="tg o">predict</span><span class="tg g">best_practices</span></div></div>
+  </div>
+</div></section>
+
+<section class="cs"><div class="ctr">
+  <div class="ch rv"><div class="ci" style="background:rgba(255,130,67,.12)">⚡</div><div><h2>Автоматизация <span class="tc"><b>3</b> инстр. · <b>12</b> действий</span></h2><p>Auto-assign, follow-up, эскалация, SLA, реактивация</p></div></div>
+  <div class="cg">
+    <div class="fc rv"><h4>🔄 Автоматизация <span class="fid">kommo_automation</span></h4><p>Авто-назначение, round-robin, follow-up, архивация.</p><div class="tgs"><span class="tg c">auto_assign</span><span class="tg">round_robin</span><span class="tg g">followup</span><span class="tg o">archive</span></div></div>
+    <div class="fc rv d1"><h4>🚨 Эскалация <span class="fid">kommo_escalation</span></h4><p>Проверка, уведомления, SLA-мониторинг, поддержка.</p><div class="tgs"><span class="tg r">check</span><span class="tg o">notify</span><span class="tg c">sla</span><span class="tg">support</span></div></div>
+    <div class="fc rv d2"><h4>😴 Реактивация <span class="fid">kommo_reactivation</span></h4><p>Спящие, nurture, churn prevention, win-back.</p><div class="tgs"><span class="tg o">sleeping</span><span class="tg">nurture</span><span class="tg r">churn</span><span class="tg g">win_back</span></div></div>
+  </div>
+</div></section>
+
+<section class="cs"><div class="ctr">
+  <div class="ch rv"><div class="ci" style="background:rgba(255,71,87,.12)">✏️</div><div><h2>CRUD и bulk-операции <span class="tc"><b>2</b> инстр. · <b>17</b> действий</span></h2><p>Заметки, задачи, перемещение, клонирование + mass до 100+</p></div></div>
+  <div class="cg">
+    <div class="fc rv"><h4>📝 Entity Actions <span class="fid">kommo_entity_actions</span></h4><p>Заметка, задача, закрытие, обновление, перемещение, привязка, клон, реактивация.</p><div class="tgs"><span class="tg">note</span><span class="tg g">task</span><span class="tg c">move</span><span class="tg o">clone</span><span class="tg">update</span><span class="tg r">reactivate</span></div></div>
+    <div class="fc rv d1"><h4>🚀 Bulk Actions <span class="fid">kommo_bulk_actions</span></h4><p>Mass update, move, tag, assign, delete — одной командой.</p><div class="tgs"><span class="tg o">update</span><span class="tg c">move</span><span class="tg">tag</span><span class="tg g">assign</span><span class="tg r">delete</span></div></div>
+  </div>
+</div></section>
+
+<section class="cs"><div class="ctr">
+  <div class="ch rv"><div class="ci" style="background:rgba(0,206,209,.12)">📄</div><div><h2>Шаблоны и документы <span class="tc"><b>2</b> инстр. · <b>13</b> действий</span></h2><p>Скрипты, КП, презентации, кейс-стади, CSV</p></div></div>
+  <div class="cg">
+    <div class="fc rv"><h4>📋 Шаблоны <span class="fid">kommo_templates</span></h4><p>Генерация, персонализация, sales script, follow-up, closing script.</p><div class="tgs"><span class="tg g">generate</span><span class="tg c">personalize</span><span class="tg">sales</span><span class="tg o">follow_up</span><span class="tg r">closing</span></div></div>
+    <div class="fc rv d1"><h4>📊 Документы <span class="fid">kommo_doc_generator</span></h4><p>Презентации, КП, кейсы, коммерческие предложения, CSV.</p><div class="tgs"><span class="tg">presentation</span><span class="tg g">proposal</span><span class="tg c">case_study</span><span class="tg o">offer</span><span class="tg">csv</span></div></div>
+  </div>
+</div></section>
+
+<section class="cs"><div class="ctr">
+  <div class="ch rv"><div class="ci" style="background:rgba(100,149,237,.12)">🏆</div><div><h2>Команда и геймификация <span class="tc"><b>4</b> инстр. · <b>14</b> действий</span></h2><p>Leaderboard, ачивки, квесты, KPI, capacity</p></div></div>
+  <div class="cg">
+    <div class="fc rv"><h4>👤 Менеджеры <span class="fid">kommo_manager_stats</span></h4><p>Сделки, выручка, конверсия, рейтинг.</p><div class="tgs"><span class="tg">deals</span><span class="tg g">won_sum</span><span class="tg c">conversion</span></div></div>
+    <div class="fc rv d1"><h4>🎮 Геймификация <span class="fid">kommo_gamification</span></h4><p>Лидерборд, ачивки, челленджи, ежедневные квесты.</p><div class="tgs"><span class="tg o">leaderboard</span><span class="tg g">achievements</span><span class="tg c">challenges</span><span class="tg">quests</span></div></div>
+    <div class="fc rv d2"><h4>📅 Планирование <span class="fid">kommo_team_planner</span></h4><p>Capacity, прогноз ресурсов.</p><div class="tgs"><span class="tg c">capacity</span><span class="tg g">forecast</span></div></div>
+    <div class="fc rv d3"><h4>📈 Активность <span class="fid">kommo_activity</span></h4><p>Лента, продуктивность, KPI, рекомендации, корреляции.</p><div class="tgs"><span class="tg">feed</span><span class="tg g">productivity</span><span class="tg c">kpi</span><span class="tg o">recs</span></div></div>
+  </div>
+</div></section>
+
+<section class="cs"><div class="ctr">
+  <div class="ch rv"><div class="ci" style="background:rgba(0,212,255,.12)">🏗️</div><div><h2>B2B лидогенерация <span class="tc"><b>1</b> инстр. · <b>5</b> действий</span></h2><p>DaData + 2GIS → обогащение → импорт в CRM</p></div></div>
+  <div class="cg">
+    <div class="fc rv"><h4>🔍 Поиск (DaData)</h4><p>По ОКВЭД и региону.</p><div class="tgs"><span class="tg c">search_companies</span><span class="tg">okved</span><span class="tg">region</span></div></div>
+    <div class="fc rv d1"><h4>🍽️ HoReCa (2GIS)</h4><p>Рестораны, кафе, гостиницы с телефонами.</p><div class="tgs"><span class="tg o">search_horeca</span><span class="tg">city</span></div></div>
+    <div class="fc rv d2"><h4>📋 Обогащение по ИНН</h4><p>Реквизиты, директор, финансы через DaData.</p><div class="tgs"><span class="tg g">enrich</span><span class="tg">inn</span></div></div>
+    <div class="fc rv d3"><h4>📥 Импорт в CRM</h4><p>Компании + контакты + лиды с дедупликацией.</p><div class="tgs"><span class="tg r">import</span><span class="tg g">dedup</span><span class="tg">tags</span></div></div>
+  </div>
+</div></section>
+
+<section class="cs"><div class="ctr">
+  <div class="ch rv"><div class="ci" style="background:rgba(200,200,210,.12)">⚙️</div><div><h2>Настройка и утилиты <span class="tc"><b>12</b> инстр. · <b>55</b> действий</span></h2><p>Setup, отчёты, дайджесты, теги, поля, вебхуки, каталоги, экспорт</p></div></div>
+  <div class="cg">
+    <div class="fc rv"><h4>🔧 CRM Setup <span class="fid">kommo_setup</span></h4><p>CRUD воронок/этапов, поля, 10 шаблонов.</p><div class="tgs"><span class="tg c">pipeline</span><span class="tg">stage</span><span class="tg g">field</span><span class="tg o">templates</span></div></div>
+    <div class="fc rv d1"><h4>📊 Отчёты <span class="fid">kommo_reports</span></h4><p>Продажи, воронка, менеджеры, stale, top.</p><div class="tgs"><span class="tg">sales</span><span class="tg c">pipeline</span><span class="tg g">manager</span><span class="tg o">stale</span></div></div>
+    <div class="fc rv d2"><h4>☀️ Дайджесты <span class="fid">kommo_digest</span></h4><p>Утренний, еженедельный, мои задачи.</p><div class="tgs"><span class="tg o">morning</span><span class="tg c">weekly</span><span class="tg">my_tasks</span></div></div>
+    <div class="fc rv d3"><h4>👤 Мой дашборд <span class="fid">kommo_my</span></h4><p>Воронка, нагрузка, команда, инсайты.</p><div class="tgs"><span class="tg g">pipeline</span><span class="tg">workload</span><span class="tg c">insights</span></div></div>
+    <div class="fc rv"><h4>⏰ Smart Time <span class="fid">kommo_smart_time</span></h4><p>Лучшее время звонка, journey timing, response time.</p><div class="tgs"><span class="tg g">best_time</span><span class="tg">journey</span><span class="tg c">response</span></div></div>
+    <div class="fc rv d1"><h4>🏷️ Теги · Поля <span class="fid">kommo_tags + kommo_custom_fields</span></h4><p>CRUD тегов, поиск по тегу, кастомные поля.</p><div class="tgs"><span class="tg">tags</span><span class="tg g">add</span><span class="tg r">remove</span><span class="tg c">fields</span></div></div>
+    <div class="fc rv d2"><h4>🔗 Связи · Каталоги <span class="fid">kommo_links + kommo_catalogs</span></h4><p>Entity linking, каталоги продуктов, привязка к сделкам.</p><div class="tgs"><span class="tg">link</span><span class="tg r">unlink</span><span class="tg c">catalogs</span><span class="tg g">products</span></div></div>
+    <div class="fc rv d3"><h4>🌐 Webhooks · Sources · Events · Calls</h4><p>Вебхуки, источники с аналитикой, события, звонки.</p><div class="tgs"><span class="tg">webhooks</span><span class="tg c">sources</span><span class="tg">events</span><span class="tg o">calls</span></div></div>
+    <div class="fc rv"><h4>📤 Экспорт <span class="fid">kommo_export</span></h4><p>Сделки/контакты в CSV, аналитика.</p><div class="tgs"><span class="tg g">leads_csv</span><span class="tg c">contacts</span><span class="tg">analytics</span></div></div>
+    <div class="fc rv d1"><h4>👥 Users <span class="fid">kommo_users</span></h4><p>Список, детали, нагрузка.</p><div class="tgs"><span class="tg">list</span><span class="tg c">get</span><span class="tg g">workload</span></div></div>
+    <div class="fc rv d2"><h4>🧪 Mock Data & Cleanup</h4><p>Генерация тестовых данных, очистка, hard reset.</p><div class="tgs"><span class="tg o">mock</span><span class="tg r">cleanup</span><span class="tg r">reset</span></div></div>
+  </div>
+</div></section>
+
+</div>
+
+<section class="sec" id="how" style="background:radial-gradient(ellipse at 80% 0%,rgba(0,212,255,.06) 0%,transparent 50%)">
+<div class="ctr">
+  <div class="sh rv"><div class="she">Архитектура</div><h2 class="sht">Tool Graph Planner<br><span class="gt">44 узла · 24 ребра · 17 интентов</span></h2><p class="shs">Backward chaining + topological sort. Без нейросети — мгновенно.</p></div>
+  <div class="hs-wrap">
+    <div class="hs rv"><div class="hsn">💬</div><div class="hsc"><h3>Сообщение на естественном языке</h3><p>Русский или английский — без команд.</p><div class="hcd"><span class="dim">Вы:</span> Покажи аналитику «Продажи» и сравни с прошлым месяцем</div></div></div>
+    <div class="hs rv d1"><div class="hsn">🎯</div><div class="hsc"><h3>Планировщик за &lt;2ms</h3><p>17 intents → backward chaining → dependency resolution → topological sort. Cost: $0.</p><div class="hcd"><span class="dim">Intent:</span> analytics + comparison<br><span class="dim">Plan:</span> list_pipelines → [pipeline_analytics ∥ compare.periods]<br><span class="dim">Edges:</span> SEQUENCE + PARALLEL</div></div></div>
+    <div class="hs rv d2"><div class="hsn">🤖</div><div class="hsc"><h3>AI получает 3 из 44 инструментов</h3><p>Точность: 95%+ (vs ~80% без планировщика).</p><div class="hcd"><span class="dim">Tools:</span> [list_pipelines, pipeline_analytics, compare]<br><span class="dim">RAG:</span> Dynamic prompt + examples</div></div></div>
+    <div class="hs rv d3"><div class="hsn">📊</div><div class="hsc"><h3>Ответ за ~10 секунд</h3><p>Kommo API → аналитика → Telegram.</p><div class="hcd"><span class="dim">→</span> 142 сделки, конверсия 23%<br><span class="dim">→</span> vs прошлый: +12% сделок, +8% конверсия<br><span class="dim">→</span> Bottleneck: «Согласование» — 18 дней</div></div></div>
+  </div>
+  <div style="margin-top:64px">
+    <h3 class="rv" style="font-size:20px;font-weight:700;margin-bottom:24px;text-align:center">Связи в графе <span style="font-size:14px;color:var(--t3)">SEQUENCE · PARALLEL · REQUIRES</span></h3>
+    <div class="edge-list">
+      <div class="edge rv"><span class="ef">list_pipelines</span> → <span class="et">pipeline_analytics</span> <span class="ety">SEQ</span><div class="ers">Сначала pipeline_id, потом аналитика</div></div>
+      <div class="edge rv d1"><span class="ef">search</span> → <span class="et">entity_actions</span> <span class="ety">SEQ</span><div class="ers">Найти → действовать</div></div>
+      <div class="edge rv d2"><span class="ef">contacts_ext</span> → <span class="et">contact_enrichment</span> <span class="ety">SEQ</span><div class="ers">Найти → обогатить</div></div>
+      <div class="edge rv d3"><span class="ef">deal_intelligence</span> → <span class="et">templates.closing</span> <span class="ety">SEQ</span><div class="ers">Сигналы → скрипт</div></div>
+      <div class="edge rv"><span class="ef">loss_analysis</span> → <span class="et">advisor.strategy</span> <span class="ety">SEQ</span><div class="ers">Причины → стратегия</div></div>
+      <div class="edge rv d1"><span class="ef">pipeline_analytics</span> ∥ <span class="et">manager_stats</span> <span class="ety">PAR</span><div class="ers">Параллельная аналитика</div></div>
+      <div class="edge rv d2"><span class="ef">forecast</span> ∥ <span class="et">pipeline_health</span> <span class="ety">PAR</span><div class="ers">Независимый анализ</div></div>
+      <div class="edge rv d3"><span class="ef">entity_actions.move</span> ← <span class="et">list_pipelines</span> <span class="ety">REQ</span><div class="ers">Нужен pipeline_id</div></div>
+    </div>
+  </div>
+</div>
+</section>
+
+<section class="sec" id="cases" style="background:var(--bg2)">
+<div class="ctr">
+  <div class="sh rv"><div class="she">Сценарии</div><h2 class="sht">Кейсы для <span class="gt">каждой роли</span></h2></div>
+  <div class="cases-grid">
+    <div class="cc rv"><div class="ccr">Руководитель</div><h3>Утренний дайджест за 10 сек</h3><p>Все воронки, задачи, риски, coverage, leaderboard.</p><div class="cdlg"><div class="cq">«Утренний дайджест»</div><div class="cans">📊 3 воронки, 247 сделок · ⚠️ 12 просрочено<br>💰 Pipeline: 4.2M ₽ (+18%)<br>🏆 Лидер: Алексей — 31%</div></div></div>
+    <div class="cc rv d1"><div class="ccr">Менеджер</div><h3>AI-подготовка к звонку</h3><p>История, стиль, возражения, talking points.</p><div class="cdlg"><div class="cq">«Подготовь к звонку ООО Ромашка»</div><div class="cans">🎯 850K ₽, «КП», 14 дней<br>📞 Лучшее время: 14-16<br>⚡ Возражение: «дорого» → скрипт</div></div></div>
+    <div class="cc rv"><div class="ccr">Маркетолог</div><h3>B2B база за 5 минут</h3><p>DaData → обогащение → импорт с тегами.</p><div class="cdlg"><div class="cq">«Найди оптовиков ОКВЭД 46.37 в Сочи»</div><div class="cans">✅ 47 компаний найдено<br>📋 ООО «Край Опт» — 2301003185<br>→ Импортируй в «Холодные»</div></div></div>
+    <div class="cc rv d1"><div class="ccr">Новый сотрудник</div><h3>Онбординг с AI-коучем</h3><p>Объяснение CRM, next step, roleplay.</p><div class="cdlg"><div class="cq">«Я новый, что делать?»</div><div class="cans">📋 5 задач на сегодня<br>🎯 Приоритет: ООО «Альфа»<br>📖 Используйте BANT<br>🎮 Квест: закрыть 2 задачи</div></div></div>
+    <div class="cc rv"><div class="ccr">Аналитик</div><h3>Cashflow + аномалии</h3><p>Forecast, plan/fact, RFM, когорты.</p><div class="cdlg"><div class="cq">«Прогноз выручки + аномалии»</div><div class="cans">📉 Прогноз: 2.8M ₽ (80% conf)<br>💰 Cashflow: 1.2M к 15.03<br>⚡ Аномалия: конверсия -40% в «Демо»</div></div></div>
+    <div class="cc rv d1"><div class="ccr">CRM-администратор</div><h3>Настройка за 30 секунд</h3><p>Воронки из шаблонов, поля, вебхуки.</p><div class="cdlg"><div class="cq">«Создай B2B воронку из шаблона»</div><div class="cans">✅ Воронка «B2B Sales» создана<br>📋 7 этапов: Lead → Qualification → ...<br>🏷️ Поля: бюджет, ЛПР, BANT</div></div></div>
+  </div>
+</div>
+</section>
+
+<section class="sec" id="tech">
+<div class="ctr">
+  <div class="sh rv"><div class="she">Технологии</div><h2 class="sht">Стек <span class="gt">под капотом</span></h2></div>
+  <div class="tgr">
+    <div class="tcard rv"><div class="ti">🧠</div><h4>OpenAI GPT-4o</h4><p>Function calling, контекст до 128K токенов</p></div>
+    <div class="tcard rv d1"><div class="ti">📊</div><h4>Tool Graph Planner</h4><p>44 узла, 24 ребра, backward chaining, &lt;2ms</p></div>
+    <div class="tcard rv d2"><div class="ti">🐍</div><h4>Python + asyncio</h4><p>Async handlers, aiohttp, rate limiting</p></div>
+    <div class="tcard rv d1"><div class="ti">🤖</div><h4>Telegram Bot API</h4><p>python-telegram-bot, markdown V2</p></div>
+    <div class="tcard rv d2"><div class="ti">🔌</div><h4>Kommo REST API</h4><p>OAuth 2.0, все endpoints</p></div>
+    <div class="tcard rv d3"><div class="ti">🏗️</div><h4>Multi-CRM</h4><p>Несколько CRM на одного пользователя</p></div>
+  </div>
+  <div class="introw">
+    <div class="intb rv"><div class="ii">📡</div><div><div class="inn">DaData API</div><div class="idd">B2B поиск и обогащение</div></div></div>
+    <div class="intb rv d1"><div class="ii">🗺️</div><div><div class="inn">2GIS API</div><div class="idd">HoReCa поиск</div></div></div>
+    <div class="intb rv d2"><div class="ii">💬</div><div><div class="inn">Kommo API</div><div class="idd">CRM операции</div></div></div>
+    <div class="intb rv d3"><div class="ii">🧠</div><div><div class="inn">OpenAI API</div><div class="idd">AI reasoning</div></div></div>
+  </div>
+</div>
+</section>
+
+<section class="cta-s">
+<div class="ctr"><div class="ctac">
+  <h2>Начните за <span class="gt">3 минуты</span></h2>
+  <p class="ctap">Подключите CRM и начните управлять продажами на естественном языке</p>
+  <div class="csteps">
+    <div class="cst"><div class="csn">1</div><div class="csl"><strong>Откройте</strong> бота</div></div>
+    <div class="cst"><div class="csn">2</div><div class="csl"><strong>Подключите</strong> CRM</div></div>
+    <div class="cst"><div class="csn">3</div><div class="csl"><strong>Спросите</strong> что угодно</div></div>
+  </div>
+  <a href="https://t.me/kommo_wizard_bot" target="_blank" class="bp">🤖 Запустить @kommo_wizard_bot</a>
+</div></div>
+</section>
+
+<footer><div class="ctr"><p>KommoMCP — AI-ассистент для Kommo CRM · 44 инструмента · 280+ действий · <a href="https://github.com/ampulex-23/KommoMCP" target="_blank">GitHub</a></p></div></footer>
+
+<script>
+const O=new IntersectionObserver(e=>{e.forEach(n=>{n.isIntersecting&&(n.target.classList.add('v'),O.unobserve(n.target))})},{threshold:.15,rootMargin:'0px 0px -40px 0px'});
+document.querySelectorAll('.rv').forEach(e=>O.observe(e));
+
+const nav=document.getElementById('nav');
+window.addEventListener('scroll',()=>nav.classList.toggle('scrolled',window.scrollY>40));
+const navToggle=document.getElementById('navToggle'),navLinks=document.getElementById('navLinks');
+navToggle.addEventListener('click',()=>{navLinks.classList.toggle('open');navToggle.textContent=navLinks.classList.contains('open')?'✕':'☰'});
+navLinks.querySelectorAll('a').forEach(a=>a.addEventListener('click',()=>{navLinks.classList.remove('open');navToggle.textContent='☰'}));
+
+document.querySelectorAll('.sn').forEach(el=>{
+  const io=new IntersectionObserver(([e])=>{if(e.isIntersecting){io.unobserve(el);const t=+el.dataset.t,p=el.dataset.p||'',s=el.dataset.s||'';let c=0;const d=t>100?2:30,step=Math.ceil(t/60);const iv=setInterval(()=>{c=Math.min(c+step,t);el.textContent=p+c+s;if(c>=t)clearInterval(iv)},d)}},{threshold:.5});
+  io.observe(el);
+});
+
+const scenarios=[
+  {q:'Покажи аналитику воронки «Продажи»',a:'📊 <b>Воронка «Продажи»</b><br>142 сделки, конверсия 23%<br>Выручка: 4.2M ₽<br><code>kommo_pipeline_analytics</code> → 0.8s'},
+  {q:'Подготовь к звонку ООО «Ромашка»',a:'🎯 <b>ООО Ромашка</b> — 850K ₽<br>📞 Лучшее время: 14:00-16:00<br>⚡ Возражение: «дорого» → скрипт<br><code>advisor + smart_time + objections</code>'},
+  {q:'Найди спящих клиентов за 30 дней',a:'😴 <b>47 спящих клиентов</b><br>💰 Потенциал: 2.1M ₽<br>🔥 ТОП: ООО «Альфа» — 450K<br><code>reactivation.sleeping</code> → 1.2s'},
+  {q:'Создай B2B воронку из шаблона',a:'✅ Воронка <b>«B2B Sales»</b> создана<br>📋 7 этапов: Lead → Demo → КП → ...<br>🏷️ Поля: бюджет, ЛПР, BANT<br><code>kommo_setup.apply_template</code>'},
+  {q:'Прогноз выручки на месяц',a:'📉 <b>Прогноз: 2.8M ₽</b> (80% conf)<br>💰 Cashflow к 15.03: 1.2M ₽<br>🎯 6 сделок к закрытию<br><code>forecast.revenue + cashflow</code>'},
+  {q:'Рейтинг менеджеров за неделю',a:'🏆 <b>Leaderboard</b><br>1. Алексей — 31% конв, 12 сделок<br>2. Мария — 28% конв, 9 сделок<br><code>gamification.leaderboard</code> → 0.6s'}
+];
+let si=0;
+function runDemo(){
+  const b=document.getElementById('demoBody');b.innerHTML='';
+  const s=scenarios[si];si=(si+1)%scenarios.length;
+  setTimeout(()=>{b.innerHTML=`<div class="cm u" style="animation-delay:0s"><div class="ca">👤</div><div class="cb">${s.q}</div></div>`;
+    setTimeout(()=>{b.innerHTML+=`<div class="cm b" style="animation-delay:0s"><div class="ca">🤖</div><div class="cb"><div class="tp"><span></span><span></span><span></span></div></div></div>`;
+      setTimeout(()=>{const msgs=b.querySelectorAll('.cm');msgs[1].querySelector('.cb').innerHTML=s.a;},1200);
+    },800);
+  },300);
+}
+runDemo();setInterval(runDemo,5000);
+</script>
+</body>
+</html>
