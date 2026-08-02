@@ -60,3 +60,8 @@ htmlcov/
 # OS
 .DS_Store
 Thumbs.db
+
+# ── Deploy secrets: never commit real values ──────────────────────────
+deploy/env_fixed.txt
+deploy/*.env
+!deploy/env.example.txt
